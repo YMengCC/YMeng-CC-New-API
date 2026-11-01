@@ -196,7 +196,7 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		if restoreErr != nil {
 			common.SysError("managed update HAProxy restore failed: " + restoreErr.Error())
 			controller.status.State = "failed"
-			controller.status.Reason = "Persisted active container could not restore the HAProxy map; no update operation will start."
+			controller.status.Reason = "Persisted active container could not restore the HAProxy map: " + restoreErr.Error()
 			controller.status.OperationID = ""
 			controller.status.TargetVersion = ""
 			controller.status.Draining = false
