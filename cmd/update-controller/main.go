@@ -687,7 +687,7 @@ func switchHAProxyMap(ctx context.Context, socketPath, mapPath, key, target stri
 	if err != nil {
 		return err
 	}
-	if message := strings.TrimSpace(string(response)); message != "" {
+	if message := strings.TrimSpace(strings.Trim(string(response), "\x00")); message != "" {
 		return fmt.Errorf("HAProxy rejected runtime-map switch: %s", message)
 	}
 	return nil
