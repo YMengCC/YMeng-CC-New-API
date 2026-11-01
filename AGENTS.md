@@ -151,6 +151,8 @@ Tasks that touch none of these (for example unrelated frontend work, authenticat
 - Avoid hand-written assertion helpers unless they encode a reusable project-specific invariant.
 - When cleaning tests, preserve meaningful regression coverage. If a deleted test covered a real contract indirectly, replace it with a smaller test that asserts that contract directly.
 
+**Version tagging:** Every commit that updates the root `VERSION` file MUST also create and push the matching git tag to `origin` in the same change. Use an annotated tag whose name equals the file content (for example, `v1.1.29`), created with `git tag -a <tag> -m "Release <tag>"` and pushed with `git push origin <tag>`. Verify with `git ls-remote --tags origin <tag>` after pushing.
+
 **Documentation files:**
 
 - Do NOT add new files under `docs/` or any of its subdirectories unless the user explicitly requests it.

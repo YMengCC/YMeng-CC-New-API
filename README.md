@@ -152,12 +152,83 @@ curl -fsS http://localhost:3000/api/status
 
 需要在已有 Nginx/宝塔反向代理后接入双实例模式时，使用 `docker-compose.managed.yml`。该模板让代理先把新请求送到已通过健康检查的新实例，再让旧实例继续完成已建立的 HTTP/SSE/WebSocket 连接；不使用 `docker compose down`，也不会删除数据卷、数据库或 Redis。
 
-启用前必须完成以下条件：
+#### 一次性配置
+
+完成以下配置后，**之后每次发布新版本都不需要再改任何配置**，用户只需在后台点"一键更新"按钮。
+
+**1. GitHub Secrets（2 个）**
+
+进入仓库 Settings → Secrets and variables → Actions → New repository secret：
+
+| Secret 名称 | 内容 | 说明 |
+| --- | --- | --- |
+| `UPDATE_RELEASE_PRIVATE_KEY_B64` | Ed25519 私钥的 base64 编码（PKCS8 PEM 格式） | 用于签名更新兼容性清单 |
+| `UPDATE_COMPATIBILITY_JSON` | `{"schema_unchanged":true,"shared_state_compatible":true,"platforms":["linux/amd64","linux/arm64"],"databases":["sqlite","mysql","postgres"]}` | 声明兼容的平台和数据库；`from_versions` 由 CI 自动从 git tags 推导，无需手动维护 |
+
+生成密钥对的方法（需要 OpenSSL 3.x）：
+
+```bash
+openssl genpkey -algorithm ed25519 -out release-private.pem
+openssl pkey -in release-private.pem -pubout -out release-public.pem
+# 私钥 base64（填入 GitHub Secret UPDATE_RELEASE_PRIVATE_KEY_B64）
+base64 -w 0 release-private.pem
+# 公钥 raw 32 字节 base64（填入服务器 UPDATE_RELEASE_PUBLIC_KEY）
+openssl pkey -pubin -in release-public.pem -outform DER | tail -c 32 | base64 -w 0
+# 妥善保存私钥，不要提交到仓库
+rm -f release-private.pem release-public.pem
+```
+
+**2. 服务器 `.env`（1 个变量）**
+
+在部署目录的 `.env` 文件中添加：
+
+```bash
+UPDATE_RELEASE_PUBLIC_KEY=<上面生成的公钥 base64>
+```
+
+**3. 启用托管部署**
+
+```bash
+docker compose -f docker-compose.managed.yml up -d
+```
+
+**4. GHCR 包可见性（仅首次发布后）**
+
+第一次发布 Docker 镜像后，进入 https://github.com/users/atelier-of-dongn/packages/container/ymeng-cc-new-api/settings 将包设为 Public，否则部署服务器无法匿名拉取镜像。
+
+#### 日常使用
+
+配置完成后，发布新版本的流程：
+
+```bash
+# 1. 更新 VERSION 文件
+echo "v1.1.30" > VERSION
+git add VERSION && git commit -m "release: v1.1.30"
+
+# 2. 打 tag 并推送（自动触发镜像构建 + 签名清单上传）
+git tag -a v1.1.30 -m "Release v1.1.30"
+git push origin main && git push origin v1.1.30
+```
+
+推送 tag 后，GitHub Actions 自动完成：构建多平台镜像 → 推送 GHCR → 生成并签名兼容性清单 → 上传到 Release。
+
+用户到管理后台点"一键更新"，选择新版本即可。CI 会自动把最近 30 个 git tag 写入 `from_versions`，所以任何近期版本都能升级。
+
+#### 工作原理
 
 - `NEW_API_IMAGE` 使用已验证的不可变 digest；两实例共享主数据库、日志数据库、Redis、`SESSION_SECRET`、`CRYPTO_SECRET` 和 `update_assets` 卷。
-- 设置随机且仅用于内部网络的 `UPDATE_CONTROL_TOKEN`，以及与发布清单匹配的 `UPDATE_RELEASE_PUBLIC_KEY`；控制器是唯一允许挂载 Docker socket 的服务。
+- `UPDATE_CONTROL_TOKEN` 是随机且仅用于内部网络的令牌；`UPDATE_RELEASE_PUBLIC_KEY` 验证发布清单签名；控制器是唯一允许挂载 Docker socket 的服务。
 - 先让 Nginx/宝塔指向代理的 `3000` 端口，再从后台更新入口执行检查。没有签名兼容清单、数据库/schema/缓存兼容性证据或候选实例 readiness 时，安装按钮会保持禁用。
 - 旧实例不会因固定超时被强制关闭；长连接或计费写入未完成时会保留旧实例并显示排空状态。更新失败时继续使用旧实例。
+
+#### 故障排查
+
+| 症状 | 可能原因 | 解决方法 |
+| --- | --- | --- |
+| 一键更新按钮灰色 | Release 缺少签名清单 | 检查 managed-release.yml workflow 是否成功；确认 Secrets 已配置 |
+| 更新时提示镜像拉取失败 | GHCR 包为私有 | 将包设为 Public |
+| workflow 报 secrets 缺失 | 未配置 GitHub Secrets | 按上方"一次性配置"添加 2 个 Secrets |
+| 提示不兼容当前版本 | 当前版本不在 from_versions 中 | 当前版本过旧（超出最近 30 个 tag），需手动升级 |
 
 首次把直接访问 `new-api:3000` 的站点迁移到代理入口，必须先在独立端口验证并通过 Nginx graceful reload；不能保证改入口本身不影响已有连接。SQLite、破坏性 schema 迁移和未验证的后台任务交接不支持在线安装。必须先在测试环境验证，再处理生产入口。
 
