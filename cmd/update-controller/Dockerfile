@@ -2,6 +2,7 @@ FROM golang:1.26.1-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY relaykit/go.mod relaykit/go.mod
+COPY tokenkit/go.mod tokenkit/go.mod
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /update-controller ./cmd/update-controller
