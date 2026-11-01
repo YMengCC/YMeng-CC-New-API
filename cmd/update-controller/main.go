@@ -190,18 +190,35 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		}
 	}
 	if engine != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		restoreErr := restoreHAProxyMap(ctx, controller)
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		var restoreErr error
+		for {
+			restoreErr = restoreHAProxyMap(ctx, controller)
+			if restoreErr == nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				cancel()
+				common.SysError("managed update HAProxy restore failed: " + restoreErr.Error())
+				controller.status.State = "failed"
+				controller.status.Reason = "Persisted active container could not restore the HAProxy map: " + restoreErr.Error()
+				controller.status.OperationID = ""
+				controller.status.TargetVersion = ""
+				controller.status.Draining = false
+				_ = controller.persist()
+				return controller, nil
+			case <-time.After(2 * time.Second):
+			}
+		}
 		cancel()
-		if restoreErr != nil {
-			common.SysError("managed update HAProxy restore failed: " + restoreErr.Error())
-			controller.status.State = "failed"
-			controller.status.Reason = "Persisted active container could not restore the HAProxy map: " + restoreErr.Error()
-			controller.status.OperationID = ""
-			controller.status.TargetVersion = ""
-			controller.status.Draining = false
-			_ = controller.persist()
-			return controller, nil
+		controller.status.State = "ready"
+		controller.status.Reason = "Managed update controller is ready."
+		controller.status.OperationID = ""
+		controller.status.TargetVersion = ""
+		controller.status.Draining = false
+		if err := controller.persist(); err != nil {
+			return controller, err
 		}
 	}
 	if controller.status.State == "draining" && controller.drainingContainer != "" && engine != nil {
