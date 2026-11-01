@@ -142,7 +142,12 @@ type githubRelease struct {
 
 func newController(config updateConfig, engine dockerEngine, client *http.Client) (*controller, error) {
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 5 || request.URL.Scheme != "https" {
+				return fmt.Errorf("refusing release download redirect")
+			}
+			return nil
+		}}
 	}
 	controller := &controller{
 		config: config,
