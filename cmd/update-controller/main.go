@@ -189,6 +189,7 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		restoreErr := restoreHAProxyMap(ctx, controller)
 		cancel()
 		if restoreErr != nil {
+			common.SysError("managed update HAProxy restore failed: " + restoreErr.Error())
 			controller.status.State = "failed"
 			controller.status.Reason = "Persisted active container could not restore the HAProxy map; no update operation will start."
 			controller.status.OperationID = ""
@@ -290,6 +291,7 @@ func (u *controller) releases(ctx context.Context) (siteupdate.ReleaseList, erro
 		manifest, manifestErr := u.get(ctx, manifestURL)
 		signature, signatureErr := u.get(ctx, signatureURL)
 		if manifestErr != nil || signatureErr != nil {
+			common.SysError("managed update manifest download failed for " + release.Tag)
 			list.Releases = append(list.Releases, item)
 			continue
 		}
@@ -300,6 +302,7 @@ func (u *controller) releases(ctx context.Context) (siteupdate.ReleaseList, erro
 		}
 		compatibility, verifyErr := verifyCompatibilityManifest(u.config.key, release.Tag, manifest, decoded)
 		if verifyErr != nil {
+			common.SysError("managed update manifest verification failed for " + release.Tag + ": " + verifyErr.Error())
 			list.Releases = append(list.Releases, item)
 			continue
 		}
