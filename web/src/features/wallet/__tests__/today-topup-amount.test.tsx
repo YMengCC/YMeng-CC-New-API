@@ -65,7 +65,7 @@ describe('TodayTopUpAmount', () => {
     ).toBeInTheDocument()
   })
 
-  it('wraps the total in a fixed-height branded pill that stays hidden on mobile', async () => {
+  it('wraps the total in a fixed-height branded pill visible on all breakpoints', async () => {
     vi.spyOn(api, 'get').mockResolvedValue({
       data: { success: true, data: { amount: 1_000_000 } },
     })
@@ -76,7 +76,8 @@ describe('TodayTopUpAmount', () => {
       name: "Today's total recharge: ¥1.00",
     })
     expect(amount).toHaveClass('h-7', 'rounded-full', 'border', 'bg-accent/60')
-    expect(amount).toHaveClass('hidden', 'sm:flex')
+    expect(amount).toHaveClass('flex')
+    expect(amount).not.toHaveClass('hidden')
   })
 
   it.each([10, 1])(
