@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,10 +17,13 @@ import (
 
 const dockerAPIVersion = "v1.41"
 
+var errDockerNotFound = errors.New("docker resource not found")
+
 type dockerEngine interface {
 	Inspect(ctx context.Context, name string) (dockerContainer, error)
 	Create(ctx context.Context, name, image string, source dockerContainer) (string, error)
 	Start(ctx context.Context, id string) error
+	Stop(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
 }
 
@@ -85,6 +89,9 @@ func (d *dockerHTTPClient) request(ctx context.Context, method, endpoint string,
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if readErr != nil {
 		return readErr
+	}
+	if response.StatusCode == http.StatusNotFound {
+		return errDockerNotFound
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message := strings.TrimSpace(string(data))
@@ -197,6 +204,11 @@ func (d *dockerHTTPClient) Create(ctx context.Context, name, image string, sourc
 
 func (d *dockerHTTPClient) Start(ctx context.Context, id string) error {
 	endpoint := "/" + dockerAPIVersion + "/containers/" + url.PathEscape(id) + "/start"
+	return d.request(ctx, http.MethodPost, endpoint, nil, nil)
+}
+
+func (d *dockerHTTPClient) Stop(ctx context.Context, id string) error {
+	endpoint := "/" + dockerAPIVersion + "/containers/" + url.PathEscape(id) + "/stop?t=20"
 	return d.request(ctx, http.MethodPost, endpoint, nil, nil)
 }
 

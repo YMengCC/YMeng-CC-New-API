@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -212,16 +213,21 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 			}
 		}
 		cancel()
-		controller.status.State = "ready"
-		controller.status.Reason = "Managed update controller is ready."
-		controller.status.OperationID = ""
-		controller.status.TargetVersion = ""
-		controller.status.Draining = false
+		if controller.drainingContainer == "" {
+			controller.status.State = "ready"
+			controller.status.Reason = "Managed update controller is ready."
+			controller.status.OperationID = ""
+			controller.status.TargetVersion = ""
+			controller.status.Draining = false
+		} else {
+			controller.status.State = "draining"
+			controller.status.Draining = true
+		}
 		if err := controller.persist(); err != nil {
 			return controller, err
 		}
 	}
-	if controller.status.State == "draining" && controller.drainingContainer != "" && engine != nil {
+	if controller.drainingContainer != "" && engine != nil {
 		go controller.resumeDrain()
 	}
 	return controller, nil
@@ -557,17 +563,15 @@ func (u *controller) runUpdate(operationID, tag string) {
 		})
 		return
 	}
-	_ = u.setStatus(func(status *siteupdate.Status) {
-		status.State = "completed"
-		status.CurrentVersion = tag
-		status.TargetVersion = ""
-		status.OperationID = ""
-		status.Draining = false
-		status.Reason = "Update completed; the previous container was retained after draining. Manual cleanup is required before another update."
-		if mapPersistenceErr != nil {
-			status.Reason = "Update completed, but the HAProxy map file was not persisted. Repair the map and retain the previous container before another update."
-		}
-	})
+	if mapPersistenceErr != nil || persistErr != nil {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.Reason = "Traffic switched and drained; routing or state persistence must be repaired before automatic cleanup."
+		})
+		return
+	}
+	if err := u.finishDrained(ctx, active, tag); err != nil {
+		common.SysError("managed update cleanup failed: " + err.Error())
+	}
 }
 
 type containerAddressInfo struct {
@@ -662,7 +666,21 @@ func (u *controller) resumeDrain() {
 	containerName := u.drainingContainer
 	u.mu.Unlock()
 	container, err := u.engine.Inspect(ctx, containerName)
-	if err != nil {
+	if errors.Is(err, errDockerNotFound) {
+		container = dockerContainer{ID: containerName, Name: containerName}
+	} else if err != nil {
+		return
+	}
+	if !container.State.Running {
+		u.mu.Lock()
+		tag := u.status.TargetVersion
+		if tag == "" {
+			tag = u.status.CurrentVersion
+		}
+		u.mu.Unlock()
+		if err := u.finishDrained(ctx, container, tag); err != nil {
+			common.SysError("managed update cleanup failed: " + err.Error())
+		}
 		return
 	}
 	address, err := u.containerAddress(container)
@@ -677,14 +695,66 @@ func (u *controller) resumeDrain() {
 	if err := u.waitDrained(ctx, address); err != nil {
 		return
 	}
-	_ = u.setStatus(func(status *siteupdate.Status) {
-		status.State = "completed"
-		status.CurrentVersion = status.TargetVersion
-		status.TargetVersion = ""
-		status.OperationID = ""
-		status.Draining = false
-		status.Reason = "Update completed; the previous container was retained after draining. Manual cleanup is required before another update."
-	})
+	u.mu.Lock()
+	tag := u.status.TargetVersion
+	if tag == "" {
+		tag = u.status.CurrentVersion
+	}
+	u.mu.Unlock()
+	if err := u.finishDrained(ctx, container, tag); err != nil {
+		common.SysError("managed update cleanup failed: " + err.Error())
+	}
+}
+
+// finishDrained is called only after the lifecycle endpoint confirms safe_to_stop.
+// Recheck and persist the active route before deleting the previous container.
+func (u *controller) finishDrained(ctx context.Context, old dockerContainer, tag string) error {
+	if old.Name == u.currentContainer() {
+		return fmt.Errorf("refusing to remove the active container")
+	}
+	if old.State.Running {
+		address, err := u.containerAddress(old)
+		if err != nil {
+			return err
+		}
+		snapshot, err := u.lifecycle(ctx, address, http.MethodGet)
+		if err != nil {
+			return err
+		}
+		if snapshot.Protocol != lifecycleProtocol || !snapshot.Ready || !snapshot.Draining || !snapshot.SafeToStop || snapshot.ActiveRequests != 0 || snapshot.PendingWrites != 0 {
+			return fmt.Errorf("previous container is not safely drained")
+		}
+	}
+	if err := restoreHAProxyMap(ctx, u); err != nil {
+		return err
+	}
+	if err := u.persist(); err != nil {
+		return err
+	}
+	fail := func(err error) error {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.Reason = "Update switched successfully; automatic cleanup failed and will resume after controller restart."
+		})
+		return err
+	}
+	if old.State.Running {
+		if err := u.engine.Stop(ctx, old.ID); err != nil {
+			return fail(err)
+		}
+	}
+	if err := u.engine.Remove(ctx, old.ID, false); err != nil && !errors.Is(err, errDockerNotFound) {
+		return fail(err)
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.drainingContainer = ""
+	u.status.State = "completed"
+	u.status.CurrentVersion = tag
+	u.status.TargetVersion = ""
+	u.status.OperationID = ""
+	u.status.Draining = false
+	u.status.Reason = "Update completed; the previous container was automatically removed after draining."
+	return u.persistLocked()
 }
 
 func switchHAProxyMap(ctx context.Context, socketPath, mapPath, key, target string) error {
