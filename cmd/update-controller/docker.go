@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -140,6 +141,10 @@ func (d *dockerHTTPClient) Create(ctx context.Context, name, image string, sourc
 		labels["com.ymeng.update.candidate"] = "true"
 	}
 	config["Labels"] = labels
+	// Hostname and MAC address are per-container identities; reusing them would
+	// make the candidate indistinguishable from the active node.
+	delete(config, "Hostname")
+	delete(config, "MacAddress")
 
 	hostConfig := cloneMap(source.HostConfig)
 	// Published host ports would collide with the active instance. HAProxy
@@ -147,25 +152,23 @@ func (d *dockerHTTPClient) Create(ctx context.Context, name, image string, sourc
 	delete(hostConfig, "PortBindings")
 	delete(hostConfig, "PublishAllPorts")
 
-	networking := map[string]any{}
-	for network, endpoint := range source.NetworkSettings.Networks {
-		networking[network] = map[string]any{
-			"Aliases": endpoint.Aliases,
-			"Links":   endpoint.Links,
-		}
+	networks := make([]string, 0, len(source.NetworkSettings.Networks))
+	for network := range source.NetworkSettings.Networks {
+		networks = append(networks, network)
 	}
-	if len(networking) > 0 {
-		// NetworkMode names the same network in inspect output, while
-		// NetworkingConfig is the create API's multi-network form. Sending both
-		// makes Docker reject the request as contradictory.
-		delete(hostConfig, "NetworkMode")
+	slices.Sort(networks)
+	endpointConfig := func(network string) map[string]any {
+		endpoint := source.NetworkSettings.Networks[network]
+		return map[string]any{"Aliases": endpoint.Aliases, "Links": endpoint.Links}
 	}
-	payload := map[string]any{
-		"Config":     config,
-		"HostConfig": hostConfig,
-	}
-	if len(networking) > 0 {
-		payload["NetworkingConfig"] = map[string]any{"EndpointsConfig": networking}
+	// The container create API takes the Config fields at the top level of the
+	// body. API versions before 1.44 accept only one endpoint at create time, so
+	// the remaining networks are connected before the candidate starts.
+	payload := cloneMap(config)
+	payload["HostConfig"] = hostConfig
+	if len(networks) > 0 {
+		hostConfig["NetworkMode"] = networks[0]
+		payload["NetworkingConfig"] = map[string]any{"EndpointsConfig": map[string]any{networks[0]: endpointConfig(networks[0])}}
 	}
 	query := url.Values{}
 	query.Set("name", name)
@@ -178,6 +181,16 @@ func (d *dockerHTTPClient) Create(ctx context.Context, name, image string, sourc
 	}
 	if created.ID == "" {
 		return "", fmt.Errorf("docker engine returned an empty candidate id")
+	}
+	if len(networks) > 1 {
+		for _, network := range networks[1:] {
+			connect := map[string]any{"Container": created.ID, "EndpointConfig": endpointConfig(network)}
+			connectEndpoint := "/" + dockerAPIVersion + "/networks/" + url.PathEscape(network) + "/connect"
+			if err := d.request(ctx, http.MethodPost, connectEndpoint, connect, nil); err != nil {
+				_ = d.Remove(context.Background(), created.ID, true)
+				return "", fmt.Errorf("connect candidate to network %s: %w", network, err)
+			}
+		}
 	}
 	return created.ID, nil
 }
