@@ -36,9 +36,12 @@ func TestSensitiveOperationOriginGuardTrustedHTTPSProxy(t *testing.T) {
 		remote   string
 		expected int
 	}{
-		{name: "trusted proxy same origin", trusted: "172.16.0.0/12", origin: "https://panel.example.com", remote: "172.18.0.1:12345", expected: http.StatusNoContent},
-		{name: "untrusted proxy still rejected", trusted: "none", origin: "https://panel.example.com", remote: "203.0.113.9:12345", expected: http.StatusForbidden},
-		{name: "cross origin still rejected", trusted: "172.16.0.0/12", origin: "https://evil.example.com", remote: "172.18.0.1:12345", expected: http.StatusForbidden},
+		{name: "trusted proxy same origin", trusted: "172.16.0.0/12", origin: "https://panel.example.com", remote: "172.18.0.4:12345", expected: http.StatusNoContent},
+		{name: "trusted single proxy address", trusted: "172.18.0.7", origin: "https://panel.example.com", remote: "172.18.0.7:12345", expected: http.StatusNoContent},
+		{name: "default proxy list not trusted", trusted: "", origin: "https://panel.example.com", remote: "172.18.0.4:12345", expected: http.StatusForbidden},
+		{name: "untrusted peer rejected", trusted: "172.16.0.0/12", origin: "https://panel.example.com", remote: "203.0.113.9:12345", expected: http.StatusForbidden},
+		{name: "proxies disabled", trusted: "none", origin: "https://panel.example.com", remote: "172.18.0.4:12345", expected: http.StatusForbidden},
+		{name: "cross origin still rejected", trusted: "172.16.0.0/12", origin: "https://evil.example.com", remote: "172.18.0.4:12345", expected: http.StatusForbidden},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("TRUSTED_PROXIES", test.trusted)

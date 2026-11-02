@@ -2,41 +2,56 @@ package middleware
 
 import (
 	"crypto/subtle"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
 )
 
-// SensitiveOperationOriginGuard accepts HTTPS forwarded only by a configured trusted proxy.
+// isExplicitTrustedProxy reports whether the direct peer is listed in an
+// explicitly configured TRUSTED_PROXIES. The compatibility defaults are not
+// enough to trust a forwarded scheme for deployment changes.
+func isExplicitTrustedProxy(remote string) bool {
+	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+	if raw == "" {
+		return false
+	}
+	trustedProxies, _, err := common.ResolveTrustedProxies(raw)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(remote)
+	if ip == nil {
+		return false
+	}
+	for _, trustedProxy := range trustedProxies {
+		if _, network, err := net.ParseCIDR(trustedProxy); err == nil {
+			if network.Contains(ip) {
+				return true
+			}
+			continue
+		}
+		if proxyIP := net.ParseIP(trustedProxy); proxyIP != nil && proxyIP.Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAllowedSensitiveOperationOrigin also accepts the HTTPS origin forwarded by
+// an explicitly trusted TLS-terminating proxy.
 func isAllowedSensitiveOperationOrigin(c *gin.Context, origin string) bool {
 	if isAllowedSessionOrigin(c.Request, origin) {
 		return true
 	}
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") != "https" || c.GetHeader("X-Forwarded-For") == "" {
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") != "https" || !isExplicitTrustedProxy(c.RemoteIP()) {
 		return false
 	}
-	trustedProxies, _, err := common.ResolveTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
-	if err != nil {
-		return false
-	}
-	probe := gin.New()
-	if err := common.ConfigureTrustedProxies(probe, trustedProxies); err != nil {
-		return false
-	}
-	probe.Any("/*path", func(context *gin.Context) {
-		if context.RemoteIP() != "172.18.0.1" {
-			return
-		}
-		requestOrigin, err := common.NormalizeOrigin("https://" + context.Request.Host)
-		if err == nil && subtle.ConstantTimeCompare([]byte(origin), []byte(requestOrigin)) == 1 {
-			c.Set("sensitive_origin_trusted_proxy", true)
-		}
-	})
-	probe.ServeHTTP(httptest.NewRecorder(), c.Request)
-	return c.GetBool("sensitive_origin_trusted_proxy")
+	requestOrigin, err := common.NormalizeOrigin("https://" + c.Request.Host)
+	return err == nil && subtle.ConstantTimeCompare([]byte(origin), []byte(requestOrigin)) == 1
 }
 
 // SensitiveOperationOriginGuard applies the CSRF origin check regardless of
