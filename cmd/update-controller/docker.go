@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -134,10 +135,52 @@ func (d *dockerHTTPClient) Pull(ctx context.Context, image string) error {
 	query := url.Values{}
 	query.Set("fromImage", image)
 	endpoint := "/" + dockerAPIVersion + "/images/create?" + query.Encode()
-	if err := d.request(ctx, http.MethodPost, endpoint, nil, nil); err != nil {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, d.baseURL+endpoint, nil)
+	if err != nil {
+		return err
+	}
+	client := *d.client
+	client.Timeout = 0 // Image downloads are bounded by the update operation context.
+	response, err := client.Do(request)
+	if err != nil {
 		return fmt.Errorf("pull candidate image: %w", err)
 	}
-	return nil
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("pull candidate image returned HTTP %d", response.StatusCode)
+	}
+	decoder := json.NewDecoder(response.Body)
+	for {
+		var progress struct {
+			Error       string `json:"error"`
+			ErrorDetail struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+		}
+		if err := decoder.Decode(&progress); err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("read image pull progress: %w", err)
+		}
+		if progress.Error != "" || progress.ErrorDetail.Message != "" {
+			return fmt.Errorf("Docker could not pull the verified candidate image")
+		}
+	}
+	_, err = d.InspectImage(ctx, image)
+	return err
+}
+
+func (d *dockerHTTPClient) InspectImage(ctx context.Context, image string) (string, error) {
+	var result struct {
+		ID string `json:"Id"`
+	}
+	if err := d.request(ctx, http.MethodGet, "/"+dockerAPIVersion+"/images/"+url.PathEscape(image)+"/json", nil, &result); err != nil {
+		return "", err
+	}
+	if result.ID == "" {
+		return "", fmt.Errorf("pulled candidate image is unavailable")
+	}
+	return result.ID, nil
 }
 
 func (d *dockerHTTPClient) Inspect(ctx context.Context, name string) (dockerContainer, error) {
