@@ -27,7 +27,7 @@ func RetainUpdateAssets(buildFS embed.FS, directory string) error {
 		return err
 	}
 	defer root.Close()
-	assets, err := fs.Sub(buildFS, "web/dist/assets")
+	assets, err := fs.Sub(buildFS, "web/dist/static")
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func retainedUpdateAsset(directory string) gin.HandlerFunc {
 		if directory == "" || (c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) {
 			return
 		}
-		name, ok := strings.CutPrefix(c.Request.URL.Path, "/assets/")
+		name, ok := strings.CutPrefix(c.Request.URL.Path, "/static/")
 		if !ok || !fs.ValidPath(name) {
 			return
 		}

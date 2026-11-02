@@ -152,7 +152,12 @@ type githubRelease struct {
 
 func newController(config updateConfig, engine dockerEngine, client *http.Client) (*controller, error) {
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 5 || request.URL.Scheme != "https" {
+				return fmt.Errorf("refusing release download redirect")
+			}
+			return nil
+		}}
 	}
 	controller := &controller{
 		config: config,
@@ -204,20 +209,43 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		}
 	}
 	if engine != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		restoreErr := restoreHAProxyMap(ctx, controller)
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		var restoreErr error
+		for {
+			restoreErr = restoreHAProxyMap(ctx, controller)
+			if restoreErr == nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				cancel()
+				common.SysError("managed update HAProxy restore failed: " + restoreErr.Error())
+				controller.status.State = "blocked"
+				controller.status.Reason = "Persisted active container could not restore the HAProxy map: " + restoreErr.Error()
+				controller.status.OperationID = ""
+				controller.status.TargetVersion = ""
+				controller.status.Draining = false
+				_ = controller.persist()
+				return controller, nil
+			case <-time.After(2 * time.Second):
+			}
+		}
 		cancel()
-		if restoreErr != nil {
-			controller.status.State = "blocked"
-			controller.status.Reason = "Persisted active container could not restore the HAProxy map; no update operation will start."
+		if controller.drainingContainer == "" {
+			controller.status.State = "ready"
+			controller.status.Reason = "Managed update controller is ready."
 			controller.status.OperationID = ""
 			controller.status.TargetVersion = ""
 			controller.status.Draining = false
-			_ = controller.persist()
-			return controller, nil
+		} else {
+			controller.status.State = "draining"
+			controller.status.Draining = true
+		}
+		if err := controller.persist(); err != nil {
+			return controller, err
 		}
 	}
-	if controller.status.State == "draining" && controller.drainingContainer != "" && engine != nil {
+	if controller.drainingContainer != "" && engine != nil {
 		go controller.resumeDrain()
 	}
 	return controller, nil
@@ -311,6 +339,7 @@ func (u *controller) releases(ctx context.Context) (siteupdate.ReleaseList, erro
 		manifest, manifestErr := u.get(ctx, manifestURL)
 		signature, signatureErr := u.get(ctx, signatureURL)
 		if manifestErr != nil || signatureErr != nil {
+			common.SysError("managed update manifest download failed for " + release.Tag)
 			list.Releases = append(list.Releases, item)
 			continue
 		}
@@ -321,6 +350,7 @@ func (u *controller) releases(ctx context.Context) (siteupdate.ReleaseList, erro
 		}
 		compatibility, verifyErr := verifyCompatibilityManifest(u.config.key, release.Tag, manifest, decoded)
 		if verifyErr != nil {
+			common.SysError("managed update manifest verification failed for " + release.Tag + ": " + verifyErr.Error())
 			list.Releases = append(list.Releases, item)
 			continue
 		}
@@ -743,7 +773,7 @@ func switchHAProxyMap(ctx context.Context, socketPath, mapPath, key, target stri
 	if err != nil {
 		return err
 	}
-	if message := strings.TrimSpace(string(response)); message != "" {
+	if message := strings.TrimSpace(strings.Trim(string(response), "\x00")); message != "" {
 		return fmt.Errorf("HAProxy rejected runtime-map switch: %s", message)
 	}
 	return nil

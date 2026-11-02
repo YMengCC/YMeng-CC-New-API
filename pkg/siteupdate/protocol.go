@@ -1,7 +1,7 @@
 package siteupdate
 
-const Repository = "atelier-of-dongn/YMeng-CC-New-API"
-const ImageRepository = "ghcr.io/atelier-of-dongn/ymeng-cc-new-api"
+const Repository = "YMengCC/YMeng-CC-New-API"
+const ImageRepository = "ghcr.io/ymengcc/ymeng-cc-new-api"
 
 type Status struct {
 	Supported        bool           `json:"supported"`
