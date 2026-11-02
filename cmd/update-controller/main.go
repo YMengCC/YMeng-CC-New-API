@@ -495,6 +495,10 @@ func (u *controller) runUpdate(operationID, tag string) {
 		fail("Update refused: "+err.Error(), "")
 		return
 	}
+	if err := u.engine.Pull(ctx, release.Image); err != nil {
+		fail("Cannot pull the verified candidate image: "+err.Error(), "")
+		return
+	}
 	activeName := u.currentContainer()
 	u.mu.Lock()
 	activeID := activeName

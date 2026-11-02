@@ -20,6 +20,7 @@ const dockerAPIVersion = "v1.41"
 var errDockerNotFound = errors.New("docker resource not found")
 
 type dockerEngine interface {
+	Pull(ctx context.Context, image string) error
 	Inspect(ctx context.Context, name string) (dockerContainer, error)
 	Create(ctx context.Context, name, image string, source dockerContainer) (string, error)
 	Start(ctx context.Context, id string) error
@@ -124,6 +125,19 @@ func (d *dockerHTTPClient) request(ctx context.Context, method, endpoint string,
 		return nil
 	}
 	return common.Unmarshal(data, result)
+}
+
+func (d *dockerHTTPClient) Pull(ctx context.Context, image string) error {
+	if !validImageDigest(image) {
+		return fmt.Errorf("refusing to pull an unverified image reference")
+	}
+	query := url.Values{}
+	query.Set("fromImage", image)
+	endpoint := "/" + dockerAPIVersion + "/images/create?" + query.Encode()
+	if err := d.request(ctx, http.MethodPost, endpoint, nil, nil); err != nil {
+		return fmt.Errorf("pull candidate image: %w", err)
+	}
+	return nil
 }
 
 func (d *dockerHTTPClient) Inspect(ctx context.Context, name string) (dockerContainer, error) {
