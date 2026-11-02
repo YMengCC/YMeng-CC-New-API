@@ -149,6 +149,8 @@ type cleanupEngine struct {
 	keepAfterRemove        bool
 }
 
+func (e *cleanupEngine) Pull(context.Context, string) error { return nil }
+
 func (e *cleanupEngine) Inspect(_ context.Context, id string) (dockerContainer, error) {
 	for key, container := range e.containers {
 		if key == id || container.Name == id {
