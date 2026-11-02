@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Release history": "История версий",
+    "Latest release": "Последняя версия",
+    "View release": "Посмотреть версию",
+    "Showing the last successfully checked releases.": "Показаны версии из последней успешной проверки.",
     "Invoice orders": "Заказы для выставления счёта",
     "BaoCode Link": "Ссылка BaoCode",
     "Link opened by the Get BaoCode button on the home page": "Ссылка, открываемая кнопкой «Получить BaoCode» на главной странице",

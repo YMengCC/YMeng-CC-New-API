@@ -34,11 +34,11 @@ import { statusQueryOptions } from '@/lib/status-query'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
-  fetchLatestForkSystemRelease,
+  fetchForkSystemReleases,
   UpdateCheckError,
   type UpdateCheckErrorCode,
 } from './api'
-import { compareSystemVersions } from './releases'
+import { compareSystemVersions, SYSTEM_RELEASE_REPOSITORY } from './releases'
 import {
   subscribeSystemUpdatePreferences,
   useSystemUpdatePreferencesStore,
@@ -47,7 +47,12 @@ import {
 } from './store'
 
 export const SYSTEM_UPDATE_INTERVAL = 60 * 60 * 1000
-export const SYSTEM_UPDATE_QUERY_KEY = ['system-update'] as const
+export const SYSTEM_UPDATE_QUERY_KEY = [
+  'system-update',
+  SYSTEM_RELEASE_REPOSITORY,
+  'releases',
+  2,
+] as const
 
 export function getUpdateErrorMessage(
   code: UpdateCheckErrorCode,
@@ -74,11 +79,12 @@ export const systemUpdateQueryOptions = queryOptions({
       .catch(() => undefined)
     let snapshot: SystemUpdateSnapshot
     try {
-      const release = await fetchLatestForkSystemRelease(signal)
+      const releases = await fetchForkSystemReleases(signal)
       signal.throwIfAborted()
       const now = Date.now()
       snapshot = {
-        release,
+        source: SYSTEM_RELEASE_REPOSITORY,
+        releases,
         lastCheckedAt: now,
         lastAttemptAt: now,
         error: null,
@@ -89,7 +95,8 @@ export const systemUpdateQueryOptions = queryOptions({
       // A failed attempt is also cached, so focus changes and remounts cannot
       // hammer GitHub while it is unavailable or rate limiting this browser.
       snapshot = {
-        release: previous?.release ?? null,
+        source: SYSTEM_RELEASE_REPOSITORY,
+        releases: previous?.releases ?? [],
         lastCheckedAt: previous?.lastCheckedAt ?? 0,
         lastAttemptAt: Date.now(),
         error: error instanceof UpdateCheckError ? error.code : 'network',
@@ -153,7 +160,8 @@ export function useSystemUpdate() {
     version === 'v0.0.0' || version === '0.0.0'
       ? undefined
       : version || undefined
-  const release = query.data?.release ?? null
+  const releases = query.data?.releases ?? []
+  const release = releases[0] ?? null
   const comparison = compareSystemVersions(currentVersion, release?.tag_name)
   const hasUpdate = comparison === -1
   const isIgnored = useSyncExternalStore(subscribeSystemUpdatePreferences, () =>
@@ -183,6 +191,7 @@ export function useSystemUpdate() {
 
   return {
     currentVersion,
+    releases,
     release,
     comparison,
     hasUpdate,

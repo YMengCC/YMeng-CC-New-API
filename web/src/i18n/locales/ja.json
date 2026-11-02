@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Release history": "バージョン履歴",
+    "Latest release": "最新バージョン",
+    "View release": "このバージョンを見る",
+    "Showing the last successfully checked releases.": "前回の確認に成功したバージョン一覧を表示しています。",
     "Invoice orders": "請求書申請の注文",
     "BaoCode Link": "BaoCode リンク",
     "Link opened by the Get BaoCode button on the home page": "ホームページの「BaoCode を入手」ボタンで開くリンク",

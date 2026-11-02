@@ -137,7 +137,7 @@ describe('administrator update entry', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
       const [url, options] = fetchMock.mock.calls[0]
       expect(String(url)).toBe(
-        'https://api.github.com/repos/QuantumNous/new-api/releases?per_page=100'
+        'https://api.github.com/repos/atelier-of-dongn/YMeng-CC-New-API/releases?per_page=100'
       )
       expect(options?.credentials).toBe('omit')
       expect(options?.headers).toEqual({
@@ -190,7 +190,7 @@ describe('administrator update entry', () => {
       within(dialog).getByRole('link', { name: 'Go to GitHub' })
     ).toHaveAttribute(
       'href',
-      'https://github.com/QuantumNous/new-api/releases/tag/v1.0.0-rc.36'
+      'https://github.com/atelier-of-dongn/YMeng-CC-New-API/releases/tag/v1.0.0-rc.36'
     )
     await user.keyboard('{Escape}')
     await waitFor(() =>
@@ -336,8 +336,14 @@ describe('administrator update entry', () => {
   test('keeps the previous release on automatic failure and reports a failed manual check once', async () => {
     const user = userEvent.setup()
     const oldCheck = Date.now() - SYSTEM_UPDATE_INTERVAL - 1
+    const olderRelease = {
+      ...release,
+      tag_name: 'v1.0.0-rc.34',
+      body: 'Older cached branch notes',
+    }
     useSystemUpdateStore.getState().setSnapshot({
-      release,
+      source: 'atelier-of-dongn/YMeng-CC-New-API',
+      releases: [release, olderRelease],
       lastCheckedAt: oldCheck,
       lastAttemptAt: oldCheck,
       error: null,
@@ -355,17 +361,302 @@ describe('administrator update entry', () => {
       })
     )
     expect(
-      screen.getByText('Showing the last successfully checked release.')
+      screen.getByText('Showing the last successfully checked releases.')
     ).toBeInTheDocument()
     expect(useSystemUpdateStore.getState().snapshot?.lastCheckedAt).toBe(
       oldCheck
     )
+    expect(
+      screen.getByRole('button', { name: /v1\.0\.0-rc\.34/ })
+    ).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      useSystemUpdateStore
+        .getState()
+        .snapshot?.releases.map((item) => item.tag_name)
+    ).toEqual([release.tag_name, olderRelease.tag_name])
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
     expect(
       screen.getByText('GitHub rate limit reached. Try again later.')
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('release history', () => {
+  test('sorts versions with only the latest expanded, preserves toggles on recheck and resets on reopen', async () => {
+    const user = userEvent.setup()
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify([
+            { ...release, tag_name: 'v1.9.0', body: 'Older branch notes' },
+            {
+              ...release,
+              tag_name: 'v1.10.0',
+              body: 'Latest branch notes',
+              prerelease: false,
+            },
+          ])
+        )
+    )
+    client.setQueryData(STATUS_QUERY_KEY, { version: 'v1.9.0' })
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    const trigger = await screen.findByRole('button', {
+      name: 'New version available: v1.10.0',
+    })
+    await user.click(trigger)
+    const dialog = screen.getByRole('dialog')
+    const latest = within(dialog).getByRole('button', { name: /v1\.10\.0/ })
+    const older = within(dialog).getByRole('button', { name: /v1\.9\.0/ })
+    const versions = within(dialog).getAllByRole('button', {
+      name: /v1\.(?:10|9)\.0/,
+    })
+    expect(versions).toEqual([latest, older])
+    expect(latest).toHaveAttribute('aria-expanded', 'true')
+    expect(older).toHaveAttribute('aria-expanded', 'false')
+    expect(await within(dialog).findByText('Latest branch notes')).toBeVisible()
+    expect(
+      within(dialog).queryByText('Older branch notes')
+    ).not.toBeInTheDocument()
+    expect(within(older).getByText('Current version')).toBeInTheDocument()
+
+    older.focus()
+    await user.keyboard('{Enter}')
+    expect(older).toHaveAttribute('aria-expanded', 'true')
+    expect(await within(dialog).findByText('Older branch notes')).toBeVisible()
+    expect(latest).toHaveAttribute('aria-expanded', 'true')
+    await user.keyboard(' ')
+    expect(older).toHaveAttribute('aria-expanded', 'false')
+    await user.tab({ shift: true })
+    expect(
+      within(dialog).getByRole('link', { name: 'View release' })
+    ).toHaveFocus()
+    await user.tab({ shift: true })
+    expect(latest).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(latest).toHaveAttribute('aria-expanded', 'false')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Check again' })
+    )
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(latest).toHaveAttribute('aria-expanded', 'false')
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    )
+    await user.click(trigger)
+    expect(
+      screen.getByRole('button', { name: /v1\.10\.0.*Latest release/ })
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(
+      screen.getByRole('button', { name: /v1\.9\.0.*Current version/ })
+    ).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      fetchMock.mock.calls.every(([url]) =>
+        String(url).startsWith(
+          'https://api.github.com/repos/atelier-of-dongn/YMeng-CC-New-API/'
+        )
+      )
+    ).toBe(true)
+  })
+
+  test('expands the latest release when history arrives after the dialog opens', async () => {
+    const user = userEvent.setup()
+    let finishRequest: ((response: Response) => void) | undefined
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishRequest = resolve
+        })
+    )
+    render(<SystemUpdateAction presentation='version' />, { wrapper: Wrapper })
+    await user.click(
+      screen.getByRole('button', { name: /System updates, current version/ })
+    )
+    expect(
+      screen.getByText('Checking updates...', { selector: 'p' })
+    ).toBeVisible()
+    await act(async () => {
+      finishRequest?.(new Response(JSON.stringify([release])))
+    })
+    const latest = await screen.findByRole('button', {
+      name: /v1\.0\.0-rc\.36.*Latest release/,
+    })
+    expect(latest).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByText(release.body)).toBeVisible()
+  })
+
+  test('opens a newly discovered latest version after the previous latest was collapsed', async () => {
+    const user = userEvent.setup()
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    await user.click(
+      await screen.findByRole('button', { name: /New version available/ })
+    )
+    const latest = screen.getByRole('button', {
+      name: /v1\.0\.0-rc\.36.*Latest release/,
+    })
+    await user.click(latest)
+    expect(latest).toHaveAttribute('aria-expanded', 'false')
+    respondWithRelease('v1.0.0-rc.37')
+    await user.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(
+      await screen.findByRole('button', {
+        name: /v1\.0\.0-rc\.37.*Latest release/,
+      })
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(await screen.findByText(release.body)).toBeVisible()
+  })
+
+  test('constrains long release titles and scrolls notes separately from dialog actions', async () => {
+    const name =
+      'A-release-title-without-spaces-for-checking-wrapping-on-narrow-mobile-dialogs'
+    const body =
+      '```text\nA-long-code-line-that-must-scroll-inside-the-release-notes-instead-of-widening-the-dialog\n```'
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify([{ ...release, name, body }]))
+    )
+    const user = userEvent.setup()
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    await user.click(
+      await screen.findByRole('button', { name: /New version available/ })
+    )
+    const dialog = screen.getByRole('dialog')
+    const history = within(dialog).getByRole('region', {
+      name: 'Release history',
+    })
+    expect(within(history).getByText(name)).toHaveClass('wrap-anywhere')
+    expect(history).toHaveClass('min-w-0')
+    const notes = (
+      await within(history).findByText(
+        'A-long-code-line-that-must-scroll-inside-the-release-notes-instead-of-widening-the-dialog'
+      )
+    ).closest('pre')
+    expect(notes).toBeVisible()
+    const scrollBody = history.parentElement?.parentElement
+    expect(scrollBody).toHaveClass(
+      'min-h-0',
+      'overflow-y-auto',
+      'overflow-x-hidden'
+    )
+    expect(
+      scrollBody?.contains(
+        within(dialog).getByRole('button', { name: 'Check again' })
+      )
+    ).toBe(false)
+    expect(
+      within(dialog).getByRole('link', { name: 'Go to GitHub' })
+    ).toBeVisible()
+  })
+
+  test('shows an empty history when a successful check finds no releases', async () => {
+    fetchMock.mockImplementation(async () => new Response('[]'))
+    const user = userEvent.setup()
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    await waitFor(() =>
+      expect(
+        useSystemUpdateStore.getState().snapshot?.lastCheckedAt
+      ).toBeGreaterThan(0)
+    )
+    await user.click(screen.getByRole('button', { name: 'Check for updates' }))
+    expect(
+      screen.getByText('No releases found.', {
+        selector: '[data-slot=empty-title]',
+      })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('link', { name: 'Go to GitHub' })
+    ).not.toBeInTheDocument()
+  })
+
+  test('places managed installation after history and folds older install versions without enabling incompatible updates', async () => {
+    const user = userEvent.setup()
+    useAuthStore
+      .getState()
+      .auth.setUser({ id: 1, username: 'root', role: ROLE.SUPER_ADMIN })
+    vi.mocked(api.get).mockImplementation(async (url) => {
+      if (url === '/api/system-update/status') {
+        return {
+          data: {
+            success: true,
+            data: {
+              supported: true,
+              state: 'idle',
+              reason: '',
+              operation_id: '',
+            },
+          },
+        }
+      }
+      if (url === '/api/system-update/releases') {
+        return {
+          data: {
+            success: true,
+            data: {
+              releases: [
+                {
+                  tag: 'v1.9.0',
+                  name: 'v1.9.0',
+                  compatible: false,
+                  reason: 'Incompatible deployment',
+                },
+                {
+                  tag: 'v1.10.0',
+                  name: 'v1.10.0',
+                  compatible: true,
+                  reason: '',
+                },
+              ],
+            },
+          },
+        }
+      }
+      return { data: { success: true, data: { version: 'v1.0.0-rc.35' } } }
+    })
+    const post = vi.spyOn(api, 'post')
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'New version available: v1.0.0-rc.36',
+      })
+    )
+    const history = screen.getByRole('region', { name: 'Release history' })
+    const managed = screen.getByRole('region', { name: 'Site updates' })
+    expect(
+      history.compareDocumentPosition(managed) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    const versions = await within(managed).findAllByRole('button', {
+      name: /v1\.(?:10|9)\.0/,
+    })
+    expect(versions[0]).toHaveTextContent('v1.10.0')
+    expect(versions[0]).toHaveAttribute('aria-expanded', 'true')
+    expect(versions[1]).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      within(managed).getByRole('button', { name: 'Install update' })
+    ).toBeEnabled()
+    await user.click(versions[1])
+    const incompatible = within(managed)
+      .getByText('Incompatible deployment')
+      .closest('[data-slot=accordion-content]')
+    expect(
+      within(incompatible as HTMLElement).getByRole('button', {
+        name: 'Install update',
+      })
+    ).toBeDisabled()
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  test('uses the no-notes fallback for whitespace-only release bodies', async () => {
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify([{ ...release, body: '  \n  ' }]))
+    )
+    const user = userEvent.setup()
+    render(<SystemUpdateAction />, { wrapper: Wrapper })
+    await user.click(
+      await screen.findByRole('button', { name: /New version available/ })
+    )
+    expect(await screen.findByText('No release notes provided.')).toBeVisible()
   })
 })
 
@@ -454,14 +745,19 @@ describe('version notification preferences', () => {
     act(() => first.result.current.setIgnored(true))
     expect(first.result.current.hasUpdate).toBe(true)
     expect(first.result.current.shouldNotify).toBe(false)
-    const saved = localStorage.getItem('system-update-preferences:v1')
+    const saved = localStorage.getItem(
+      'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2'
+    )
     expect(saved).not.toBeNull()
     first.unmount()
     client.clear()
     useSystemUpdateStore.setState({ snapshot: null })
     useSystemUpdateStore.persist.clearStorage()
     useSystemUpdatePreferencesStore.setState({ ignoredVersionsByUserId: {} })
-    localStorage.setItem('system-update-preferences:v1', String(saved))
+    localStorage.setItem(
+      'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2',
+      String(saved)
+    )
     await useSystemUpdatePreferencesStore.persist.rehydrate()
     client = createAppQueryClient()
     client.setQueryData(STATUS_QUERY_KEY, { version: 'v1.0.0-rc.35' })
@@ -543,10 +839,13 @@ describe('version notification preferences', () => {
       version: 0,
     })
     act(() => {
-      localStorage.setItem('system-update-preferences:v1', saved)
+      localStorage.setItem(
+        'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2',
+        saved
+      )
       window.dispatchEvent(
         new StorageEvent('storage', {
-          key: 'system-update-preferences:v1',
+          key: 'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2',
           newValue: saved,
         })
       )
@@ -554,10 +853,12 @@ describe('version notification preferences', () => {
     expect(first.result.current.shouldNotify).toBe(false)
     expect(second.result.current.shouldNotify).toBe(false)
     act(() => {
-      localStorage.removeItem('system-update-preferences:v1')
+      localStorage.removeItem(
+        'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2'
+      )
       window.dispatchEvent(
         new StorageEvent('storage', {
-          key: 'system-update-preferences:v1',
+          key: 'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2',
           newValue: null,
         })
       )
@@ -586,7 +887,7 @@ describe('version notification preferences', () => {
         })
       } else {
         localStorage.setItem(
-          'system-update-preferences:v1',
+          'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2',
           state === 'corrupt'
             ? '{bad json'
             : JSON.stringify({
@@ -606,6 +907,82 @@ describe('version notification preferences', () => {
 })
 
 describe('update cache and scheduling', () => {
+  test('does not restore source-unknown v1 releases or their ignored tags', async () => {
+    const now = Date.now()
+    localStorage.setItem(
+      'system-update:v1',
+      JSON.stringify({
+        state: {
+          snapshot: {
+            release: {
+              ...release,
+              tag_name: 'v9.0.0',
+              body: 'Old upstream notes',
+            },
+            lastCheckedAt: now,
+            lastAttemptAt: now,
+            error: null,
+          },
+        },
+        version: 0,
+      })
+    )
+    localStorage.setItem(
+      'system-update-preferences:v1',
+      JSON.stringify({
+        state: { ignoredVersionsByUserId: { 1: [release.tag_name] } },
+        version: 0,
+      })
+    )
+    await useSystemUpdateStore.persist.rehydrate()
+    await useSystemUpdatePreferencesStore.persist.rehydrate()
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+    expect(hook.result.current.release).toBeNull()
+    await waitFor(() =>
+      expect(hook.result.current.release?.tag_name).toBe(release.tag_name)
+    )
+    expect(hook.result.current.shouldNotify).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('rejects another repository in the new snapshot cache before showing release details', async () => {
+    const now = Date.now()
+    localStorage.setItem(
+      'system-update:atelier-of-dongn/YMeng-CC-New-API:v2',
+      JSON.stringify({
+        state: {
+          snapshot: {
+            source: 'another/project',
+            releases: [{ ...release, tag_name: 'v9.0.0' }],
+            lastCheckedAt: now,
+            lastAttemptAt: now,
+            error: null,
+          },
+        },
+        version: 0,
+      })
+    )
+    await useSystemUpdateStore.persist.rehydrate()
+    expect(useSystemUpdateStore.getState().snapshot).toBeNull()
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+    await waitFor(() =>
+      expect(hook.result.current.release?.tag_name).toBe(release.tag_name)
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('clears the previous history when a successful response contains no published releases', async () => {
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+    await waitFor(() =>
+      expect(hook.result.current.release?.tag_name).toBe(release.tag_name)
+    )
+    fetchMock.mockImplementation(async () => new Response('[]'))
+    await act(async () => hook.result.current.checkNow())
+    await waitFor(() => expect(hook.result.current.releases).toEqual([]))
+    expect(hook.result.current.release).toBeNull()
+    expect(hook.result.current.shouldNotify).toBe(false)
+  })
+
   test('refreshes the server version during a later automatic check and clears an installed update', async () => {
     vi.useFakeTimers()
     fetchMock.mockImplementation(
@@ -631,10 +1008,15 @@ describe('update cache and scheduling', () => {
     await waitFor(() => expect(first.result.current.hasUpdate).toBe(true))
     first.unmount()
     client.clear()
-    const saved = localStorage.getItem('system-update:v1')
+    const saved = localStorage.getItem(
+      'system-update:atelier-of-dongn/YMeng-CC-New-API:v2'
+    )
     expect(saved).not.toBeNull()
     useSystemUpdateStore.setState({ snapshot: null })
-    localStorage.setItem('system-update:v1', String(saved))
+    localStorage.setItem(
+      'system-update:atelier-of-dongn/YMeng-CC-New-API:v2',
+      String(saved)
+    )
     await useSystemUpdateStore.persist.rehydrate()
     client = createAppQueryClient()
     client.setQueryData(STATUS_QUERY_KEY, { version: 'v1.0.0-rc.35' })
@@ -647,15 +1029,19 @@ describe('update cache and scheduling', () => {
     'keeps checking when persisted storage is %s',
     async (state) => {
       if (state === 'corrupt') {
-        localStorage.setItem('system-update:v1', '{bad json')
+        localStorage.setItem(
+          'system-update:atelier-of-dongn/YMeng-CC-New-API:v2',
+          '{bad json'
+        )
         await useSystemUpdateStore.persist.rehydrate()
       } else if (state === 'future') {
         localStorage.setItem(
-          'system-update:v1',
+          'system-update:atelier-of-dongn/YMeng-CC-New-API:v2',
           JSON.stringify({
             state: {
               snapshot: {
-                release,
+                source: 'atelier-of-dongn/YMeng-CC-New-API',
+                releases: [release],
                 lastCheckedAt: 0,
                 lastAttemptAt: Date.now() + 86_400_000,
                 error: null,

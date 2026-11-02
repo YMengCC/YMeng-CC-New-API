@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Release history": "Lịch sử phiên bản",
+    "Latest release": "Phiên bản mới nhất",
+    "View release": "Xem phiên bản này",
+    "Showing the last successfully checked releases.": "Đang hiển thị các phiên bản từ lần kiểm tra thành công gần nhất.",
     "Invoice orders": "Đơn hàng yêu cầu hóa đơn",
     "BaoCode Link": "Liên kết BaoCode",
     "Link opened by the Get BaoCode button on the home page": "Liên kết được mở bằng nút Tải BaoCode trên trang chủ",

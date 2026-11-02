@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import { compareSystemVersions, selectLatestRelease } from '../releases'
+import {
+  compareSystemVersions,
+  selectLatestRelease,
+  selectSystemReleases,
+} from '../releases'
 
 describe('system release ordering', () => {
   test.each([
@@ -55,6 +59,48 @@ describe('system release ordering', () => {
       { tag_name: 'nightly', draft: false, prerelease: true },
     ]
     expect(selectLatestRelease(releases)?.tag_name).toBe('v1.0.0-rc.36')
+  })
+
+  test('keeps every published version in descending numeric order and removes duplicate tags', () => {
+    const releases = [
+      {
+        tag_name: 'v1.9.0',
+        draft: false,
+        prerelease: false,
+        body: 'Older notes',
+      },
+      { tag_name: 'v1.10.0-rc.2', draft: false, prerelease: true },
+      {
+        tag_name: 'v1.10.0',
+        draft: false,
+        prerelease: false,
+        body: 'Latest notes',
+      },
+      { tag_name: 'v1.9.0-patch.1', draft: false, prerelease: false },
+      { tag_name: 'v2.0.0', draft: true, prerelease: false },
+      { tag_name: 'nightly', draft: false, prerelease: true },
+      { tag_name: 'v1.9.0', draft: false, prerelease: false },
+    ]
+    const result = selectSystemReleases(releases)
+    expect(result.map((release) => release.tag_name)).toEqual([
+      'v1.10.0',
+      'v1.10.0-rc.2',
+      'v1.9.0-patch.1',
+      'v1.9.0',
+    ])
+    expect(result[0].body).toBe('Latest notes')
+    expect(result[3].body).toBe('Older notes')
+    expect(releases[0].tag_name).toBe('v1.9.0')
+  })
+
+  test('returns an empty history when no published version has a valid tag', () => {
+    expect(selectSystemReleases([])).toEqual([])
+    expect(
+      selectSystemReleases([
+        { tag_name: 'v2.0.0', draft: true, prerelease: false },
+        { tag_name: 'nightly', draft: false, prerelease: true },
+      ])
+    ).toEqual([])
   })
 
   test('returns no release for an empty list or a list containing only drafts', () => {

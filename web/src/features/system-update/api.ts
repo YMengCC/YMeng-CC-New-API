@@ -16,7 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { selectLatestRelease, type SystemRelease } from './releases'
+import {
+  selectLatestRelease,
+  selectSystemReleases,
+  SYSTEM_RELEASE_REPOSITORY,
+  type SystemRelease,
+} from './releases'
 
 export type UpdateCheckErrorCode =
   | 'network'
@@ -71,9 +76,9 @@ export async function fetchLatestSystemRelease(
   }
 }
 
-export async function fetchLatestForkSystemRelease(
+export async function fetchForkSystemReleases(
   signal: AbortSignal
-): Promise<SystemRelease | null> {
+): Promise<SystemRelease[]> {
   const controller = new AbortController()
   const cancel = () => controller.abort()
   signal.addEventListener('abort', cancel, { once: true })
@@ -82,7 +87,7 @@ export async function fetchLatestForkSystemRelease(
 
   try {
     const response = await fetch(
-      'https://api.github.com/repos/atelier-of-dongn/YMeng-CC-New-API/releases?per_page=100',
+      `https://api.github.com/repos/${SYSTEM_RELEASE_REPOSITORY}/releases?per_page=100`,
       {
         credentials: 'omit',
         headers: { Accept: 'application/vnd.github+json' },
@@ -95,7 +100,7 @@ export async function fetchLatestForkSystemRelease(
     if (!response.ok) throw new UpdateCheckError('network')
 
     try {
-      return selectLatestRelease(await response.json())
+      return selectSystemReleases(await response.json())
     } catch (error) {
       if (controller.signal.aborted) throw error
       throw new UpdateCheckError('payload')

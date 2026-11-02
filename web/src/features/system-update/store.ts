@@ -24,11 +24,12 @@ import {
   type StateStorage,
 } from 'zustand/middleware'
 
-import { systemReleaseSchema } from './releases'
+import { SYSTEM_RELEASE_REPOSITORY, systemReleaseSchema } from './releases'
 
 const updateSnapshotSchema = z
   .object({
-    release: systemReleaseSchema.nullable(),
+    source: z.literal(SYSTEM_RELEASE_REPOSITORY),
+    releases: z.array(systemReleaseSchema),
     lastCheckedAt: z.number().finite().nonnegative(),
     lastAttemptAt: z.number().finite().nonnegative(),
     error: z.enum(['network', 'rate-limit', 'timeout', 'payload']).nullable(),
@@ -78,7 +79,7 @@ export const useSystemUpdateStore = create<SystemUpdateStore>()(
       setSnapshot: (snapshot) => set({ snapshot }),
     }),
     {
-      name: 'system-update:v1',
+      name: `system-update:${SYSTEM_RELEASE_REPOSITORY}:v2`,
       storage: createJSONStorage(() => updateStorage),
       partialize: (state) => ({ snapshot: state.snapshot }),
       merge: (persisted, current) => {
@@ -94,7 +95,7 @@ export const useSystemUpdateStore = create<SystemUpdateStore>()(
   )
 )
 
-const preferencesStorageKey = 'system-update-preferences:v1'
+const preferencesStorageKey = `system-update-preferences:${SYSTEM_RELEASE_REPOSITORY}:v2`
 const updatePreferencesSchema = z.object({
   ignoredVersionsByUserId: z.record(
     z.string().regex(/^[1-9]\d*$/),

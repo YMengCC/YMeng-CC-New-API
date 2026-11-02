@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
+export const SYSTEM_RELEASE_REPOSITORY = 'atelier-of-dongn/YMeng-CC-New-API'
+
 export const systemReleaseSchema = z.object({
   tag_name: z.string().trim().min(1),
   name: z.string().nullable().optional(),
@@ -88,10 +90,10 @@ const publishedReleaseSchema = systemReleaseSchema.extend({
   draft: z.boolean(),
 })
 
-export function selectLatestRelease(payload: unknown): SystemRelease | null {
+export function selectSystemReleases(payload: unknown): SystemRelease[] {
   if (!Array.isArray(payload)) throw new Error('Unexpected release payload')
 
-  let latest: SystemRelease | null = null
+  const releases = new Map<string, SystemRelease>()
   let validPayload = payload.length === 0
   for (const item of payload) {
     const parsed = publishedReleaseSchema.safeParse(item)
@@ -99,15 +101,18 @@ export function selectLatestRelease(payload: unknown): SystemRelease | null {
     validPayload = true
     const release = parsed.data
     if (release.draft || !parseSystemVersion(release.tag_name)) continue
-    if (
-      !latest ||
-      compareSystemVersions(release.tag_name, latest.tag_name) === 1
-    ) {
-      latest = systemReleaseSchema.parse(release)
+    if (!releases.has(release.tag_name)) {
+      releases.set(release.tag_name, systemReleaseSchema.parse(release))
     }
   }
   if (!validPayload) throw new Error('Unexpected release payload')
-  return latest
+  return [...releases.values()].sort(
+    (left, right) => compareSystemVersions(right.tag_name, left.tag_name) ?? 0
+  )
+}
+
+export function selectLatestRelease(payload: unknown): SystemRelease | null {
+  return selectSystemReleases(payload)[0] ?? null
 }
 
 export function getSystemReleaseUrl(release: SystemRelease): string {
@@ -115,5 +120,5 @@ export function getSystemReleaseUrl(release: SystemRelease): string {
 }
 
 export function getForkSystemReleaseUrl(release: SystemRelease): string {
-  return `https://github.com/atelier-of-dongn/YMeng-CC-New-API/releases/tag/${encodeURIComponent(release.tag_name)}`
+  return `https://github.com/${SYSTEM_RELEASE_REPOSITORY}/releases/tag/${encodeURIComponent(release.tag_name)}`
 }

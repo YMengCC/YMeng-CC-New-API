@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Release history": "版本更新記錄",
+    "Latest release": "最新版本",
+    "View release": "查看此版本",
+    "Showing the last successfully checked releases.": "正在顯示上次成功檢查的版本清單。",
     "Invoice orders": "發票申請訂單",
     "BaoCode Link": "BaoCode 連結",
     "Link opened by the Get BaoCode button on the home page": "首頁「取得 BaoCode」按鈕開啟的連結",
