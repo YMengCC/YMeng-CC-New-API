@@ -19,6 +19,39 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  // Traffic-switch recovery status.
+  'Traffic switch did not take effect; the original instance remains active.',
+  'Container identities or the shared network could not be verified.',
+  'The active proxy route could not be verified before updating.',
+  'Traffic switch intent could not be persisted.',
+  'Traffic switch result is uncertain. Both instances were retained for recovery.',
+  'Traffic switched, but the proxy route could not be persisted. Both instances were retained.',
+  'Traffic switch could not be verified. Both instances were retained.',
+  // Retained-instance cleanup status and API errors.
+  'The previous instance is not safely drained. Wait for its requests to finish before retrying cleanup.',
+  'Cleanup is blocked because the proxy route does not match the active instance.',
+  'Cleanup could not save its progress. Check controller storage and retry.',
+  'The previous instance has not finished stopping. Retry cleanup after it stops.',
+  'The previous instance could not be removed. Check the controller and retry cleanup.',
+  'Cleanup could not verify the retained instance identity. No container was removed.',
+  'Cleanup could not verify the active instance. Check the controller and retry.',
+  'Cleaning up the previous instance. The active service remains available.',
+  'Previous instance cleanup completed. New updates can now be installed.',
+  'Cleanup no longer matches the retained instance. Refresh the update status and try again.',
+  'The retained instance cannot be cleaned up safely. Check the update status before retrying.',
+  'Invalid retained instance cleanup request.',
+  'Cleanup state could not be saved. Installation remains blocked until recovery succeeds.',
+  'This update controller does not support retained instance cleanup. Update the controller first.',
+  'The update controller is unavailable. Check the update status before retrying cleanup.',
+  // Managed update controller status and compatibility messages.
+  'Managed update controller is ready.',
+  'Update completed; the previous container was retained after draining. Manual cleanup is required before another update.',
+  'Update completed, but the HAProxy map file was not persisted. Repair the map and retain the previous container before another update.',
+  'This release has no verified online-update compatibility manifest.',
+  'Release is not approved from the current version.',
+  'Connect the managed update controller before installing releases.',
+  'update controller rejected the operation (HTTP 409)',
+  'Traffic switched; the previous container is still draining and was retained.',
   'For this channel, map the model name in client requests to the model name sent upstream.',
   // Channel provider labels, descriptions and presentation badges.
   'Zhipu GLM',

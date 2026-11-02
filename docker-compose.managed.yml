@@ -112,6 +112,7 @@ services:
       UPDATE_PLATFORM: ${UPDATE_PLATFORM:-linux/amd64}
       UPDATE_DATABASE: ${UPDATE_DATABASE:?set sqlite, mysql or postgres}
       UPDATE_DOCKER_SOCKET: /var/run/docker.sock
+      UPDATE_DOCKER_NETWORK: ${UPDATE_DOCKER_NETWORK:-}
       UPDATE_STATE_FILE: /var/lib/update-controller/state.json
       UPDATE_ACTIVE_CONTAINER: ${UPDATE_ACTIVE_CONTAINER:-new-api-blue}
       UPDATE_HAPROXY_SOCKET: /var/run/haproxy/admin.sock

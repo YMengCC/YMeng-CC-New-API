@@ -2,6 +2,7 @@ package service
 
 import (
 	"crypto/hmac"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -36,6 +37,7 @@ const (
 	VerificationScopePasswordSet         = "account.password.set"
 	VerificationScopePasswordChange      = "account.password.change"
 	VerificationScopeAccountDelete       = "account.delete"
+	VerificationScopeSystemUpdateCleanup = "system.update.cleanup"
 	// Administrative step-up scopes bind the managed user into the proof so a
 	// proof issued for one account cannot be replayed against another.
 	VerificationScopeAdminUserCreate       = "admin.user.create"
@@ -66,6 +68,10 @@ var (
 type VerificationOperation struct {
 	Scope   string          `json:"scope"`
 	Context json.RawMessage `json:"context,omitempty"`
+}
+
+type SystemUpdateCleanupContext struct {
+	CleanupID string `json:"cleanup_id"`
 }
 
 type ChannelKeyReadContext struct {
@@ -163,6 +169,15 @@ func BindVerificationOperation(operation VerificationOperation) (VerificationBin
 	}
 	var normalized any
 	switch operation.Scope {
+	case VerificationScopeSystemUpdateCleanup:
+		var context SystemUpdateCleanupContext
+		if len(fields) != 1 || common.Unmarshal(fields["cleanup_id"], &context.CleanupID) != nil || len(context.CleanupID) != 32 || context.CleanupID != strings.ToLower(context.CleanupID) {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		if _, err := hex.DecodeString(context.CleanupID); err != nil {
+			return VerificationBinding{}, ErrVerificationContextInvalid
+		}
+		normalized = context
 	case VerificationScopeChannelKeyRead:
 		var context ChannelKeyReadContext
 		if len(fields) != 1 || common.Unmarshal(fields["channel_id"], &context.ChannelID) != nil || context.ChannelID <= 0 {
@@ -328,6 +343,7 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 		VerificationScopeAccessTokenGenerate, VerificationScopeAccessTokenUpdate, VerificationScopeAccessTokenRevoke,
 		VerificationScopeAccountBind, VerificationScopeAccountUnbind,
 		VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
+		VerificationScopeSystemUpdateCleanup,
 		VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 		VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
 		VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear:
@@ -375,7 +391,7 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 	if state.Status != common.UserStatusEnabled || state.AuthVersion != identity.UserAuthVersion {
 		return nil, ErrAuthTokenInvalid
 	}
-	if scope == VerificationScopeChannelKeyRead && state.Role != common.RoleRootUser {
+	if (scope == VerificationScopeChannelKeyRead || scope == VerificationScopeSystemUpdateCleanup) && state.Role != common.RoleRootUser {
 		return nil, ErrVerificationForbidden
 	}
 	if strings.HasPrefix(scope, verificationScopeAdminUserPrefix) && state.Role < common.RoleAdminUser {
@@ -393,6 +409,7 @@ func GetVerificationRequirements(identity AuthIdentity, scope string) (*Verifica
 		if methods[i].Method == VerificationMethodPassword && !common.PasswordLoginEnabled {
 			switch scope {
 			case VerificationScopeAccountBind, VerificationScopeAccountUnbind, VerificationScopePasswordSet, VerificationScopePasswordChange, VerificationScopeAccountDelete,
+				VerificationScopeSystemUpdateCleanup,
 				VerificationScopeAdminUserCreate, VerificationScopeAdminUserUpdate, VerificationScopeAdminUserDelete,
 				VerificationScopeAdminUserManage, VerificationScopeAdminUserPasskeyReset,
 				VerificationScopeAdminUserTwoFADisable, VerificationScopeAdminUserBindingClear:

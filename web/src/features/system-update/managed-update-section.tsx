@@ -13,20 +13,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
+import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { ManagedCleanupAction } from './managed-cleanup-action'
+import type { UpdateStatus } from './managed-update-types'
 import { compareSystemVersions } from './releases'
-
-type UpdateStatus = {
-  supported: boolean
-  reason: string
-  state: string
-  current_version: string
-  target_version: string
-  operation_id: string
-  draining: boolean
-}
+import { useManagedCleanup } from './use-managed-cleanup'
 
 type ManagedRelease = {
   tag: string
@@ -50,7 +44,10 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
     },
     refetchInterval: (query) => {
       if (!props.enabled) return false
-      return query.state.data?.operation_id ? 3000 : false
+      return query.state.data?.operation_id ||
+        query.state.data?.state === 'cleaning'
+        ? 3000
+        : false
     },
   })
   const releases = useQuery({
@@ -76,11 +73,35 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
       )
       return requireServerSuccess(response.data)
     },
-    onSuccess: () => {
+    onSuccess: () => setSelected(null),
+    onError: (error) => {
       setSelected(null)
-      void client.invalidateQueries({ queryKey: ['managed-system-update'] })
+      handleServerError(error)
     },
+    onSettled: () =>
+      client.invalidateQueries({ queryKey: ['managed-system-update'] }),
   })
+  const cleanup = useManagedCleanup(
+    props.enabled &&
+      user?.role === 100 &&
+      status.isSuccess &&
+      !update.isPending,
+    status.data
+  )
+  const canInstall =
+    status.isSuccess &&
+    releases.isSuccess &&
+    status.data.supported &&
+    !status.data.operation_id &&
+    !status.data.draining &&
+    (status.data.can_update ??
+      (status.data.state === 'ready' || status.data.state === 'failed')) &&
+    status.data.state !== 'cleaning' &&
+    !cleanup.pending &&
+    !update.isPending
+  const selectedIsCurrent =
+    selected &&
+    compareSystemVersions(selected.tag, status.data?.current_version) === 0
   const sortedReleases = [...(releases.data ?? [])].sort(
     (left, right) => compareSystemVersions(right.tag, left.tag) ?? 0
   )
@@ -106,45 +127,49 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
       {status.data && (
         <Alert>
           <AlertDescription>
-            {status.data.reason ||
-              t('Update state: {{state}}', { state: status.data.state })}
+            {status.data.reason
+              ? t(status.data.reason)
+              : t('Update state: {{state}}', { state: status.data.state })}
           </AlertDescription>
         </Alert>
       )}
+      <ManagedCleanupAction status={status.data} cleanup={cleanup} />
       {props.enabled && sortedReleases.length > 0 && (
         <Accordion
           key={sortedReleases[0].tag}
           multiple
           defaultValue={[sortedReleases[0].tag]}
         >
-          {sortedReleases.map((release) => (
-            <AccordionItem key={release.tag} value={release.tag}>
-              <AccordionTrigger className='min-w-0 gap-3 hover:no-underline'>
-                <span className='min-w-0 wrap-anywhere'>
-                  {release.name || release.tag}
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className='flex flex-col items-start gap-2'>
-                {release.reason && (
-                  <p className='text-muted-foreground text-sm wrap-anywhere'>
-                    {release.reason}
-                  </p>
-                )}
-                <Button
-                  type='button'
-                  disabled={
-                    !status.data?.supported ||
-                    !release.compatible ||
-                    update.isPending ||
-                    !!status.data.operation_id
-                  }
-                  onClick={() => setSelected(release)}
-                >
-                  {t('Install update')}
-                </Button>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
+          {sortedReleases.map((release) => {
+            const isCurrent =
+              compareSystemVersions(
+                release.tag,
+                status.data?.current_version
+              ) === 0
+            return (
+              <AccordionItem key={release.tag} value={release.tag}>
+                <AccordionTrigger className='min-w-0 gap-3 hover:no-underline'>
+                  <span className='min-w-0 wrap-anywhere'>
+                    {release.name || release.tag}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className='flex flex-col items-start gap-2'>
+                  {release.reason && (
+                    <p className='text-muted-foreground text-sm wrap-anywhere'>
+                      {t(release.reason)}
+                    </p>
+                  )}
+                  <Button
+                    type='button'
+                    disabled={!canInstall || !release.compatible || isCurrent}
+                    onClick={() => setSelected(release)}
+                  >
+                    {isCurrent ? t('Current version') : t('Install update')}
+                  </Button>
+                </AccordionContent>
+              </AccordionItem>
+            )
+          })}
         </Accordion>
       )}
       <ConfirmDialog
@@ -157,9 +182,11 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
           'Prepare the new version while existing requests finish on the current version.'
         )}
         isLoading={update.isPending}
-        disabled={!status.data?.supported || !selected?.compatible}
+        disabled={!canInstall || !selected?.compatible || !!selectedIsCurrent}
         handleConfirm={() => {
-          if (selected) update.mutate(selected)
+          if (canInstall && selected?.compatible && !selectedIsCurrent) {
+            update.mutate(selected)
+          }
         }}
       />
     </section>

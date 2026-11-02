@@ -219,7 +219,20 @@ git push origin main && git push origin v1.1.30
 - `NEW_API_IMAGE` 使用已验证的不可变 digest；两实例共享主数据库、日志数据库、Redis、`SESSION_SECRET`、`CRYPTO_SECRET` 和 `update_assets` 卷。
 - `UPDATE_CONTROL_TOKEN` 是随机且仅用于内部网络的令牌；`UPDATE_RELEASE_PUBLIC_KEY` 验证发布清单签名；控制器是唯一允许挂载 Docker socket 的服务。
 - 先让 Nginx/宝塔指向代理的 `3000` 端口，再从后台更新入口执行检查。没有签名兼容清单、数据库/schema/缓存兼容性证据或候选实例 readiness 时，安装按钮会保持禁用。
-- 旧实例不会因固定超时被强制关闭；长连接或计费写入未完成时会保留旧实例并显示排空状态。更新失败时继续使用旧实例。
+- 旧实例不会因固定超时被强制关闭；长连接或计费写入未完成时会保留旧实例并显示排空状态。切流前失败继续使用旧实例；切流结果不确定时保留双方实例并阻止后续操作，等待路由对账。
+- 更新成功且旧实例排空后，超级管理员在更新弹窗中选择“清理旧实例”，确认目标并完成身份验证。控制器重新校验当前实例健康、代理运行中/磁盘路由和旧实例排空状态，再优雅停止并非强制删除旧容器；不会删除共享卷、镜像或当前服务。进度保存成功后安装入口恢复，才能开始下一次更新。
+- 清理中断或超时后先查看状态；失败时可重试同一次清理。控制器按已持久化的 Docker ID 对账，不会因名称相同而清理后来创建的容器。历史状态只有旧名称且该容器已被人工删除时，无法自动证明清理对象，需运维核对恢复，不能直接清空状态文件。
+
+#### 更新清理能力所需部署
+
+此能力需要配套更新应用前端/后端、`cmd/update-controller` 控制器镜像和 `deploy/update/haproxy.cfg`。普通应用 Release 不会自动重建独立控制器。先备份控制器状态及代理 map，确认持久 active 实例仍在运行，再构建控制器，并单独替换控制器服务：
+
+```bash
+docker compose -f docker-compose.managed.yml build update-controller
+docker compose -f docker-compose.managed.yml up -d --no-deps update-controller
+```
+
+HAProxy 配置变更需先在隔离环境使用 HAProxy 3.2 校验，再通过部署环境已有的优雅重载机制加载，保留现有长连接；不要用强制重启代理替代。控制器确认运行中 map 与磁盘 map 一致后，方可清理旧实例。不要执行整组 `docker compose up` 或 `down` 来部署此功能，以免重建已删除的 blue/green 声明服务或中断现有连接。单网络部署自动选用唯一网络；多网络有歧义时可用 `UPDATE_DOCKER_NETWORK` 指定 Docker 实际网络名或 ID。
 
 #### 故障排查
 

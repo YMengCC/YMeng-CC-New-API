@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -44,6 +45,7 @@ type updateConfig struct {
 	haproxyMapKey    string
 	internalPort     int
 	operationTimeout time.Duration
+	dockerNetwork    string
 }
 
 func loadConfig() (updateConfig, error) {
@@ -60,6 +62,7 @@ func loadConfig() (updateConfig, error) {
 		haproxyMapKey:    strings.TrimSpace(os.Getenv("UPDATE_HAPROXY_MAP_KEY")),
 		internalPort:     defaultControlPort,
 		operationTimeout: 3 * time.Minute,
+		dockerNetwork:    strings.TrimSpace(os.Getenv("UPDATE_DOCKER_NETWORK")),
 	}
 	missing := make([]string, 0)
 	for name, value := range map[string]string{
@@ -125,6 +128,13 @@ type controller struct {
 	status            siteupdate.Status
 	active            string
 	drainingContainer string
+	activeRef         *containerRef
+	cleanup           *cleanupRecord
+	switchIntent      *switchIntent
+	lastCleanupID     string
+	persistenceFailed bool
+	workerRunning     bool
+	proxy             proxyRuntime
 }
 
 type githubRelease struct {
@@ -150,6 +160,7 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		engine: engine,
 		client: client,
 		active: config.activeContainer,
+		proxy:  haproxySocket{path: config.haproxySocket},
 		status: siteupdate.Status{
 			Supported:      true,
 			CurrentVersion: config.currentVersion,
@@ -173,6 +184,14 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		controller.status.Supported = true
 	}
 	controller.drainingContainer = state.DrainingContainer
+	controller.activeRef = state.ActiveRef
+	controller.cleanup = state.Cleanup
+	controller.switchIntent = state.SwitchIntent
+	controller.lastCleanupID = state.LastCleanupID
+	if engine != nil && (controller.cleanup != nil || controller.switchIntent != nil || controller.drainingContainer != "") {
+		controller.recoverRetainedState()
+		return controller, nil
+	}
 	if controller.status.OperationID != "" && controller.status.State != "draining" {
 		controller.status.State = "failed"
 		controller.status.Reason = "Controller restarted during an update; existing containers were retained and no automatic rollback was attempted."
@@ -189,7 +208,7 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		restoreErr := restoreHAProxyMap(ctx, controller)
 		cancel()
 		if restoreErr != nil {
-			controller.status.State = "failed"
+			controller.status.State = "blocked"
 			controller.status.Reason = "Persisted active container could not restore the HAProxy map; no update operation will start."
 			controller.status.OperationID = ""
 			controller.status.TargetVersion = ""
@@ -211,13 +230,15 @@ func (u *controller) persist() error {
 }
 
 func (u *controller) persistLocked() error {
-	return u.store.save(persistedState{Status: u.status, ActiveContainer: u.active, DrainingContainer: u.drainingContainer})
+	err := u.store.save(u.persistedLocked())
+	u.persistenceFailed = err != nil
+	return err
 }
 
 func (u *controller) snapshot() siteupdate.Status {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return u.status
+	return u.snapshotLocked()
 }
 
 func (u *controller) setStatus(update func(*siteupdate.Status)) error {
@@ -376,8 +397,11 @@ func (u *controller) reserve(tag string) (string, siteupdate.Status, error) {
 	if !u.status.Supported {
 		return "", u.status, fmt.Errorf("managed update controller is not configured")
 	}
-	if u.status.OperationID != "" {
-		return "", u.status, fmt.Errorf("an update operation is already in progress")
+	if u.status.OperationID != "" || u.workerRunning {
+		return "", u.snapshotLocked(), fmt.Errorf("an update operation is already in progress")
+	}
+	if !u.canUpdateLocked() {
+		return "", u.snapshotLocked(), fmt.Errorf("the controller is not ready for another update")
 	}
 	if u.drainingContainer != "" {
 		return "", u.status, fmt.Errorf("the previous container is retained; manual cleanup is required before another update")
@@ -397,7 +421,8 @@ func (u *controller) reserve(tag string) (string, siteupdate.Status, error) {
 		u.status.State = "failed"
 		return "", u.status, err
 	}
-	return operationID, u.status, nil
+	u.workerRunning = true
+	return operationID, u.snapshotLocked(), nil
 }
 
 func newOperationID() (string, error) {
@@ -418,6 +443,7 @@ func (u *controller) startUpdate(ctx context.Context, tag string) (siteupdate.St
 }
 
 func (u *controller) runUpdate(operationID, tag string) {
+	defer func() { u.mu.Lock(); u.workerRunning = false; u.mu.Unlock() }()
 	ctx, cancel := context.WithTimeout(context.Background(), u.config.operationTimeout)
 	defer cancel()
 	fail := func(reason string, _ string) {
@@ -440,7 +466,13 @@ func (u *controller) runUpdate(operationID, tag string) {
 		return
 	}
 	activeName := u.currentContainer()
-	active, err := u.engine.Inspect(ctx, activeName)
+	u.mu.Lock()
+	activeID := activeName
+	if u.activeRef != nil {
+		activeID = u.activeRef.ID
+	}
+	u.mu.Unlock()
+	active, err := u.engine.Inspect(ctx, activeID)
 	if err != nil {
 		fail("Cannot inspect the configured active container.", "")
 		return
@@ -467,8 +499,9 @@ func (u *controller) runUpdate(operationID, tag string) {
 		return
 	}
 	trafficSwitched := false
+	intentSaved := false
 	defer func() {
-		if !trafficSwitched {
+		if !trafficSwitched && !intentSaved {
 			_ = u.engine.Remove(context.Background(), candidateID, true)
 		}
 	}()
@@ -490,32 +523,48 @@ func (u *controller) runUpdate(operationID, tag string) {
 		fail("Candidate readiness was not proven before switching traffic.", candidateID)
 		return
 	}
-	if err := switchHAProxyMap(ctx, u.config.haproxySocket, u.config.haproxyMap, u.config.haproxyMapKey, candidateAddress.host); err != nil {
-		fail("Traffic switch was not acknowledged by HAProxy; existing service was left running.", candidateID)
+	toRef, fromRef, err := u.sharedContainerRefs(candidate, active)
+	if err != nil {
+		fail("Container identities or the shared network could not be verified.", candidateID)
+		return
+	}
+	if err := u.verifyProxyTarget(ctx, oldAddress.host); err != nil {
+		fail("The active proxy route could not be verified before updating.", candidateID)
+		return
+	}
+	if err := u.prepareSwitch(fromRef, toRef, tag); err != nil {
+		fail("Traffic switch intent could not be persisted.", candidateID)
+		return
+	}
+	intentSaved = true
+	if err := u.proxy.Select(ctx, u.config.haproxyMap, u.config.haproxyMapKey, candidateAddress.host); err != nil {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.State = "blocked"
+			status.OperationID = ""
+			status.Reason = "Traffic switch result is uncertain. Both instances were retained for recovery."
+		})
 		return
 	}
 	trafficSwitched = true
-	mapPersistenceErr := persistHAProxyMap(u.config.haproxyMap, u.config.haproxyMapKey, candidateAddress.host)
-	if mapPersistenceErr != nil {
-		common.SysError("managed update runtime map switched but map file persistence failed: " + mapPersistenceErr.Error())
+	if err := persistHAProxyMap(u.config.haproxyMap, u.config.haproxyMapKey, candidateAddress.host); err != nil {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.State = "blocked"
+			status.OperationID = ""
+			status.Reason = "Traffic switched, but the proxy route could not be persisted. Both instances were retained."
+		})
+		return
 	}
-
-	u.mu.Lock()
-	u.active = candidateName
-	u.drainingContainer = activeName
-	u.status.State = "draining"
-	u.status.Draining = true
-	u.status.Reason = "Traffic switched to the verified candidate; waiting for the previous container to drain."
-	if mapPersistenceErr != nil {
-		u.status.Reason = "Traffic switched, but the HAProxy map file was not persisted; previous container is retained for recovery."
+	if err := u.verifyProxyTarget(ctx, candidateAddress.host); err != nil {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.State = "blocked"
+			status.OperationID = ""
+			status.Reason = "Traffic switch could not be verified. Both instances were retained."
+		})
+		return
 	}
-	persistErr := u.persistLocked()
-	u.mu.Unlock()
-	if persistErr != nil {
-		// The switch has already been acknowledged. Continue draining the old
-		// container even if the state file could not be updated; stopping here
-		// would leave the old worker accepting direct traffic indefinitely.
-		common.SysError("managed update state persistence failed after traffic switch: " + persistErr.Error())
+	if err := u.commitSwitch(); err != nil {
+		common.SysError("managed update state persistence failed after traffic switch")
+		return
 	}
 
 	if _, err := u.lifecycle(ctx, oldAddress, http.MethodPost); err != nil {
@@ -539,9 +588,6 @@ func (u *controller) runUpdate(operationID, tag string) {
 		status.OperationID = ""
 		status.Draining = false
 		status.Reason = "Update completed; the previous container was retained after draining. Manual cleanup is required before another update."
-		if mapPersistenceErr != nil {
-			status.Reason = "Update completed, but the HAProxy map file was not persisted. Repair the map and retain the previous container before another update."
-		}
 	})
 }
 
@@ -556,17 +602,24 @@ func (u *controller) currentContainer() string {
 }
 
 func (u *controller) containerAddress(container dockerContainer) (containerAddressInfo, error) {
-	names := make([]string, 0, len(container.NetworkSettings.Networks))
-	for name := range container.NetworkSettings.Networks {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	for _, name := range names {
-		if address := container.NetworkSettings.Networks[name].IPAddress; address != "" {
-			return containerAddressInfo{host: address}, nil
+	var selected *containerAddressInfo
+	for name, endpoint := range container.NetworkSettings.Networks {
+		if u.config.dockerNetwork != "" && name != u.config.dockerNetwork && endpoint.NetworkID != u.config.dockerNetwork {
+			continue
 		}
+		if endpoint.IPAddress == "" {
+			continue
+		}
+		if selected != nil {
+			return containerAddressInfo{}, fmt.Errorf("container network is ambiguous; configure UPDATE_DOCKER_NETWORK")
+		}
+		address := containerAddressInfo{host: endpoint.IPAddress}
+		selected = &address
 	}
-	return containerAddressInfo{}, fmt.Errorf("container has no network address")
+	if selected == nil {
+		return containerAddressInfo{}, fmt.Errorf("container has no network address")
+	}
+	return *selected, nil
 }
 
 func (u *controller) lifecycle(ctx context.Context, address containerAddressInfo, method string) (common.UpdateLifecycleSnapshot, error) {
@@ -635,6 +688,9 @@ func (u *controller) resumeDrain() {
 	defer cancel()
 	u.mu.Lock()
 	containerName := u.drainingContainer
+	if u.cleanup != nil {
+		containerName = u.cleanup.Old.ID
+	}
 	u.mu.Unlock()
 	container, err := u.engine.Inspect(ctx, containerName)
 	if err != nil {
@@ -705,7 +761,30 @@ func (u *controller) serve(w http.ResponseWriter, r *http.Request) {
 	var result any
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/status":
+		u.refreshRetainedState(r.Context())
 		result = u.snapshot()
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/cleanup":
+		var fields map[string]string
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+		if err != nil || common.Unmarshal(body, &fields) != nil || len(fields) != 1 || !validHexID(fields["cleanup_id"], 32) {
+			writeCleanupError(w, http.StatusBadRequest, cleanupError("cleanup_invalid_request"))
+			return
+		}
+		status, err := u.startCleanup(fields["cleanup_id"])
+		if err != nil {
+			var operationError *siteupdate.OperationError
+			if !errors.As(err, &operationError) {
+				operationError = cleanupError("cleanup_unavailable")
+			}
+			code := http.StatusConflict
+			if operationError.Code == "cleanup_persistence_failed" {
+				code = http.StatusServiceUnavailable
+			}
+			writeCleanupError(w, code, operationError)
+			return
+		}
+		responseStatus = http.StatusAccepted
+		result = status
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/releases":
 		releases, err := u.releases(r.Context())
 		if err != nil {

@@ -414,6 +414,7 @@ func SetApiRouter(router *gin.Engine) {
 		updateRoute.GET("/status", controller.GetSystemUpdateStatus)
 		updateRoute.GET("/releases", controller.GetSystemUpdateReleases)
 		updateRoute.POST("/update", middleware.SensitiveOperationOriginGuard(), controller.StartSystemUpdate)
+		updateRoute.POST("/cleanup", middleware.SensitiveOperationOriginGuard(), controller.CleanupSystemUpdate)
 
 		systemInfoRoute := apiRouter.Group("/system-info")
 		systemInfoRoute.Use(middleware.RootAuth())

@@ -4,14 +4,37 @@ const Repository = "atelier-of-dongn/YMeng-CC-New-API"
 const ImageRepository = "ghcr.io/atelier-of-dongn/ymeng-cc-new-api"
 
 type Status struct {
-	Supported      bool   `json:"supported"`
-	Reason         string `json:"reason"`
-	State          string `json:"state"`
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	OperationID    string `json:"operation_id"`
-	Draining       bool   `json:"draining"`
+	Supported        bool           `json:"supported"`
+	Reason           string         `json:"reason"`
+	State            string         `json:"state"`
+	CurrentVersion   string         `json:"current_version"`
+	TargetVersion    string         `json:"target_version"`
+	OperationID      string         `json:"operation_id"`
+	Draining         bool           `json:"draining"`
+	CleanupSupported bool           `json:"cleanup_supported"`
+	CanUpdate        *bool          `json:"can_update,omitempty"`
+	CanCleanup       bool           `json:"can_cleanup"`
+	ReasonCode       string         `json:"reason_code,omitempty"`
+	Cleanup          *CleanupStatus `json:"cleanup,omitempty"`
 }
+
+type CleanupStatus struct {
+	CleanupID     string `json:"cleanup_id"`
+	TargetName    string `json:"target_name"`
+	Phase         string `json:"phase"`
+	LastErrorCode string `json:"last_error_code,omitempty"`
+}
+
+type CleanupRequest struct {
+	CleanupID string `json:"cleanup_id"`
+}
+
+type OperationError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e *OperationError) Error() string { return e.Message }
 
 type Release struct {
 	Tag         string `json:"tag"`

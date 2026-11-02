@@ -15,6 +15,16 @@ import (
 	"github.com/QuantumNous/new-api/pkg/siteupdate"
 )
 
+type SystemUpdateControllerError struct {
+	StatusCode int
+	Code       string
+	Message    string
+}
+
+func (e *SystemUpdateControllerError) Error() string {
+	return e.Message
+}
+
 func SystemUpdateRequest(ctx context.Context, method, endpoint string, payload any, result any) error {
 	base := strings.TrimRight(os.Getenv("UPDATE_CONTROLLER_URL"), "/")
 	token := os.Getenv("UPDATE_CONTROL_TOKEN")
@@ -49,6 +59,31 @@ func SystemUpdateRequest(ctx context.Context, method, endpoint string, payload a
 		return fmt.Errorf("cannot read update controller response")
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		if endpoint == "/v1/cleanup" {
+			var rejection siteupdate.OperationError
+			if common.Unmarshal(body, &rejection) == nil {
+				messages := map[string]string{
+					"cleanup_conflict":           "Cleanup no longer matches the retained instance. Refresh the update status and try again.",
+					"cleanup_unavailable":        "The retained instance cannot be cleaned up safely. Check the update status before retrying.",
+					"cleanup_invalid_request":    "Invalid retained instance cleanup request.",
+					"cleanup_persistence_failed": "Cleanup state could not be saved. Installation remains blocked until recovery succeeds.",
+					"cleanup_not_supported":      "This update controller does not support retained instance cleanup. Update the controller first.",
+				}
+				if message, ok := messages[rejection.Code]; ok {
+					status := http.StatusConflict
+					if rejection.Code == "cleanup_invalid_request" {
+						status = http.StatusBadRequest
+					} else if rejection.Code == "cleanup_unavailable" || rejection.Code == "cleanup_persistence_failed" || rejection.Code == "cleanup_not_supported" {
+						status = http.StatusServiceUnavailable
+					}
+					return &SystemUpdateControllerError{StatusCode: status, Code: rejection.Code, Message: message}
+				}
+			}
+			if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusMethodNotAllowed {
+				return &SystemUpdateControllerError{StatusCode: http.StatusServiceUnavailable, Code: "cleanup_not_supported", Message: "This update controller does not support retained instance cleanup. Update the controller first."}
+			}
+			return &SystemUpdateControllerError{StatusCode: http.StatusServiceUnavailable, Code: "cleanup_unavailable", Message: "The retained instance cannot be cleaned up safely. Check the update status before retrying."}
+		}
 		return fmt.Errorf("update controller rejected the operation (HTTP %d)", response.StatusCode)
 	}
 	return common.Unmarshal(body, result)

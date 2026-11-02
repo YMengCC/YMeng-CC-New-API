@@ -581,7 +581,7 @@ describe('release history', () => {
             success: true,
             data: {
               supported: true,
-              state: 'idle',
+              state: 'ready',
               reason: '',
               operation_id: '',
             },

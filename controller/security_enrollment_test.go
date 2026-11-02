@@ -102,6 +102,10 @@ func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentit
 		if err == nil {
 			_ = connection.Close()
 		}
+		logConnection, err := logDB.DB()
+		if err == nil {
+			_ = logConnection.Close()
+		}
 	})
 	password, err := common.Password2Hash("enrollment-password")
 	require.NoError(t, err)
@@ -1817,6 +1821,126 @@ func TestSecurityEnrollmentMissingTargetsAreBusinessErrors(t *testing.T) {
 	}
 	_, _, err := service.ValidateLoginSession(identity)
 	require.NoError(t, err)
+}
+
+func TestManagedCleanupRequiresRootAndExactOneTimeProof(t *testing.T) {
+	user, identity := setupSecurityEnrollmentTest(t)
+	previousPasswordEnabled := common.PasswordLoginEnabled
+	common.PasswordLoginEnabled = true
+	t.Cleanup(func() { common.PasswordLoginEnabled = previousPasswordEnabled })
+	cleanupID := "0123456789abcdef0123456789abcdef"
+	otherID := "fedcba9876543210fedcba9876543210"
+	operation := service.VerificationOperation{Scope: service.VerificationScopeSystemUpdateCleanup, Context: []byte(`{"cleanup_id":"` + cleanupID + `"}`)}
+
+	_, err := service.GetVerificationRequirements(identity, operation.Scope)
+	assert.ErrorIs(t, err, service.ErrVerificationForbidden)
+	require.NoError(t, model.DB.Model(user).Update("role", common.RoleRootUser).Error)
+	requirements, err := service.GetVerificationRequirements(identity, operation.Scope)
+	require.NoError(t, err)
+	require.Len(t, requirements.Methods, 1)
+	assert.Equal(t, service.VerificationMethodPassword, requirements.Methods[0].Method)
+	assert.True(t, requirements.Methods[0].Available)
+	common.PasswordLoginEnabled = false
+	requirements, err = service.GetVerificationRequirements(identity, operation.Scope)
+	require.NoError(t, err)
+	assert.False(t, requirements.Methods[0].Available)
+	common.PasswordLoginEnabled = true
+
+	requests := 0
+	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		assert.Equal(t, "/v1/cleanup", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		var request map[string]string
+		require.NoError(t, common.DecodeJson(r.Body, &request))
+		assert.Equal(t, map[string]string{"cleanup_id": cleanupID}, request)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"supported":true,"state":"cleaning","operation_id":"test-cleanup"}`))
+	}))
+	defer controller.Close()
+	t.Setenv("UPDATE_CONTROLLER_URL", controller.URL)
+	t.Setenv("UPDATE_CONTROL_TOKEN", "cleanup-test-token-with-at-least-32-characters")
+	handler := func(c *gin.Context) {
+		c.Set("role", common.RoleRootUser)
+		c.Request.Header.Set("X-Requested-With", "YMeng-Update")
+		CleanupSystemUpdate(c)
+	}
+	proof := issueSecurityEnrollmentProof(t, identity, operation, service.VerificationMethodPassword)
+	for _, payload := range []string{
+		`{}`, `{"cleanup_id":"invalid"}`, `{"cleanup_id":"` + cleanupID + `","force":true}`,
+		`{"cleanup_id":"` + cleanupID + `"} {}`, `{"cleanup_id":42}`,
+	} {
+		response := securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", payload, proof, identity, handler)
+		assert.Equal(t, http.StatusBadRequest, response.Code, payload)
+	}
+	response := securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", `{"cleanup_id":"`+cleanupID+`"}`, "", identity, handler)
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "SECURITY_PROOF_REQUIRED")
+	response = securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", `{"cleanup_id":"`+otherID+`"}`, proof, identity, handler)
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "SECURITY_PROOF_CONTEXT_MISMATCH")
+	assert.Zero(t, requests)
+
+	response = securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", `{"cleanup_id":"`+cleanupID+`"}`, proof, identity, handler)
+	assert.Equal(t, http.StatusAccepted, response.Code, response.Body.String())
+	assert.Equal(t, 1, requests)
+	response = securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", `{"cleanup_id":"`+cleanupID+`"}`, proof, identity, handler)
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "SECURITY_PROOF_CONSUMED")
+	assert.Equal(t, 1, requests)
+}
+
+func TestManagedCleanupRejectsUnauthorizedRequestsAndSanitizesControllerErrors(t *testing.T) {
+	user, identity := setupSecurityEnrollmentTest(t)
+	previousPasswordEnabled := common.PasswordLoginEnabled
+	common.PasswordLoginEnabled = true
+	t.Cleanup(func() { common.PasswordLoginEnabled = previousPasswordEnabled })
+	cleanupID := "0123456789abcdef0123456789abcdef"
+	payload := `{"cleanup_id":"` + cleanupID + `"}`
+	response := securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", payload, "", identity, CleanupSystemUpdate)
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	require.NoError(t, model.DB.Model(user).Update("role", common.RoleRootUser).Error)
+	response = securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", payload, "", identity, func(c *gin.Context) {
+		c.Set("role", common.RoleRootUser)
+		CleanupSystemUpdate(c)
+	})
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "update request header is required")
+
+	operation := service.VerificationOperation{Scope: service.VerificationScopeSystemUpdateCleanup, Context: []byte(payload)}
+	cases := []struct {
+		name       string
+		body       string
+		status     int
+		wantStatus int
+		wantCode   string
+	}{
+		{"conflict", `{"code":"cleanup_conflict","message":"docker-secret-details"}`, 409, 409, "cleanup_conflict"},
+		{"persistence", `{"code":"cleanup_persistence_failed","message":"docker-secret-details"}`, 503, 503, "cleanup_persistence_failed"},
+		{"unknown", `docker-secret-details`, 500, 503, "cleanup_unavailable"},
+		{"old-controller", `not found`, 404, 503, "cleanup_not_supported"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer controller.Close()
+			t.Setenv("UPDATE_CONTROLLER_URL", controller.URL)
+			t.Setenv("UPDATE_CONTROL_TOKEN", "cleanup-test-token-with-at-least-32-characters")
+			proof := issueSecurityEnrollmentProof(t, identity, operation, service.VerificationMethodPassword)
+			response := securityEnrollmentRequest(http.MethodPost, "/api/system-update/cleanup", payload, proof, identity, func(c *gin.Context) {
+				c.Set("role", common.RoleRootUser)
+				c.Request.Header.Set("X-Requested-With", "YMeng-Update")
+				CleanupSystemUpdate(c)
+			})
+			assert.Equal(t, tc.wantStatus, response.Code, response.Body.String())
+			assert.Contains(t, response.Body.String(), tc.wantCode)
+			assert.NotContains(t, response.Body.String(), "docker-secret-details")
+		})
+	}
 }
 
 func TestSecurityEnrollmentRejectsChangedFirstFactorPolicy(t *testing.T) {

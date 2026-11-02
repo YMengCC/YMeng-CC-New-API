@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,7 +20,17 @@ type dockerEngine interface {
 	Inspect(ctx context.Context, name string) (dockerContainer, error)
 	Create(ctx context.Context, name, image string, source dockerContainer) (string, error)
 	Start(ctx context.Context, id string) error
+	Stop(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
+}
+
+type dockerHTTPError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *dockerHTTPError) Error() string {
+	return fmt.Sprintf("docker engine returned HTTP %d", e.StatusCode)
 }
 
 type dockerHTTPClient struct {
@@ -38,7 +49,10 @@ type dockerContainer struct {
 }
 
 type dockerState struct {
-	Running bool `json:"Running"`
+	Running    bool   `json:"Running"`
+	Restarting bool   `json:"Restarting"`
+	Dead       bool   `json:"Dead"`
+	Status     string `json:"Status"`
 }
 
 type dockerNetworkSettings struct {
@@ -46,6 +60,7 @@ type dockerNetworkSettings struct {
 }
 
 type dockerNetworkEndpoint struct {
+	NetworkID string   `json:"NetworkID"`
 	Aliases   []string `json:"Aliases"`
 	Links     []string `json:"Links"`
 	IPAddress string   `json:"IPAddress"`
@@ -76,7 +91,13 @@ func (d *dockerHTTPClient) request(ctx context.Context, method, endpoint string,
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := d.client.Do(request)
+	client := d.client
+	if strings.HasSuffix(endpoint, "/stop?t=-1") {
+		copy := *client
+		copy.Timeout = 0 // The caller bounds the wait; Docker must never escalate to SIGKILL.
+		client = &copy
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -90,7 +111,7 @@ func (d *dockerHTTPClient) request(ctx context.Context, method, endpoint string,
 		if len(message) > 512 {
 			message = message[:512]
 		}
-		return fmt.Errorf("docker engine returned HTTP %d: %s", response.StatusCode, message)
+		return &dockerHTTPError{StatusCode: response.StatusCode, Message: message}
 	}
 	if result == nil || len(data) == 0 {
 		return nil
@@ -185,6 +206,15 @@ func (d *dockerHTTPClient) Create(ctx context.Context, name, image string, sourc
 func (d *dockerHTTPClient) Start(ctx context.Context, id string) error {
 	endpoint := "/" + dockerAPIVersion + "/containers/" + url.PathEscape(id) + "/start"
 	return d.request(ctx, http.MethodPost, endpoint, nil, nil)
+}
+
+func (d *dockerHTTPClient) Stop(ctx context.Context, id string) error {
+	err := d.request(ctx, http.MethodPost, "/"+dockerAPIVersion+"/containers/"+url.PathEscape(id)+"/stop?t=-1", nil, nil)
+	var engineError *dockerHTTPError
+	if errors.As(err, &engineError) && engineError.StatusCode == http.StatusNotModified {
+		return nil
+	}
+	return err
 }
 
 func (d *dockerHTTPClient) Remove(ctx context.Context, id string, force bool) error {

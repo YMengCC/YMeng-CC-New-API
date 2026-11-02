@@ -162,6 +162,65 @@ func TestSecurityProofBindsIdentityAndOperation(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAuthTokenExpired)
 }
 
+func TestCleanupProofRequiresExactCleanupGeneration(t *testing.T) {
+	setupAuthSessionTestDB(t)
+	useTestSessionSecret(t)
+	operation := VerificationOperation{Scope: VerificationScopeSystemUpdateCleanup, Context: []byte(`{"cleanup_id":"0123456789abcdef0123456789abcdef"}`)}
+	binding, err := BindVerificationOperation(operation)
+	require.NoError(t, err)
+	identity := AuthIdentity{UserID: 1, SessionID: "root-session", UserAuthVersion: 1, SessionVersion: 1}
+	proof, _, err := IssueSecurityProof(identity, VerificationMethodPassword, binding)
+	require.NoError(t, err)
+	_, err = verifySecurityProof(proof, identity, binding)
+	require.NoError(t, err)
+
+	otherGeneration, err := BindVerificationOperation(VerificationOperation{Scope: VerificationScopeSystemUpdateCleanup, Context: []byte(`{"cleanup_id":"fedcba9876543210fedcba9876543210"}`)})
+	require.NoError(t, err)
+	_, err = verifySecurityProof(proof, identity, otherGeneration)
+	assert.ErrorIs(t, err, ErrProofContext)
+	otherScope, err := BindVerificationOperation(VerificationOperation{Scope: VerificationScopePasskeyDelete})
+	require.NoError(t, err)
+	_, err = verifySecurityProof(proof, identity, otherScope)
+	assert.ErrorIs(t, err, ErrProofScope)
+	otherIdentity := identity
+	otherIdentity.SessionID = "another-root-session"
+	_, err = verifySecurityProof(proof, otherIdentity, binding)
+	assert.ErrorIs(t, err, ErrAuthTokenInvalid)
+	claims, err := parseAuthClaims(proof, securityProofTokenUse, authSigningKey(securityProofTokenUse))
+	require.NoError(t, err)
+	claims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(-time.Minute))
+	expired, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(authSigningKey(securityProofTokenUse))
+	require.NoError(t, err)
+	_, err = ConsumeOperationProof(expired, identity, operation)
+	assert.ErrorIs(t, err, ErrAuthTokenExpired)
+
+	for _, payload := range []string{
+		`{}`, `{"cleanup_id":""}`, `{"cleanup_id":"../old-container"}`,
+		`{"cleanup_id":"0123456789ABCDEF0123456789ABCDEF"}`,
+		`{"cleanup_id":"0123456789abcdef0123456789abcdef","force":true}`,
+	} {
+		_, err := BindVerificationOperation(VerificationOperation{Scope: VerificationScopeSystemUpdateCleanup, Context: []byte(payload)})
+		assert.ErrorIs(t, err, ErrVerificationContextInvalid, payload)
+	}
+}
+
+func TestCleanupProofUsesExistingSensitiveVerificationPolicy(t *testing.T) {
+	methods, err := securityVerificationPolicy(VerificationScopeSystemUpdateCleanup, model.UserVerificationState{Role: common.RoleRootUser, HasPassword: true})
+	require.NoError(t, err)
+	require.Len(t, methods, 1)
+	assert.Equal(t, VerificationMethodPassword, methods[0].Method)
+
+	methods, err = securityVerificationPolicy(VerificationScopeSystemUpdateCleanup, model.UserVerificationState{Role: common.RoleRootUser, HasPassword: true, HasTwoFA: true})
+	require.NoError(t, err)
+	require.Len(t, methods, 1)
+	assert.Equal(t, VerificationMethodTwoFA, methods[0].Method)
+
+	scope, listed := AccessTokenVerificationScope(VerificationScopeSystemUpdateCleanup)
+	assert.True(t, listed)
+	assert.Empty(t, scope)
+	assert.ErrorIs(t, requireAccessTokenVerificationScope(AuthIdentity{SessionID: model.AccessTokenSessionID(7)}, VerificationScopeSystemUpdateCleanup), ErrVerificationForbidden)
+}
+
 func TestSecurityProofBindsAccessTokenSession(t *testing.T) {
 	setupAuthSessionTestDB(t)
 	useTestSessionSecret(t)
