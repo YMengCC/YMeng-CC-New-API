@@ -19,6 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  'Traffic switched to the verified candidate; waiting for the previous container to drain.',
+  'Release compatibility has not approved schema or shared-state migration.',
+  'Release is not approved for this platform.',
+  'Release is not approved for this database.',
+  'Verifying the signed release and active container.',
+  'Traffic switched, but the previous container did not acknowledge drain; it was retained for manual recovery.',
   // Traffic-switch recovery status.
   'Traffic switch did not take effect; the original instance remains active.',
   'Container identities or the shared network could not be verified.',

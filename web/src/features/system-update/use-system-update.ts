@@ -24,21 +24,28 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
+import { getServerErrorStatus } from '@/lib/server-error-message'
 import { statusQueryOptions } from '@/lib/status-query'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
-  fetchForkSystemReleases,
+  fetchSystemReleaseFeed,
   UpdateCheckError,
   type UpdateCheckErrorCode,
 } from './api'
-import { compareSystemVersions, SYSTEM_RELEASE_REPOSITORY } from './releases'
+import { managedReleasesQueryOptions } from './managed-release-query'
+import {
+  compareSystemVersions,
+  parseSystemVersion,
+  SYSTEM_RELEASE_REPOSITORY,
+  type SystemRelease,
+} from './releases'
 import {
   subscribeSystemUpdatePreferences,
   useSystemUpdatePreferencesStore,
@@ -50,8 +57,8 @@ export const SYSTEM_UPDATE_INTERVAL = 60 * 60 * 1000
 export const SYSTEM_UPDATE_QUERY_KEY = [
   'system-update',
   SYSTEM_RELEASE_REPOSITORY,
-  'releases',
-  2,
+  'release-feed',
+  3,
 ] as const
 
 export function getUpdateErrorMessage(
@@ -79,21 +86,29 @@ export const systemUpdateQueryOptions = queryOptions({
       .catch(() => undefined)
     let snapshot: SystemUpdateSnapshot
     try {
-      const releases = await fetchForkSystemReleases(signal)
+      const feed = await fetchSystemReleaseFeed(signal)
       signal.throwIfAborted()
-      const now = Date.now()
+      const previous = useSystemUpdateStore.getState().snapshot
+      const retainPrevious = !!feed.error && feed.last_checked_at === 0
       snapshot = {
-        source: SYSTEM_RELEASE_REPOSITORY,
-        releases,
-        lastCheckedAt: now,
-        lastAttemptAt: now,
-        error: null,
+        source: feed.source,
+        releases: retainPrevious ? (previous?.releases ?? []) : feed.releases,
+        lastCheckedAt: retainPrevious
+          ? (previous?.lastCheckedAt ?? 0)
+          : feed.last_checked_at,
+        lastAttemptAt: feed.last_attempt_at,
+        error: feed.error,
       }
     } catch (error) {
-      if (signal.aborted) throw error
+      if (
+        signal.aborted ||
+        [401, 403].includes(getServerErrorStatus(error) ?? 0)
+      ) {
+        throw error
+      }
       const previous = useSystemUpdateStore.getState().snapshot
-      // A failed attempt is also cached, so focus changes and remounts cannot
-      // hammer GitHub while it is unavailable or rate limiting this browser.
+      // Cache transport failures so focus changes and remounts respect backoff
+      // while the release-feed endpoint is unavailable.
       snapshot = {
         source: SYSTEM_RELEASE_REPOSITORY,
         releases: previous?.releases ?? [],
@@ -108,7 +123,8 @@ export const systemUpdateQueryOptions = queryOptions({
   initialData: () => useSystemUpdateStore.getState().snapshot ?? undefined,
   initialDataUpdatedAt: () =>
     useSystemUpdateStore.getState().snapshot?.lastAttemptAt,
-  staleTime: SYSTEM_UPDATE_INTERVAL,
+  staleTime: (query) =>
+    query.state.data?.error ? 60_000 : SYSTEM_UPDATE_INTERVAL,
   gcTime: 24 * SYSTEM_UPDATE_INTERVAL,
   retry: false,
   meta: { errorToast: false },
@@ -119,8 +135,8 @@ export const systemUpdateQueryOptions = queryOptions({
     if (query.state.fetchStatus === 'fetching') return false
     return Math.max(
       1_000,
-      SYSTEM_UPDATE_INTERVAL -
-        (Date.now() - (query.state.data?.lastAttemptAt ?? 0))
+      (query.state.data?.error ? 60_000 : SYSTEM_UPDATE_INTERVAL) -
+        (Date.now() - query.state.dataUpdatedAt)
     )
   },
 })
@@ -160,7 +176,30 @@ export function useSystemUpdate() {
     version === 'v0.0.0' || version === '0.0.0'
       ? undefined
       : version || undefined
-  const releases = query.data?.releases ?? []
+  // Only an open root dialog fetches these. The header observes existing data
+  // without triggering controller requests or exposing its cache to admins.
+  const managed = useQuery({ ...managedReleasesQueryOptions, enabled: false })
+  const releases = useMemo(() => {
+    if (!isAdmin || query.isError) return []
+    const byTag = new Map<string, SystemRelease>(
+      (query.data?.releases ?? []).map((release) => [release.tag_name, release])
+    )
+    if (user?.role === ROLE.SUPER_ADMIN) {
+      for (const release of managed.data ?? []) {
+        const version = parseSystemVersion(release.tag)
+        if (!version || byTag.has(release.tag)) continue
+        byTag.set(release.tag, {
+          tag_name: release.tag,
+          name: release.name,
+          body: null,
+          prerelease: version.stage < 3,
+        })
+      }
+    }
+    return [...byTag.values()].sort(
+      (left, right) => compareSystemVersions(right.tag_name, left.tag_name) ?? 0
+    )
+  }, [isAdmin, query.isError, query.data?.releases, user?.role, managed.data])
   const release = releases[0] ?? null
   const comparison = compareSystemVersions(currentVersion, release?.tag_name)
   const hasUpdate = comparison === -1
@@ -184,7 +223,9 @@ export function useSystemUpdate() {
   const checkNow = async () => {
     if (!isAdmin || !online) return
     const result = await query.refetch({ cancelRefetch: false })
-    if (result.data?.error) {
+    if (result.isError) {
+      handleServerError(result.error)
+    } else if (result.data?.error) {
       handleServerError(new Error(getUpdateErrorMessage(result.data.error, t)))
     }
   }
@@ -200,7 +241,7 @@ export function useSystemUpdate() {
     setIgnored,
     checking: query.isFetching,
     online,
-    snapshot: query.data,
+    snapshot: isAdmin && !query.isError ? query.data : undefined,
     checkNow,
   }
 }

@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Traffic switched to the verified candidate; waiting for the previous container to drain.": "Le trafic a été basculé vers la nouvelle instance vérifiée ; les requêtes de l’ancienne instance sont en cours de finalisation.",
+    "Release compatibility has not approved schema or shared-state migration.": "La compatibilité de cette version n’a pas été approuvée pour la migration du schéma ou de l’état partagé.",
+    "Release is not approved for this platform.": "Cette version n’est pas approuvée pour cette plateforme.",
+    "Release is not approved for this database.": "Cette version n’est pas approuvée pour cette base de données.",
+    "Verifying the signed release and active container.": "Vérification de la signature de la version et de l’instance active.",
+    "Traffic switched, but the previous container did not acknowledge drain; it was retained for manual recovery.": "Le trafic a été basculé, mais l’ancienne instance n’a pas confirmé la fin des requêtes. Elle a été conservée pour une récupération manuelle.",
     "Traffic switch did not take effect; the original instance remains active.": "Le basculement du trafic n’a pas pris effet ; l’instance d’origine reste active.",
     "Container identities or the shared network could not be verified.": "Les identités des conteneurs ou le réseau partagé n’ont pas pu être vérifiés.",
     "The active proxy route could not be verified before updating.": "La route active du proxy n’a pas pu être vérifiée avant la mise à jour.",

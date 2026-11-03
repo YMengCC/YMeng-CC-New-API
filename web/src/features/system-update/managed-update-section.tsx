@@ -1,43 +1,44 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { ManagedCleanupAction } from './managed-cleanup-action'
+import { managedReleasesQueryOptions } from './managed-release-query'
 import type { UpdateStatus } from './managed-update-types'
 import { compareSystemVersions } from './releases'
 import { useManagedCleanup } from './use-managed-cleanup'
 
-type ManagedRelease = {
-  tag: string
-  name: string
-  compatible: boolean
-  reason: string
-  image: string
+type ManagedUpdateContent = {
+  statusContent: ReactNode
+  renderReleaseAction: (tag: string) => ReactNode
+  refresh: () => Promise<void>
+  refreshing: boolean
 }
 
-export function ManagedUpdateSection(props: { enabled: boolean }) {
+type ManagedUpdateSectionProps = {
+  enabled: boolean
+  children: (managed: ManagedUpdateContent) => ReactNode
+}
+
+export function ManagedUpdateSection(props: ManagedUpdateSectionProps) {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
+  const isRoot = user?.role === 100
   const client = useQueryClient()
-  const [selected, setSelected] = useState<ManagedRelease | null>(null)
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshRequest = useRef<Promise<void> | null>(null)
   const status = useQuery({
     queryKey: ['managed-system-update', 'status'],
-    enabled: props.enabled && user?.role === 100,
+    enabled: props.enabled && isRoot,
     queryFn: async (): Promise<UpdateStatus> => {
       const response = await api.get('/api/system-update/status')
       return requireServerSuccess(response.data).data
@@ -51,44 +52,40 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
     },
   })
   const releases = useQuery({
-    queryKey: ['managed-system-update', 'releases'],
+    ...managedReleasesQueryOptions,
     enabled:
       props.enabled &&
-      user?.role === 100 &&
+      isRoot &&
       !!status.data &&
       status.data.state !== 'unconfigured',
-    queryFn: async (): Promise<ManagedRelease[]> => {
-      const response = await api.get('/api/system-update/releases')
-      return requireServerSuccess(response.data).data.releases
-    },
   })
   const update = useMutation({
-    mutationFn: async (release: ManagedRelease) => {
+    mutationFn: async (tag: string) => {
       const response = await api.post(
         '/api/system-update/update',
-        { tag: release.tag },
+        { tag },
         {
           headers: { 'X-Requested-With': 'YMeng-Update' },
         }
       )
       return requireServerSuccess(response.data)
     },
-    onSuccess: () => setSelected(null),
+    onSuccess: () => setSelectedTag(null),
     onError: (error) => {
-      setSelected(null)
+      setSelectedTag(null)
       handleServerError(error)
     },
     onSettled: () =>
       client.invalidateQueries({ queryKey: ['managed-system-update'] }),
   })
   const cleanup = useManagedCleanup(
-    props.enabled &&
-      user?.role === 100 &&
-      status.isSuccess &&
-      !update.isPending,
+    props.enabled && isRoot && status.isSuccess && !update.isPending,
     status.data
   )
   const canInstall =
+    props.enabled &&
+    isRoot &&
+    !refreshing &&
     status.isSuccess &&
     releases.isSuccess &&
     status.data.supported &&
@@ -99,24 +96,36 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
     status.data.state !== 'cleaning' &&
     !cleanup.pending &&
     !update.isPending
+  const selected = releases.data?.find((release) => release.tag === selectedTag)
   const selectedIsCurrent =
-    selected &&
-    compareSystemVersions(selected.tag, status.data?.current_version) === 0
-  const sortedReleases = [...(releases.data ?? [])].sort(
-    (left, right) => compareSystemVersions(right.tag, left.tag) ?? 0
-  )
-  if (user?.role !== 100) return null
-  return (
-    <section
-      className='flex min-w-0 flex-col gap-3'
-      aria-label={t('Site updates')}
-    >
-      <Separator />
-      <h3 className='font-medium'>{t('Site updates')}</h3>
-      <p className='text-muted-foreground text-sm'>
-        {t('Updates from YMeng-CC-New-API')}
-      </p>
-      {status.isPending && <p role='status'>{t('Checking updates...')}</p>}
+    compareSystemVersions(selected?.tag, status.data?.current_version) === 0
+
+  const refresh = (): Promise<void> => {
+    if (!props.enabled || !isRoot) return Promise.resolve()
+    if (refreshRequest.current) return refreshRequest.current
+    setRefreshing(true)
+    const request = (async () => {
+      try {
+        const next = await status.refetch({ cancelRefetch: false })
+        if (!next.isError && next.data && next.data.state !== 'unconfigured') {
+          await releases.refetch({ cancelRefetch: false })
+        }
+      } finally {
+        refreshRequest.current = null
+        setRefreshing(false)
+      }
+    })()
+    refreshRequest.current = request
+    return request
+  }
+
+  const statusContent = isRoot ? (
+    <div className='flex min-w-0 flex-col gap-3'>
+      {status.isPending && (
+        <p role='status' className='text-muted-foreground text-sm'>
+          {t('Checking updates...')}
+        </p>
+      )}
       {(status.isError || releases.isError) && (
         <Alert variant='destructive'>
           <AlertDescription>
@@ -134,61 +143,59 @@ export function ManagedUpdateSection(props: { enabled: boolean }) {
         </Alert>
       )}
       <ManagedCleanupAction status={status.data} cleanup={cleanup} />
-      {props.enabled && sortedReleases.length > 0 && (
-        <Accordion
-          key={sortedReleases[0].tag}
-          multiple
-          defaultValue={[sortedReleases[0].tag]}
-        >
-          {sortedReleases.map((release) => {
-            const isCurrent =
-              compareSystemVersions(
-                release.tag,
-                status.data?.current_version
-              ) === 0
-            return (
-              <AccordionItem key={release.tag} value={release.tag}>
-                <AccordionTrigger className='min-w-0 gap-3 hover:no-underline'>
-                  <span className='min-w-0 wrap-anywhere'>
-                    {release.name || release.tag}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className='flex flex-col items-start gap-2'>
-                  {release.reason && (
-                    <p className='text-muted-foreground text-sm wrap-anywhere'>
-                      {t(release.reason)}
-                    </p>
-                  )}
-                  <Button
-                    type='button'
-                    disabled={!canInstall || !release.compatible || isCurrent}
-                    onClick={() => setSelected(release)}
-                  >
-                    {isCurrent ? t('Current version') : t('Install update')}
-                  </Button>
-                </AccordionContent>
-              </AccordionItem>
-            )
-          })}
-        </Accordion>
-      )}
-      <ConfirmDialog
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null)
-        }}
-        title={t('Install update')}
-        desc={t(
-          'Prepare the new version while existing requests finish on the current version.'
+    </div>
+  ) : null
+
+  const renderReleaseAction = (tag: string): ReactNode => {
+    if (!isRoot) return null
+    const release = releases.data?.find((item) => item.tag === tag)
+    const isCurrent =
+      compareSystemVersions(tag, status.data?.current_version) === 0
+    return (
+      <div className='flex flex-col items-start gap-2'>
+        {release?.reason && (
+          <p className='text-muted-foreground text-sm wrap-anywhere'>
+            {t(release.reason)}
+          </p>
         )}
-        isLoading={update.isPending}
-        disabled={!canInstall || !selected?.compatible || !!selectedIsCurrent}
-        handleConfirm={() => {
-          if (canInstall && selected?.compatible && !selectedIsCurrent) {
-            update.mutate(selected)
-          }
-        }}
-      />
-    </section>
+        <Button
+          type='button'
+          disabled={!canInstall || !release?.compatible || isCurrent}
+          onClick={() => setSelectedTag(tag)}
+        >
+          {isCurrent ? t('Current version') : t('Install update')}
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {props.children({
+        statusContent,
+        renderReleaseAction,
+        refresh,
+        refreshing,
+      })}
+      {isRoot && (
+        <ConfirmDialog
+          open={selectedTag !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedTag(null)
+          }}
+          title={t('Install update')}
+          desc={t(
+            'Prepare the new version while existing requests finish on the current version.'
+          )}
+          isLoading={update.isPending}
+          disabled={!canInstall || !selected?.compatible || selectedIsCurrent}
+          handleConfirm={() => {
+            if (canInstall && selected?.compatible && !selectedIsCurrent) {
+              update.mutate(selected.tag)
+            }
+          }}
+        />
+      )}
+    </>
   )
 }

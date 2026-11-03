@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Traffic switched to the verified candidate; waiting for the previous container to drain.": "流量已切换到已验证的新实例，正在等待旧实例完成已有请求。",
+    "Release compatibility has not approved schema or shared-state migration.": "此版本尚未通过数据库结构或共享状态迁移的兼容性审核。",
+    "Release is not approved for this platform.": "此版本尚未批准在当前平台安装。",
+    "Release is not approved for this database.": "此版本尚未批准用于当前数据库。",
+    "Verifying the signed release and active container.": "正在验证发布签名和当前实例。",
+    "Traffic switched, but the previous container did not acknowledge drain; it was retained for manual recovery.": "流量已切换，但旧实例未确认排空，已保留以供管理员恢复。",
     "Traffic switch did not take effect; the original instance remains active.": "流量切换未生效，原实例仍在提供服务。",
     "Container identities or the shared network could not be verified.": "无法核实容器身份或共享网络。",
     "The active proxy route could not be verified before updating.": "更新前无法核实当前代理路由。",

@@ -1823,6 +1823,53 @@ func TestSecurityEnrollmentMissingTargetsAreBusinessErrors(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestReleaseFeedReadPermissionDoesNotGrantManagedUpdateAccess(t *testing.T) {
+	user, _ := setupSecurityEnrollmentTest(t)
+	router := gin.New()
+	readOnly := func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"releases": []any{}}})
+	}
+	router.GET("/api/system-update/release-feed", middleware.AdminAuth(), readOnly)
+	for _, path := range []string{"/api/system-update/status", "/api/system-update/releases"} {
+		router.GET(path, middleware.RootAuth(), readOnly)
+	}
+	for _, path := range []string{"/api/system-update/update", "/api/system-update/cleanup"} {
+		router.POST(path, middleware.RootAuth(), readOnly)
+	}
+	for _, role := range []int{0, common.RoleCommonUser, common.RoleAdminUser, common.RoleRootUser} {
+		t.Run(strconv.Itoa(role), func(t *testing.T) {
+			token := ""
+			if role != 0 {
+				require.NoError(t, model.DB.Model(user).Update("role", role).Error)
+				require.NoError(t, model.PublishUserAuthCache(user.Id))
+				bundle, err := service.CreateLoginSession(user.Id, "password", "127.0.0.1", "release-feed-test")
+				require.NoError(t, err)
+				token = bundle.AccessToken
+			}
+			for _, path := range []string{"release-feed", "status", "releases", "update", "cleanup"} {
+				method := http.MethodGet
+				if path == "update" || path == "cleanup" {
+					method = http.MethodPost
+				}
+				request := httptest.NewRequest(method, "/api/system-update/"+path, nil)
+				if token != "" {
+					request.Header.Set("Authorization", "Bearer "+token)
+				}
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, request)
+				want := http.StatusForbidden
+				if role == 0 {
+					want = http.StatusUnauthorized
+				}
+				if role == common.RoleRootUser || (path == "release-feed" && role == common.RoleAdminUser) {
+					want = http.StatusOK
+				}
+				assert.Equal(t, want, response.Code, "role=%d path=%s", role, path)
+			}
+		})
+	}
+}
+
 func TestManagedCleanupRequiresRootAndExactOneTimeProof(t *testing.T) {
 	user, identity := setupSecurityEnrollmentTest(t)
 	previousPasswordEnabled := common.PasswordLoginEnabled

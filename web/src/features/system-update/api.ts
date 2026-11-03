@@ -16,18 +16,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import axios from 'axios'
+import { z } from 'zod'
+
+import { api } from '@/lib/api'
 import {
-  selectLatestRelease,
-  selectSystemReleases,
+  getServerErrorStatus,
+  requireServerSuccess,
+} from '@/lib/server-error-message'
+
+import {
+  compareSystemVersions,
+  parseSystemVersion,
   SYSTEM_RELEASE_REPOSITORY,
-  type SystemRelease,
+  systemReleaseSchema,
 } from './releases'
 
-export type UpdateCheckErrorCode =
-  | 'network'
-  | 'rate-limit'
-  | 'timeout'
-  | 'payload'
+export const updateCheckErrorSchema = z.enum([
+  'network',
+  'rate-limit',
+  'timeout',
+  'payload',
+])
+export type UpdateCheckErrorCode = z.infer<typeof updateCheckErrorSchema>
 
 export class UpdateCheckError extends Error {
   constructor(public readonly code: UpdateCheckErrorCode) {
@@ -36,82 +47,55 @@ export class UpdateCheckError extends Error {
   }
 }
 
-export async function fetchLatestSystemRelease(
+const releaseFeedSchema = z
+  .object({
+    source: z.literal(SYSTEM_RELEASE_REPOSITORY),
+    releases: z.array(systemReleaseSchema),
+    last_checked_at: z.number().finite().nonnegative(),
+    last_attempt_at: z.number().finite().nonnegative(),
+    error: updateCheckErrorSchema.nullable(),
+  })
+  .refine((feed) => feed.last_checked_at <= feed.last_attempt_at)
+
+export type SystemReleaseFeed = z.infer<typeof releaseFeedSchema>
+
+export async function fetchSystemReleaseFeed(
   signal: AbortSignal
-): Promise<SystemRelease | null> {
-  const controller = new AbortController()
-  const cancel = () => controller.abort()
-  signal.addEventListener('abort', cancel, { once: true })
-  if (signal.aborted) controller.abort()
-  const timeout = setTimeout(cancel, 10_000)
-
+): Promise<SystemReleaseFeed> {
+  let payload: unknown
   try {
-    const response = await fetch(
-      'https://api.github.com/repos/QuantumNous/new-api/releases?per_page=100',
-      {
-        credentials: 'omit',
-        headers: { Accept: 'application/vnd.github+json' },
-        signal: controller.signal,
-      }
-    )
-    if (response.status === 403 || response.status === 429) {
-      throw new UpdateCheckError('rate-limit')
-    }
-    if (!response.ok) throw new UpdateCheckError('network')
-
-    try {
-      return selectLatestRelease(await response.json())
-    } catch (error) {
-      if (controller.signal.aborted) throw error
-      throw new UpdateCheckError('payload')
-    }
+    const response = await api.get('/api/system-update/release-feed', {
+      signal,
+    })
+    payload = requireServerSuccess(response.data).data
   } catch (error) {
     if (signal.aborted) throw error
-    if (controller.signal.aborted) throw new UpdateCheckError('timeout')
-    if (error instanceof UpdateCheckError) throw error
+    const status = getServerErrorStatus(error)
+    // Authentication failures keep their original contract and are never cached
+    // as a GitHub error or used to display a previous administrator's data.
+    if (status === 401 || status === 403) throw error
+    if (axios.isAxiosError(error)) {
+      const failed = releaseFeedSchema.safeParse(error.response?.data?.data)
+      if (failed.success && failed.data.error) return failed.data
+      if (error.code === 'ECONNABORTED') throw new UpdateCheckError('timeout')
+    } else if (error && typeof error === 'object' && 'response' in error) {
+      const response = error.response as { data?: { data?: unknown } }
+      const failed = releaseFeedSchema.safeParse(response.data?.data)
+      if (failed.success && failed.data.error) return failed.data
+    }
     throw new UpdateCheckError('network')
-  } finally {
-    clearTimeout(timeout)
-    signal.removeEventListener('abort', cancel)
   }
-}
-
-export async function fetchForkSystemReleases(
-  signal: AbortSignal
-): Promise<SystemRelease[]> {
-  const controller = new AbortController()
-  const cancel = () => controller.abort()
-  signal.addEventListener('abort', cancel, { once: true })
-  if (signal.aborted) controller.abort()
-  const timeout = setTimeout(cancel, 10_000)
-
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${SYSTEM_RELEASE_REPOSITORY}/releases?per_page=100`,
-      {
-        credentials: 'omit',
-        headers: { Accept: 'application/vnd.github+json' },
-        signal: controller.signal,
-      }
-    )
-    if (response.status === 403 || response.status === 429) {
-      throw new UpdateCheckError('rate-limit')
-    }
-    if (!response.ok) throw new UpdateCheckError('network')
-
-    try {
-      return selectSystemReleases(await response.json())
-    } catch (error) {
-      if (controller.signal.aborted) throw error
-      throw new UpdateCheckError('payload')
-    }
-  } catch (error) {
-    if (signal.aborted) throw error
-    if (controller.signal.aborted) throw new UpdateCheckError('timeout')
-    if (error instanceof UpdateCheckError) throw error
-    throw new UpdateCheckError('network')
-  } finally {
-    clearTimeout(timeout)
-    signal.removeEventListener('abort', cancel)
+  const parsed = releaseFeedSchema.safeParse(payload)
+  if (!parsed.success) throw new UpdateCheckError('payload')
+  const releases = new Map(
+    parsed.data.releases
+      .filter((release) => parseSystemVersion(release.tag_name))
+      .map((release) => [release.tag_name, release])
+  )
+  return {
+    ...parsed.data,
+    releases: [...releases.values()].sort(
+      (left, right) => compareSystemVersions(right.tag_name, left.tag_name) ?? 0
+    ),
   }
 }

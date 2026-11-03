@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-export const SYSTEM_RELEASE_REPOSITORY = 'atelier-of-dongn/YMeng-CC-New-API'
+export const SYSTEM_RELEASE_REPOSITORY = 'YMengCC/YMeng-CC-New-API'
 
 export const systemReleaseSchema = z.object({
   tag_name: z.string().trim().min(1),

@@ -51,7 +51,27 @@ interface SystemUpdateStore {
 const updateStorage: StateStorage = {
   getItem: (key) => {
     try {
-      return localStorage.getItem(key)
+      const saved = localStorage.getItem(key)
+      if (
+        saved !== null ||
+        key !== `system-update-preferences:${SYSTEM_RELEASE_REPOSITORY}:v2`
+      ) {
+        return saved
+      }
+      const legacy = localStorage.getItem(
+        'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2'
+      )
+      if (!legacy) return null
+      const parsed = updatePreferencesSchema.safeParse(
+        JSON.parse(legacy)?.state
+      )
+      if (!parsed.success) return null
+      const migrated = JSON.stringify({ state: parsed.data, version: 0 })
+      localStorage.setItem(key, migrated)
+      localStorage.removeItem(
+        'system-update-preferences:atelier-of-dongn/YMeng-CC-New-API:v2'
+      )
+      return migrated
     } catch {
       return null
     }
@@ -79,7 +99,7 @@ export const useSystemUpdateStore = create<SystemUpdateStore>()(
       setSnapshot: (snapshot) => set({ snapshot }),
     }),
     {
-      name: `system-update:${SYSTEM_RELEASE_REPOSITORY}:v2`,
+      name: `system-update:${SYSTEM_RELEASE_REPOSITORY}:release-feed:v3`,
       storage: createJSONStorage(() => updateStorage),
       partialize: (state) => ({ snapshot: state.snapshot }),
       merge: (persisted, current) => {

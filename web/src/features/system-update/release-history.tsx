@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -46,6 +46,7 @@ const ReleaseMarkdown = lazy(() =>
 type ReleaseHistoryProps = {
   releases: SystemRelease[]
   currentVersion: string | undefined
+  renderReleaseAction?: (tag: string) => ReactNode
 }
 
 export function ReleaseHistory(props: ReleaseHistoryProps) {
@@ -112,6 +113,7 @@ export function ReleaseHistory(props: ReleaseHistoryProps) {
                     {t('No release notes provided.')}
                   </p>
                 )}
+                {props.renderReleaseAction?.(release.tag_name)}
                 <Button
                   variant='outline'
                   size='sm'

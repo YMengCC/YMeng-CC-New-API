@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { toast } from 'sonner'
@@ -29,6 +36,8 @@ import { createAppQueryClient } from '@/lib/query-client'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { ManagedUpdateSection } from '../managed-update-section'
+import { ReleaseHistory } from '../release-history'
+import type { SystemRelease } from '../releases'
 
 let client: ReturnType<typeof createAppQueryClient>
 let status: {
@@ -124,10 +133,43 @@ function retainOldInstance(): void {
   })
 }
 
-function renderUpdates() {
+const feedReleases: SystemRelease[] = [
+  {
+    tag_name: 'v1.2.2',
+    name: 'v1.2.2',
+    prerelease: false,
+    body: 'Latest branch release notes',
+  },
+  {
+    tag_name: 'v1.2.1',
+    name: 'v1.2.1',
+    prerelease: false,
+    body: 'Previous branch release notes',
+  },
+]
+
+function renderUpdates(releases = feedReleases) {
   return render(
     <QueryClientProvider client={client}>
-      <ManagedUpdateSection enabled />
+      <ManagedUpdateSection enabled>
+        {(managed) => (
+          <>
+            {managed.statusContent}
+            <ReleaseHistory
+              releases={releases}
+              currentVersion={status.current_version}
+              renderReleaseAction={managed.renderReleaseAction}
+            />
+            <button
+              type='button'
+              disabled={managed.refreshing}
+              onClick={() => void managed.refresh()}
+            >
+              Refresh controller
+            </button>
+          </>
+        )}
+      </ManagedUpdateSection>
     </QueryClientProvider>
   )
 }
@@ -146,7 +188,10 @@ describe('retained instance cleanup', () => {
         .auth.setUser({ id: 2, username: 'admin', role: 10 })
     )
     expect(
-      screen.queryByRole('region', { name: 'Site updates' })
+      screen.getByRole('region', { name: 'Release history' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Install update' })
     ).not.toBeInTheDocument()
   })
 
@@ -455,6 +500,85 @@ describe('retained instance cleanup', () => {
   })
 })
 
+describe('single release list', () => {
+  test('composes installation with the matching release notes and never renders a second version list', async () => {
+    renderUpdates()
+    const history = screen.getByRole('region', { name: 'Release history' })
+    await waitFor(() =>
+      expect(
+        within(history).getByRole('button', { name: 'Install update' })
+      ).toBeEnabled()
+    )
+    expect(
+      await within(history).findByText('Latest branch release notes')
+    ).toBeVisible()
+    expect(screen.getAllByRole('button', { name: /v1\.2\.2/ })).toHaveLength(1)
+    expect(
+      screen.queryByRole('heading', { name: 'Site updates' })
+    ).not.toBeInTheDocument()
+  })
+
+  test('does not grant installation to a different full tag even when its numeric version matches', async () => {
+    renderUpdates([{ ...feedReleases[0], tag_name: '1.2.2' }])
+    expect(
+      await screen.findByRole('button', { name: 'Install update' })
+    ).toBeDisabled()
+  })
+
+  test('keeps notes visible when the controller is unavailable', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('controller unavailable'))
+    renderUpdates()
+    expect(await screen.findByText('Latest branch release notes')).toBeVisible()
+    expect(
+      await screen.findByText('Unable to contact the update service.')
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Install update' })
+    ).toBeDisabled()
+  })
+
+  test('refreshes controller status and the configured installation list from one action', async () => {
+    const user = userEvent.setup()
+    renderUpdates()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Install update' })
+      ).toBeEnabled()
+    )
+    const statusCalls = vi
+      .mocked(api.get)
+      .mock.calls.filter(([url]) => url === '/api/system-update/status').length
+    const releaseCalls = vi
+      .mocked(api.get)
+      .mock.calls.filter(
+        ([url]) => url === '/api/system-update/releases'
+      ).length
+    await user.click(screen.getByRole('button', { name: 'Refresh controller' }))
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(api.get)
+          .mock.calls.filter(([url]) => url === '/api/system-update/releases')
+      ).toHaveLength(releaseCalls + 1)
+    )
+    expect(
+      vi
+        .mocked(api.get)
+        .mock.calls.filter(([url]) => url === '/api/system-update/status')
+    ).toHaveLength(statusCalls + 1)
+  })
+
+  test('renders public history for ordinary administrators without starting root queries', async () => {
+    useAuthStore.getState().auth.setUser({ id: 2, username: 'admin', role: 10 })
+    renderUpdates()
+    expect(await screen.findByText('Latest branch release notes')).toBeVisible()
+    expect(api.get).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('button', { name: 'Install update' })
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe('managed installation availability', () => {
   test.each([
     { state: 'completed', operation_id: '', draining: false },
@@ -476,10 +600,14 @@ describe('managed installation availability', () => {
   test('labels the installed release as current and prevents reinstalling it', async () => {
     const user = userEvent.setup()
     renderUpdates()
-    expect(
-      await screen.findByRole('button', { name: 'Install update' })
-    ).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: 'v1.2.1' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Install update' })
+      ).toBeEnabled()
+    )
+    await user.click(
+      screen.getByRole('button', { name: /v1\.2\.1.*Current version/ })
+    )
     expect(
       screen.getByRole('button', { name: 'Current version' })
     ).toBeDisabled()
@@ -501,6 +629,44 @@ describe('managed installation availability', () => {
       )
     ).toBeVisible()
     expect(screen.queryByText(status.reason)).not.toBeInTheDocument()
+  })
+
+  test('translates the draining status in the single panel after a language change', async () => {
+    status.state = 'draining'
+    status.draining = true
+    status.reason =
+      'Traffic switched to the verified candidate; waiting for the previous container to drain.'
+    renderUpdates()
+    expect(await screen.findByText(status.reason)).toBeVisible()
+    i18next.addResourceBundle('zhCN', 'translation', zh.translation)
+    await act(async () => {
+      await i18next.changeLanguage('zhCN')
+    })
+    expect(
+      screen.getByText(
+        '流量已切换到已验证的新实例，正在等待旧实例完成已有请求。'
+      )
+    ).toBeVisible()
+    expect(screen.queryByText(status.reason)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '安装更新' })).toBeDisabled()
+  })
+
+  test('blocks a confirmation when the exact tag loses controller compatibility', async () => {
+    const user = userEvent.setup()
+    const post = vi.spyOn(api, 'post')
+    renderUpdates()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Install update' })
+      ).toBeEnabled()
+    )
+    await user.click(screen.getByRole('button', { name: 'Install update' }))
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
+    act(() => client.setQueryData(['managed-system-update', 'releases'], []))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    )
+    expect(post).not.toHaveBeenCalled()
   })
 
   test('refreshes controller status after a rejected install and closes the stale confirmation', async () => {

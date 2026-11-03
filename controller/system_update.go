@@ -12,6 +12,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func GetSystemReleaseFeed(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	feed, err := service.GetSystemReleaseFeed(c.Request.Context())
+	if err != nil {
+		if c.Request.Context().Err() != nil {
+			return
+		}
+		common.ApiErrorStatus(c, http.StatusServiceUnavailable, common.NewMessage(err.Error()), gin.H{"data": feed})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": feed})
+}
+
 func GetSystemUpdateStatus(c *gin.Context) {
 	status, err := service.SystemUpdateStatus(c.Request.Context())
 	if err != nil {
