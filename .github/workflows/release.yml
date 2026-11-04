@@ -30,6 +30,38 @@ jobs:
             VERSION=$(git describe --tags --match 'v[0-9]*')
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      # Every release must carry notes the in-app update dialog can render.
+      # The body is derived deterministically from commits so the three platform
+      # jobs write identical bytes and re-runs never duplicate content.
+      - name: Generate release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          current="$VERSION"
+          # Pick the highest reachable release tag, not merely the nearest tag
+          # in the first-parent walk: merges otherwise skip a release and make
+          # the next release repeat the previous release notes.
+          previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
+                      --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
+                     | grep -vE '^- release: v?[0-9]' || true)"
+          {
+            if [ -n "$previous" ]; then
+              printf '## Changes since %s\n\n' "$previous"
+            else
+              printf '## Changes in %s\n\n' "$current"
+            fi
+            if [ -n "$commits" ]; then
+              printf '%s\n\n' "$commits"
+            else
+              printf 'Release %s.\n\n' "$current"
+            fi
+            if [ -n "$previous" ]; then
+              printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+                "$GITHUB_REPOSITORY" "$previous" "$current"
+            fi
+          } > release-notes.md
+          test -s release-notes.md
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: '1.4.0'
@@ -61,6 +93,7 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          body_path: release-notes.md
           files: |
             new-api-*
             checksums-linux.txt
@@ -83,6 +116,38 @@ jobs:
             VERSION=$(git describe --tags --match 'v[0-9]*')
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      # Every release must carry notes the in-app update dialog can render.
+      # The body is derived deterministically from commits so the three platform
+      # jobs write identical bytes and re-runs never duplicate content.
+      - name: Generate release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          current="$VERSION"
+          # Pick the highest reachable release tag, not merely the nearest tag
+          # in the first-parent walk: merges otherwise skip a release and make
+          # the next release repeat the previous release notes.
+          previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
+                      --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
+                     | grep -vE '^- release: v?[0-9]' || true)"
+          {
+            if [ -n "$previous" ]; then
+              printf '## Changes since %s\n\n' "$previous"
+            else
+              printf '## Changes in %s\n\n' "$current"
+            fi
+            if [ -n "$commits" ]; then
+              printf '%s\n\n' "$commits"
+            else
+              printf 'Release %s.\n\n' "$current"
+            fi
+            if [ -n "$previous" ]; then
+              printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+                "$GITHUB_REPOSITORY" "$previous" "$current"
+            fi
+          } > release-notes.md
+          test -s release-notes.md
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: '1.4.0'
@@ -110,6 +175,7 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          body_path: release-notes.md
           files: |
             new-api-macos-*
             checksums-macos.txt
@@ -135,6 +201,38 @@ jobs:
             VERSION=$(git describe --tags --match 'v[0-9]*')
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      # Every release must carry notes the in-app update dialog can render.
+      # The body is derived deterministically from commits so the three platform
+      # jobs write identical bytes and re-runs never duplicate content.
+      - name: Generate release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          current="$VERSION"
+          # Pick the highest reachable release tag, not merely the nearest tag
+          # in the first-parent walk: merges otherwise skip a release and make
+          # the next release repeat the previous release notes.
+          previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
+                      --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
+                     | grep -vE '^- release: v?[0-9]' || true)"
+          {
+            if [ -n "$previous" ]; then
+              printf '## Changes since %s\n\n' "$previous"
+            else
+              printf '## Changes in %s\n\n' "$current"
+            fi
+            if [ -n "$commits" ]; then
+              printf '%s\n\n' "$commits"
+            else
+              printf 'Release %s.\n\n' "$current"
+            fi
+            if [ -n "$previous" ]; then
+              printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+                "$GITHUB_REPOSITORY" "$previous" "$current"
+            fi
+          } > release-notes.md
+          test -s release-notes.md
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: '1.4.0'
@@ -161,6 +259,7 @@ jobs:
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          body_path: release-notes.md
           files: |
             new-api-*.exe
             checksums-windows.txt

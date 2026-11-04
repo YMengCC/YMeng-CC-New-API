@@ -1,0 +1,78 @@
+name: Backfill Release Notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Space-separated tags to backfill; empty = every published release with a blank body'
+        required: false
+        type: string
+      dry_run:
+        description: 'Print notes without writing them'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill-release-notes
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      # Fills releases whose body is empty or whitespace-only, using the same
+      # deterministic commit list as release.yml. Releases with real notes are
+      # skipped so hand-written bodies are never overwritten.
+      - name: Backfill blank release bodies
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGS_INPUT: ${{ inputs.tags }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          targets=()
+          if [ -n "${TAGS_INPUT// /}" ]; then
+            read -r -a targets <<< "$TAGS_INPUT"
+          else
+            while IFS=$'\t' read -r tag blank; do
+              if [ -n "$tag" ] && [ "$blank" = "1" ]; then
+                targets+=("$tag")
+              fi
+            done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false)
+                    | [.tag_name, ((.body // "") | gsub("\\s"; "") | length == 0)] | @tsv')
+          fi
+          if [ "${#targets[@]}" -eq 0 ]; then
+            echo 'No releases need notes.'
+            exit 0
+          fi
+          for tag in "${targets[@]}"; do
+            git rev-parse --verify "refs/tags/${tag}" >/dev/null
+            previous="$(git tag --merged "${tag}^{commit}" --list 'v[0-9]*' \
+                        --sort=-v:refname | grep -vx "$tag" | sed -n '1p' || true)"
+            commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${tag}" \
+                       | grep -vE '^- release: v?[0-9]' || true)"
+            {
+              printf '## Changes since %s\n\n' "${previous:-the start of the project}"
+              printf '%s\n\n' "${commits:-Release ${tag}.}"
+              if [ -n "$previous" ]; then
+                printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+                  "$GITHUB_REPOSITORY" "$previous" "$tag"
+              fi
+            } > release-notes.md
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "=== ${tag} (dry run) ==="
+              cat release-notes.md
+            else
+              gh release edit "${tag}" --notes-file release-notes.md
+              echo "=== ${tag} updated ==="
+            fi
+          done
