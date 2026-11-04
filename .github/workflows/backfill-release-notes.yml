@@ -39,30 +39,48 @@ jobs:
         run: |
           set -euo pipefail
           targets=()
+          release_pairs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | select(.draft == false)
+                  | [.tag_name, .id, ((.body // "") | gsub("\\s"; "") | length == 0)] | @tsv')"
           if [ -n "${TAGS_INPUT// /}" ]; then
-            read -r -a targets <<< "$TAGS_INPUT"
-          else
-            while IFS=$'\t' read -r tag blank; do
-              if [ -n "$tag" ] && [ "$blank" = "1" ]; then
-                targets+=("$tag")
+            for tag in $TAGS_INPUT; do
+              id="$(grep -F "${tag}"$'\t' <<< "$release_pairs" | cut -f2 | sed -n '1p')"
+              if [ -z "$id" ]; then
+                echo "::warning::No published release found for ${tag}; skipping."
+                continue
               fi
-            done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq '.[] | select(.draft == false)
-                    | [.tag_name, ((.body // "") | gsub("\\s"; "") | length == 0)] | @tsv')
+              targets+=("${tag}"$'\t'"${id}")
+            done
+          else
+            while IFS=$'\t' read -r tag id blank; do
+              if [ -n "$tag" ] && [ "$blank" = "1" ]; then
+                targets+=("${tag}"$'\t'"${id}")
+              fi
+            done <<< "$release_pairs"
           fi
           if [ "${#targets[@]}" -eq 0 ]; then
             echo 'No releases need notes.'
             exit 0
           fi
-          for tag in "${targets[@]}"; do
+          for entry in "${targets[@]}"; do
+            IFS=$'\t' read -r tag id blank <<< "$entry"
             git rev-parse --verify "refs/tags/${tag}" >/dev/null
             previous="$(git tag --merged "${tag}^{commit}" --list 'v[0-9]*' \
                         --sort=-v:refname | grep -vx "$tag" | sed -n '1p' || true)"
+            summary="$(git log -1 --format=%b "${tag}^{commit}" | sed '/^Co-Authored-By:/d' || true)"
             commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${tag}" \
                        | grep -vE '^- release: v?[0-9]' || true)"
             {
-              printf '## Changes since %s\n\n' "${previous:-the start of the project}"
-              printf '%s\n\n' "${commits:-Release ${tag}.}"
+              printf '## %s\n\n' "$tag"
+              if [ -n "$summary" ]; then
+                printf '%s\n\n' "$summary"
+              fi
+              printf '### Changes since %s\n\n' "${previous:-the start of the project}"
+              if [ -n "$commits" ]; then
+                printf '%s\n\n' "$commits"
+              elif [ -z "$summary" ]; then
+                printf 'Release %s.\n\n' "$tag"
+              fi
               if [ -n "$previous" ]; then
                 printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
                   "$GITHUB_REPOSITORY" "$previous" "$tag"
@@ -72,7 +90,9 @@ jobs:
               echo "=== ${tag} (dry run) ==="
               cat release-notes.md
             else
-              gh release edit "${tag}" --notes-file release-notes.md
+              jq -Rs '{body: .}' release-notes.md > release-notes-payload.json
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" \
+                --input release-notes-payload.json >/dev/null
               echo "=== ${tag} updated ==="
             fi
           done

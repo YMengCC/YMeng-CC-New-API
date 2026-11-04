@@ -43,17 +43,24 @@ jobs:
           # the next release repeat the previous release notes.
           previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
                       --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          # The release commit's own message describes the release; keep it as
+          # the summary instead of dropping the commit as pure version churn.
+          summary="$(git log -1 --format=%b "${current}^{commit}" | sed '/^Co-Authored-By:/d' || true)"
           commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
                      | grep -vE '^- release: v?[0-9]' || true)"
           {
+            printf '## %s\n\n' "$current"
+            if [ -n "$summary" ]; then
+              printf '%s\n\n' "$summary"
+            fi
             if [ -n "$previous" ]; then
-              printf '## Changes since %s\n\n' "$previous"
+              printf '### Changes since %s\n\n' "$previous"
             else
-              printf '## Changes in %s\n\n' "$current"
+              printf '### Changes\n\n'
             fi
             if [ -n "$commits" ]; then
               printf '%s\n\n' "$commits"
-            else
+            elif [ -z "$summary" ]; then
               printf 'Release %s.\n\n' "$current"
             fi
             if [ -n "$previous" ]; then
@@ -129,17 +136,24 @@ jobs:
           # the next release repeat the previous release notes.
           previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
                       --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          # The release commit's own message describes the release; keep it as
+          # the summary instead of dropping the commit as pure version churn.
+          summary="$(git log -1 --format=%b "${current}^{commit}" | sed '/^Co-Authored-By:/d' || true)"
           commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
                      | grep -vE '^- release: v?[0-9]' || true)"
           {
+            printf '## %s\n\n' "$current"
+            if [ -n "$summary" ]; then
+              printf '%s\n\n' "$summary"
+            fi
             if [ -n "$previous" ]; then
-              printf '## Changes since %s\n\n' "$previous"
+              printf '### Changes since %s\n\n' "$previous"
             else
-              printf '## Changes in %s\n\n' "$current"
+              printf '### Changes\n\n'
             fi
             if [ -n "$commits" ]; then
               printf '%s\n\n' "$commits"
-            else
+            elif [ -z "$summary" ]; then
               printf 'Release %s.\n\n' "$current"
             fi
             if [ -n "$previous" ]; then
@@ -214,17 +228,24 @@ jobs:
           # the next release repeat the previous release notes.
           previous="$(git tag --merged "${current}^{commit}" --list 'v[0-9]*' \
                       --sort=-v:refname | grep -vx "$current" | sed -n '1p' || true)"
+          # The release commit's own message describes the release; keep it as
+          # the summary instead of dropping the commit as pure version churn.
+          summary="$(git log -1 --format=%b "${current}^{commit}" | sed '/^Co-Authored-By:/d' || true)"
           commits="$(git log --no-merges -n 200 --format='- %s (%h)' "${previous:+${previous}..}${current}" \
                      | grep -vE '^- release: v?[0-9]' || true)"
           {
+            printf '## %s\n\n' "$current"
+            if [ -n "$summary" ]; then
+              printf '%s\n\n' "$summary"
+            fi
             if [ -n "$previous" ]; then
-              printf '## Changes since %s\n\n' "$previous"
+              printf '### Changes since %s\n\n' "$previous"
             else
-              printf '## Changes in %s\n\n' "$current"
+              printf '### Changes\n\n'
             fi
             if [ -n "$commits" ]; then
               printf '%s\n\n' "$commits"
-            else
+            elif [ -z "$summary" ]; then
               printf 'Release %s.\n\n' "$current"
             fi
             if [ -n "$previous" ]; then
