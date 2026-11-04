@@ -5,11 +5,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -64,9 +66,12 @@ func setupChannelSelectAutoGroupsTest(t *testing.T) *gorm.DB {
 	return db
 }
 
-func createChannelSelectAutoGroupsChannel(t *testing.T, db *gorm.DB, id int, group, modelName string) {
+func createChannelSelectAutoGroupsChannel(t *testing.T, db *gorm.DB, id int, group, modelName string, priorities ...int64) {
 	t.Helper()
 	priority := int64(0)
+	if len(priorities) > 0 {
+		priority = priorities[0]
+	}
 	weight := uint(100)
 	require.NoError(t, db.Create(&model.Channel{
 		Id:       id,
@@ -197,4 +202,115 @@ func TestRetryParamFallsBackThroughTokenGroupSequence(t *testing.T) {
 			assert.Equal(t, tt.wantBudgets, budgets)
 		})
 	}
+}
+
+// Affinity uses an attempt without visiting a normal priority. Both HTTP's
+// distributor handoff and WebSocket's shared selector must preserve that first
+// priority, then start the next group with a fresh priority cursor.
+func TestChannelRetryAfterAffinityPreservesPrioritiesAcrossGroups(t *testing.T) {
+	for _, route := range []string{"single", "token groups", "auto"} {
+		for _, transport := range []string{"HTTP", "WebSocket"} {
+			t.Run(route+"/"+transport, func(t *testing.T) {
+				db := setupChannelSelectAutoGroupsTest(t)
+				common.RetryTimes = 2
+				const modelName = "affinity-priority-model"
+				createChannelSelectAutoGroupsChannel(t, db, 2301, "vip", modelName, 20)
+				createChannelSelectAutoGroupsChannel(t, db, 2302, "vip", modelName, 10)
+				createChannelSelectAutoGroupsChannel(t, db, 2303, "vip", modelName, 0)
+				createChannelSelectAutoGroupsChannel(t, db, 2401, "default", modelName, 20)
+				createChannelSelectAutoGroupsChannel(t, db, 2402, "default", modelName, 10)
+				model.InitChannelCache()
+
+				ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+				ctx.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+				ctx.Request.Header.Set("X-Affinity-Key", t.Name())
+				common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+				common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, route != "single")
+				tokenGroup := "vip"
+				if route == "auto" {
+					tokenGroup = "auto"
+					common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"vip", "default"})
+				} else if route == "token groups" {
+					common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []string{"vip", "default"})
+				}
+				rule := operation_setting.ChannelAffinityRule{
+					Name: "priority-regression", ModelRegex: []string{"^affinity-priority-model$"},
+					KeySources:  []operation_setting.ChannelAffinityKeySource{{Type: "request_header", Key: "X-Affinity-Key"}},
+					SessionMode: "prefer", IncludeUsingGroup: true, IncludeRuleName: true,
+				}
+				affinitySetting := operation_setting.GetChannelAffinitySetting()
+				original := *affinitySetting
+				affinitySetting.Enabled = true
+				affinitySetting.Rules = []operation_setting.ChannelAffinityRule{rule}
+				t.Cleanup(func() { *affinitySetting = original })
+				cache := getChannelAffinityCache()
+				key := buildChannelAffinityCacheKeySuffix(rule, modelName, tokenGroup, t.Name())
+				require.NoError(t, cache.SetWithTTL(key, 2303, time.Minute))
+				t.Cleanup(func() { _, _ = cache.DeleteMany([]string{key}) })
+
+				param := &RetryParam{Ctx: ctx, TokenGroup: tokenGroup, ModelName: modelName, Retry: common.GetPointer(0)}
+				channel, group, selectErr := SelectChannelForRequest(ctx, modelName, param)
+				require.Nil(t, selectErr)
+				require.NotNil(t, channel)
+				assert.Equal(t, 2303, channel.Id)
+				assert.Equal(t, "vip", group)
+				if transport == "HTTP" {
+					// The distributor selected affinity before the controller creates
+					// its own RetryParam; selection state travels in the context.
+					param = &RetryParam{Ctx: ctx, TokenGroup: tokenGroup, ModelName: modelName, Retry: common.GetPointer(0)}
+				}
+				want := []int{2301, 2302}
+				if route != "single" {
+					want = append(want, 2401, 2402, 2402)
+				}
+				for _, id := range want {
+					require.Positive(t, param.RemainingRetryBudget())
+					require.True(t, param.AdvanceAfterFailure())
+					if transport == "HTTP" {
+						var err error
+						channel, group, err = CacheGetRandomSatisfiedChannel(param)
+						require.NoError(t, err)
+					} else {
+						channel, group, selectErr = SelectChannelForRequest(ctx, modelName, param)
+						require.Nil(t, selectErr)
+					}
+					require.NotNil(t, channel)
+					assert.Equal(t, id, channel.Id)
+					if id >= 2400 {
+						assert.Equal(t, "default", group)
+						assert.Zero(t, ctx.GetInt(ginKeyChannelAffinityRetryOffset))
+					}
+				}
+				assert.Zero(t, param.RemainingRetryBudget())
+				assert.False(t, param.AdvanceAfterFailure())
+			})
+		}
+	}
+}
+
+func TestChannelRetrySkippingUnavailableGroupClearsAffinityOffset(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	common.RetryTimes = 1
+	const modelName = "affinity-missing-group-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2501, "default", modelName, 20)
+	createChannelSelectAutoGroupsChannel(t, db, 2502, "default", modelName, 10)
+	model.InitChannelCache()
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []string{"vip", "default"})
+	common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+	ctx.Set(ginKeyChannelAffinityRetryOffset, 1)
+	param := &RetryParam{Ctx: ctx, TokenGroup: "vip", ModelName: modelName, Retry: common.GetPointer(1)}
+
+	channel, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, 2501, channel.Id)
+	assert.Equal(t, "default", group)
+	assert.Zero(t, ctx.GetInt(ginKeyChannelAffinityRetryOffset))
+	require.True(t, param.AdvanceAfterFailure())
+	channel, _, err = CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, 2502, channel.Id)
 }

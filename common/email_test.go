@@ -12,12 +12,15 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/smtp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -339,6 +342,84 @@ func TestSendEmailWithAttachmentBuildsMultipartMessage(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for SMTP DATA")
 	}
+}
+
+func TestSendEmailWithAttachmentUsesSelectedResendProvider(t *testing.T) {
+	OptionMapRWMutex.Lock()
+	originalOptions := OptionMap
+	OptionMap = map[string]string{
+		"EmailProvider": "resend",
+		"ResendApiKey":  "test-key",
+		"ResendFrom":    "sender@example.com",
+	}
+	OptionMapRWMutex.Unlock()
+	originalClient := resendEmailClient
+	t.Cleanup(func() {
+		OptionMapRWMutex.Lock()
+		OptionMap = originalOptions
+		OptionMapRWMutex.Unlock()
+		resendEmailClient = originalClient
+	})
+
+	pdf := []byte("%PDF-1.7\n%%EOF")
+	for _, status := range []int{http.StatusOK, http.StatusBadGateway} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			calls := 0
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				assert.Equal(t, "/emails", r.URL.Path)
+				assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+				var payload struct {
+					To          []string `json:"to"`
+					HTML        string   `json:"html"`
+					Attachments []struct {
+						Filename    string `json:"filename"`
+						Content     string `json:"content"`
+						ContentType string `json:"content_type"`
+					} `json:"attachments"`
+				}
+				if !assert.NoError(t, DecodeJson(r.Body, &payload)) {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				assert.Equal(t, []string{"receiver@example.com"}, payload.To)
+				assert.Contains(t, payload.HTML, "<strong>invoice</strong>")
+				if assert.Len(t, payload.Attachments, 1) {
+					assert.Equal(t, "发票.pdf", payload.Attachments[0].Filename)
+					assert.Equal(t, "application/pdf", payload.Attachments[0].ContentType)
+					decoded, err := base64.StdEncoding.DecodeString(payload.Attachments[0].Content)
+					assert.NoError(t, err)
+					assert.Equal(t, pdf, decoded)
+				}
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"id":"invoice-email"}`))
+			}))
+			defer server.Close()
+			resendEmailClient = server.Client()
+			resendEmailClient.Transport = &emailResendTestTransport{
+				target: server.Listener.Addr().String(),
+				base:   resendEmailClient.Transport,
+			}
+			err := SendEmailWithAttachment("发票已开具", "receiver@example.com", "<strong>invoice</strong>", "发票.pdf", pdf, "application/pdf")
+			if status == http.StatusOK {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, "Resend email delivery failed (HTTP 502)")
+			}
+			require.Equal(t, 1, calls, "a failed delivery must not retry or fall back to SMTP")
+		})
+	}
+}
+
+type emailResendTestTransport struct {
+	target string
+	base   http.RoundTripper
+}
+
+func (transport *emailResendTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	request = request.Clone(request.Context())
+	request.URL.Host = transport.target
+	return transport.base.RoundTrip(request)
 }
 
 func TestSendEmailExplicitStartTLSRequiresServerSupport(t *testing.T) {

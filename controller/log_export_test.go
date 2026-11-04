@@ -213,12 +213,17 @@ func verifyLogCacheRateStats(t *testing.T, now int64) {
 	// Claude rows count cache reads into the denominator, while cache writes
 	// alone do not: their input may already include cache reads. The negative
 	// and noisy rows stay valid; only input smaller than cache reads is dropped.
-	// alice: cache reads 100+300+9455+50519+264442+900 = 325716 over input
-	// 100+400+9469+300+51404+264673+1000+100*6 = 327946.
-	aliceRate := 325716.0 / 327946.0
+	// alice: cache reads 100+300+9455+264442+900 = 275197 over input
+	// 100+400+9469+300+264673+1000+100*6 = 276542.
+	inputTotal := 276542.0
+	if common.UsingLogDatabase(common.DatabaseTypePostgreSQL) {
+		// The malformed-JSON fixture above is omitted on PostgreSQL.
+		inputTotal -= 100
+	}
+	aliceRate := 275197.0 / inputTotal
 	assert.LessOrEqual(t, aliceRate, 1.0)
 	// Admin adds bob's 100/100 and carol's 0/100.
-	adminRate := (325716.0 + 100) / (327946.0 + 200)
+	adminRate := (275197.0 + 100) / (inputTotal + 200)
 	assert.InDelta(t, aliceRate, cacheRate(GetLogsSelfStat, 1, "alice", common.RoleCommonUser, query), 1e-9)
 	assert.InDelta(t, 1.0, cacheRate(GetLogsSelfStat, 2, "bob", common.RoleCommonUser, query), 1e-9, "bob's 0% log keeps the overall rate at or below 100%")
 	assert.InDelta(t, adminRate, cacheRate(GetLogsStat, 3, "admin", common.RoleAdminUser, query), 1e-9)

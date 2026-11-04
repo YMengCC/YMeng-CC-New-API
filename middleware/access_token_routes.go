@@ -186,6 +186,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"PUT /api/option/":                                           accessTokenScopeRule("option:write"),
 	"PUT /api/option/passkey/domains":                            accessTokenScopeRule("option:write"),
 	"GET /api/option/model_pricing":                              accessTokenScopeRule("option:read"),
+	"GET /api/option/model_pricing/issues":                       accessTokenScopeRule("option:read"),
 	"PATCH /api/option/model_pricing":                            accessTokenScopeRule("option:write"),
 	"POST /api/option/model_pricing/convert":                     accessTokenScopeRule("option:read"),
 	"POST /api/option/model_pricing/preview":                     accessTokenScopeRule("option:read"),
@@ -228,9 +229,11 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"DELETE /api/system-info/instances/:node_name": accessTokenScopeRule("ops:write"),
 
 	// Executable updates require a browser session, including for legacy tokens.
-	"GET /api/system-update/status":   accessTokenScopeRule("ops:read"),
-	"GET /api/system-update/releases": accessTokenScopeRule("ops:read"),
-	"POST /api/system-update/update":  accessTokenSessionRule,
+	"GET /api/system-update/status":       accessTokenScopeRule("ops:read"),
+	"GET /api/system-update/releases":     accessTokenScopeRule("ops:read"),
+	"GET /api/system-update/release-feed": accessTokenScopeRule("ops:read"),
+	"POST /api/system-update/update":      accessTokenSessionRule,
+	"POST /api/system-update/cleanup":     accessTokenSessionRule,
 
 	// router/api-router.go: /api/plugin/task
 	"GET /api/plugin/task":                           accessTokenScopeRule("plugin:read"),

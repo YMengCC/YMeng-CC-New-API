@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	hosttypes "github.com/QuantumNous/new-api/types"
 )
 
 const (
@@ -25,13 +26,14 @@ const (
 )
 
 type upstreamUsage struct {
-	PromptTokens          int
-	CompletionTokens      int
-	CacheTokens           int
-	CacheCreationTokens   int
-	CacheCreationTokens5m int
-	CacheCreationTokens1h int
-	ClaudeUsageSemantic   bool
+	PromptTokens           int
+	CompletionTokens       int
+	CacheTokens            int
+	CacheCreationTokens    int
+	CacheCreationTokens5m  int
+	CacheCreationTokens1h  int
+	CacheCreationTokens12h int
+	ClaudeUsageSemantic    bool
 }
 
 // UpstreamInvertedModel is a model whose upstream cost reaches the lowest local
@@ -72,12 +74,16 @@ func pricingBaseUSD(pricing model.Pricing, quotaPerUnit float64, usage upstreamU
 			return 0, "", false
 		}
 		params := BuildTieredTokenParams(&dto.Usage{
-			PromptTokens:                      usage.PromptTokens,
-			CompletionTokens:                  usage.CompletionTokens,
-			PromptTokensDetails:               dto.InputTokenDetails{CachedTokens: usage.CacheTokens, CachedCreationTokens: usage.CacheCreationTokens},
-			ClaudeCacheCreation5mTokens:       usage.CacheCreationTokens5m,
-			ClaudeCacheCreation1hTokens:       usage.CacheCreationTokens1h,
-			UsageSemantic:                     map[bool]string{true: "anthropic", false: ""}[usage.ClaudeUsageSemantic],
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			PromptTokensDetails: dto.InputTokenDetails{
+				CachedTokens:            usage.CacheTokens,
+				CachedCreationTokens:    usage.CacheCreationTokens,
+				CacheWriteTokensDetails: &dto.CacheWriteTokenDetails{TTL12hTokens: usage.CacheCreationTokens12h},
+			},
+			ClaudeCacheCreation5mTokens: usage.CacheCreationTokens5m,
+			ClaudeCacheCreation1hTokens: usage.CacheCreationTokens1h,
+			UsageSemantic:               map[bool]string{true: "anthropic", false: ""}[usage.ClaudeUsageSemantic],
 		}, usage.ClaudeUsageSemantic, billingexpr.UsedVars(expr))
 		output, _, err := billingexpr.RunExpr(expr, params)
 		if err != nil || math.IsNaN(output) || math.IsInf(output, 0) || output < 0 {
@@ -113,6 +119,10 @@ func pricingBaseUSD(pricing model.Pricing, quotaPerUnit float64, usage upstreamU
 	promptTokens := float64(usage.PromptTokens) - cacheTokens - cacheCreationTokens
 	tokens := max(promptTokens, 0) + cacheTokens*cacheRatio + cacheCreationTokens*createCacheRatio +
 		float64(usage.CompletionTokens)*pricing.CompletionRatio
+	if !usage.ClaudeUsageSemantic {
+		cacheCreationTokens12h := min(float64(max(usage.CacheCreationTokens12h, 0)), cacheCreationTokens)
+		tokens += cacheCreationTokens12h * createCacheRatio * (hosttypes.OpenAICacheCreation12hMultiplier - 1)
+	}
 	return tokens * pricing.ModelRatio / quotaPerUnit, upstreamBillingPerToken, true
 }
 

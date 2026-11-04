@@ -50,6 +50,7 @@ type upstreamCostPending struct {
 	cacheWrite          int
 	cacheWrite5m        int
 	cacheWrite1h        int
+	cacheWrite12h       int
 	claudeUsageSemantic bool
 	localRatio          float64
 }
@@ -288,6 +289,7 @@ func recordUpstreamCostConsumeLog(c *gin.Context, log *model.Log, other *model.L
 		cacheWrite:          max(common.QuotaFromFloat(logOtherNumber(values["cache_creation_tokens"])), common.QuotaFromFloat(logOtherNumber(values["cache_write_tokens"])), 0),
 		cacheWrite5m:        max(common.QuotaFromFloat(logOtherNumber(values["cache_creation_tokens_5m"])), 0),
 		cacheWrite1h:        max(common.QuotaFromFloat(logOtherNumber(values["cache_creation_tokens_1h"])), 0),
+		cacheWrite12h:       max(common.QuotaFromFloat(logOtherNumber(values["cache_creation_tokens_12h"])), 0),
 		claudeUsageSemantic: usageSemantic == "anthropic",
 		localRatio:          logOtherNumber(values["group_ratio"]),
 	}
@@ -319,13 +321,14 @@ func buildUpstreamCostRecord(pending upstreamCostPending) *model.UpstreamCostRec
 	record.UpstreamGroup = group
 	record.UpstreamGroupRatio = ratio
 	usage := upstreamUsage{
-		PromptTokens:          record.PromptTokens,
-		CompletionTokens:      record.CompletionTokens,
-		CacheTokens:           pending.cacheTokens,
-		CacheCreationTokens:   pending.cacheWrite,
-		CacheCreationTokens5m: pending.cacheWrite5m,
-		CacheCreationTokens1h: pending.cacheWrite1h,
-		ClaudeUsageSemantic:   pending.claudeUsageSemantic,
+		PromptTokens:           record.PromptTokens,
+		CompletionTokens:       record.CompletionTokens,
+		CacheTokens:            pending.cacheTokens,
+		CacheCreationTokens:    pending.cacheWrite,
+		CacheCreationTokens5m:  pending.cacheWrite5m,
+		CacheCreationTokens1h:  pending.cacheWrite1h,
+		CacheCreationTokens12h: pending.cacheWrite12h,
+		ClaudeUsageSemantic:    pending.claudeUsageSemantic,
 	}
 	if cost, ok := estimateUpstreamCostQuota(channel, pending.upstreamModel, usage, record.Quota, pending.localRatio, ratio); ok {
 		record.CostQuota = cost

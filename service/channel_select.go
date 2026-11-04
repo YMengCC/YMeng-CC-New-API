@@ -125,6 +125,7 @@ func (p *RetryParam) AdvanceAfterFailure() bool {
 	}
 	p.groupIndex++
 	p.SetRetry(0)
+	p.Ctx.Set(ginKeyChannelAffinityRetryOffset, 0)
 	common.SetContextKey(p.Ctx, constant.ContextKeyTokenGroupIndex, p.groupIndex)
 	return true
 }
@@ -150,9 +151,10 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			retry = 0
 			param.SetRetry(0)
 		}
-		logger.LogDebug(param.Ctx, "Selecting group %s at retry %d", group, retry)
+		priorityRetry := max(retry-param.Ctx.GetInt(ginKeyChannelAffinityRetryOffset), 0)
+		logger.LogDebug(param.Ctx, "Selecting group %s at retry %d", group, priorityRetry)
 
-		channel, selectErr := model.GetRandomSatisfiedChannel(group, param.ModelName, retry, filters)
+		channel, selectErr := model.GetRandomSatisfiedChannel(group, param.ModelName, priorityRetry, filters)
 		if selectErr != nil {
 			return nil, group, selectErr
 		}
@@ -162,6 +164,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 				return nil, group, nil
 			}
 			param.groupIndex = index + 1
+			param.Ctx.Set(ginKeyChannelAffinityRetryOffset, 0)
 			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupIndex, param.groupIndex)
 			continue
 		}
@@ -181,37 +184,53 @@ func pinnedTaskPluginIdentities(c *gin.Context, expected string) ([]int, []strin
 	if c == nil || expected == "" {
 		return nil, nil
 	}
+	// A shared host endpoint and a native route several plugins declare both
+	// admit a channel of any candidate.
+	var generation *jsplugin.RoutingGeneration
+	var candidates []*jsplugin.LoadedPlugin
 	if value, exists := c.Get(jsplugin.ContextKeyPinnedEndpoint); exists {
-		pinned, ok := value.(jsplugin.PinnedEndpoint)
-		if ok && pinned.Generation != nil && len(pinned.Candidates) > 1 {
-			expectedFound := false
-			channelTypes := make([]int, 0, len(pinned.Candidates))
-			pluginKeys := make([]string, 0, len(pinned.Candidates))
-			seen := make(map[int]struct{}, len(pinned.Candidates))
+		if pinned, ok := value.(jsplugin.PinnedEndpoint); ok && len(pinned.Candidates) > 1 {
+			generation = pinned.Generation
 			for _, candidate := range pinned.Candidates {
-				if candidate.Plugin == nil {
+				candidates = append(candidates, candidate.Plugin)
+			}
+		}
+	} else if value, exists := c.Get(jsplugin.ContextKeyPinnedRoute); exists {
+		if pinned, ok := value.(jsplugin.PinnedRoute); ok && len(pinned.Candidates) > 1 {
+			generation = pinned.Generation
+			for _, candidate := range pinned.Candidates {
+				candidates = append(candidates, candidate.Plugin)
+			}
+		}
+	}
+	if generation != nil {
+		expectedFound := false
+		channelTypes := make([]int, 0, len(candidates))
+		pluginKeys := make([]string, 0, len(candidates))
+		seen := make(map[int]struct{}, len(candidates))
+		for _, candidate := range candidates {
+			if candidate == nil {
+				continue
+			}
+			if candidate.Meta.Key == expected {
+				expectedFound = true
+			}
+			pluginKeys = append(pluginKeys, candidate.Meta.Key)
+			for _, channelType := range candidate.Meta.ChannelTypes {
+				if channelType == 0 || channelType == constant.ChannelTypeTaskPlugin {
 					continue
 				}
-				if candidate.Plugin.Meta.Key == expected {
-					expectedFound = true
+				if _, duplicate := seen[channelType]; duplicate {
+					continue
 				}
-				pluginKeys = append(pluginKeys, candidate.Plugin.Meta.Key)
-				for _, channelType := range candidate.Plugin.Meta.ChannelTypes {
-					if channelType == 0 || channelType == constant.ChannelTypeTaskPlugin {
-						continue
-					}
-					if _, duplicate := seen[channelType]; duplicate {
-						continue
-					}
-					if plugin, indexed := pinned.Generation.GetByChannelType(channelType); indexed && plugin == candidate.Plugin {
-						seen[channelType] = struct{}{}
-						channelTypes = append(channelTypes, channelType)
-					}
+				if plugin, indexed := generation.GetByChannelType(channelType); indexed && plugin == candidate {
+					seen[channelType] = struct{}{}
+					channelTypes = append(channelTypes, channelType)
 				}
 			}
-			if expectedFound {
-				return channelTypes, pluginKeys
-			}
+		}
+		if expectedFound {
+			return channelTypes, pluginKeys
 		}
 	}
 	value, exists := c.Get(jsplugin.ContextKeyPinnedPlugin)
@@ -283,7 +302,9 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 	usingGroup := retry.TokenGroup
 	var channel *model.Channel
 	var selectGroup string
-	if retry.GetRetry() == 0 {
+	// A group fallback resets Retry to zero, but must not revisit affinity from
+	// the initial group. HTTP and WebSocket callers share this retry state.
+	if retry.GetRetry() == 0 && !retry.initialized {
 		if preferredChannelID, found := GetPreferredChannelByAffinity(c, modelName, usingGroup); found {
 			affinityUsable := false
 			preferred, err := model.CacheGetChannel(preferredChannelID)
