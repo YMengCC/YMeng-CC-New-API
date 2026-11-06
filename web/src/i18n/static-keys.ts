@@ -59,6 +59,8 @@ export const STATIC_I18N_KEYS = [
   'Connect the managed update controller before installing releases.',
   'update controller rejected the operation (HTTP 409)',
   'Traffic switched; the previous container is still draining and was retained.',
+  'The adjusted price is outside the supported range.',
+  'This expression cannot be adjusted automatically. Keep the source price or edit it manually.',
   'For this channel, map the model name in client requests to the model name sent upstream.',
   // Channel provider labels, descriptions and presentation badges.
   'Zhipu GLM',

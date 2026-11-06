@@ -21,7 +21,17 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveSidebarView } from '@/components/layout/lib/sidebar-view-registry'
-import type { NavGroup, ResolvedSidebarView } from '@/components/layout/types'
+import type {
+  NavGroup,
+  ResolvedSidebarView,
+  SidebarBadges,
+} from '@/components/layout/types'
+import { useCanEditModelPricing } from '@/features/model-pricing/api'
+import {
+  getOptionValue,
+  useSystemOptions,
+} from '@/features/system-settings/hooks/use-system-options'
+import { useModelPricingIssueBadge } from '@/features/system-settings/models/pricing-issues'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -30,6 +40,10 @@ import { useSidebarData } from './use-sidebar-data'
 
 /** Sentinel key used for the root navigation in animation `key=` props */
 const ROOT_VIEW_KEY = '__root'
+
+const BADGE_SETTING_DEFAULTS = {
+  DisplayModelPricingIssueBadgeEnabled: false,
+}
 
 /**
  * Resolve the active sidebar view for the current location.
@@ -48,7 +62,20 @@ export function useSidebarView(): ResolvedSidebarView {
   const { t } = useTranslation()
   const pathname = useLocation({ select: (l) => l.pathname })
   const userRole = useAuthStore((s) => s.auth.user?.role)
-  const rootSidebarData = useSidebarData()
+  const canEditModelPricing = useCanEditModelPricing()
+  const options = useSystemOptions(canEditModelPricing)
+  const showModelPricingBadge = getOptionValue(
+    options.data?.data,
+    BADGE_SETTING_DEFAULTS
+  ).DisplayModelPricingIssueBadgeEnabled
+  const modelPricingBadge = useModelPricingIssueBadge()
+  const badges: SidebarBadges = {
+    modelPricing:
+      canEditModelPricing && showModelPricingBadge
+        ? modelPricingBadge
+        : undefined,
+  }
+  const rootSidebarData = useSidebarData(badges)
   const configFilteredRoot = useSidebarConfig(rootSidebarData.navGroups)
 
   const rootNavGroups = useMemo<NavGroup[]>(() => {
@@ -70,7 +97,7 @@ export function useSidebarView(): ResolvedSidebarView {
     return {
       key: view.id,
       view,
-      navGroups: view.getNavGroups(t),
+      navGroups: view.getNavGroups(t, badges),
     }
   }
 

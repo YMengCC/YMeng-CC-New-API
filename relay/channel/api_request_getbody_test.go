@@ -349,7 +349,8 @@ func awaitH2ServerResult(t *testing.T, resultCh <-chan h2ServerResult) h2ServerR
 // been fully written, and then resets the stream with REFUSED_STREAM (the
 // retry-safe reset some proxy/CDN-fronted upstreams send under load or during
 // graceful shutdown, see RFC 9113 section 8.7). When expectRetry is true it
-// serves the retried stream a 200 response; otherwise it stops after the reset.
+// serves the retried stream a 200 response; otherwise it drains the connection
+// until the client closes it after processing the reset.
 func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2ServerResult {
 	resCh := make(chan h2ServerResult, 1)
 	go func() {
@@ -363,7 +364,6 @@ func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2Ser
 		}
 		defer conn.Close()
 
-	attempts:
 		for attempt := 0; ; attempt++ {
 			streamID, body, err := readH2TestRequest(framer)
 			if err != nil {
@@ -379,7 +379,11 @@ func runResetOnFirstStreamServer(ln net.Listener, expectRetry bool) <-chan h2Ser
 					return
 				}
 				if !expectRetry {
-					break attempts
+					// Keep the reset readable until the client closes the connection.
+					// Closing with unread control frames can produce a TCP reset on
+					// Windows that hides the intended HTTP/2 stream error.
+					_, res.err = io.Copy(io.Discard, conn)
+					return
 				}
 				continue
 			}
@@ -580,6 +584,7 @@ func TestUpstreamGetBody_HTTP2CannotRetryWithoutGetBody(t *testing.T) {
 	assert.Nil(t, req.GetBody)
 
 	resp, err := client.Do(req) //nolint:bodyclose // Do fails, no body to close
+	transport.CloseIdleConnections()
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, "cannot retry err")

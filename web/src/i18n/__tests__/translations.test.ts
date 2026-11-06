@@ -28,6 +28,26 @@ it.each(Object.entries(resources))(
   }
 )
 
+it.each(Object.entries(resources))(
+  'translates the model pricing issue badge setting in %s',
+  async (language, resource) => {
+    const i18n = createInstance()
+    await i18n.init({
+      lng: language,
+      fallbackLng: 'en',
+      resources: { [language]: resource, en },
+    })
+
+    for (const key of [
+      'Show model pricing issue badge',
+      'Show the number of task models whose price needs attention next to the navigation entries.',
+    ]) {
+      expect(i18n.exists(key, { lng: language })).toBe(true)
+      if (language !== 'en') expect(i18n.t(key)).not.toBe(key)
+    }
+  }
+)
+
 it('uses the requested Chinese translations', async () => {
   const i18n = createInstance()
   await i18n.init({ lng: 'zhCN', fallbackLng: 'en', resources })

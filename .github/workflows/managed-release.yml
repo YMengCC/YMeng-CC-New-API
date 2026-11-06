@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to verify without rebuilding or republishing'
+        required: true
+      current_version:
+        description: 'Optional installed version that must be approved by the manifest'
+        required: false
 
 permissions:
   contents: write
@@ -11,9 +19,12 @@ permissions:
 
 jobs:
   image:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     env:
       IMAGE_NAME: ghcr.io/ymengcc/ymeng-cc-new-api
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -128,3 +139,138 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${GITHUB_REF_NAME}" update-manifest.json update-manifest.sig --clobber
+
+      - name: Wait for all platform release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for attempt in $(seq 1 60); do
+            gh release view "$GITHUB_REF_NAME" --json assets > release-assets.json
+            if jq -e --arg tag "$GITHUB_REF_NAME" '
+              .assets as $assets |
+              ["new-api-" + $tag, "new-api-arm64-" + $tag,
+               "new-api-macos-" + $tag, "new-api-" + $tag + ".exe",
+               "checksums-linux.txt", "checksums-macos.txt", "checksums-windows.txt",
+               "update-manifest.json", "update-manifest.sig"] |
+              all(.[]; . as $name | any($assets[]; .name == $name and .size > 0))
+            ' release-assets.json >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo 'Release assets are incomplete; leaving the release as a draft.' >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Verify uploaded manifest signature and image platforms
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY_B64: ${{ secrets.UPDATE_RELEASE_PRIVATE_KEY_B64 }}
+          EXPECTED_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.image.outputs.digest }}
+        run: |
+          mkdir -p verified-release
+          trap 'rm -f signing-private.pem' EXIT
+          printf '%s' "$PRIVATE_KEY_B64" | base64 -d > signing-private.pem
+          openssl pkey -in signing-private.pem -pubout -out signing-public.pem
+          gh release download "$GITHUB_REF_NAME" --dir verified-release \
+            --pattern update-manifest.json --pattern update-manifest.sig
+          cmp update-manifest.json verified-release/update-manifest.json
+          cmp update-manifest.sig verified-release/update-manifest.sig
+          node .github/scripts/verify-managed-release.mjs "$GITHUB_REF_NAME" "$EXPECTED_IMAGE" \
+            verified-release/update-manifest.json verified-release/update-manifest.sig \
+            signing-public.pem release-assets.json
+          docker buildx imagetools inspect "$EXPECTED_IMAGE" --raw > image-index.json
+          jq -e --slurpfile compatibility verified-release/update-manifest.json '
+            [.manifests[]?.platform | "\(.os)/\(.architecture)"] as $actual |
+            all($compatibility[0].platforms[]; . as $platform | $actual | index($platform) != null)
+          ' image-index.json >/dev/null
+
+      - name: Publish only the verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERIFIED_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.image.outputs.digest }}
+        run: |
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh release view "$GITHUB_REF_NAME" --json isDraft,assets > published-release.json
+          jq -e '.isDraft == false' published-release.json >/dev/null
+          node .github/scripts/verify-managed-release.mjs "$GITHUB_REF_NAME" "$VERIFIED_IMAGE" \
+            verified-release/update-manifest.json verified-release/update-manifest.sig \
+            signing-public.pem published-release.json
+          {
+            echo "### Online update ready: $GITHUB_REF_NAME"
+            echo "Verified manifest, signature, platform binaries and image: $VERIFIED_IMAGE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-existing:
+    name: Verify an existing online release
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      CURRENT_VERSION: ${{ inputs.current_version }}
+    steps:
+      - name: Checkout verification tools
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test publication verification
+        run: node --test .github/scripts/verify-managed-release.test.mjs
+
+      - name: Verify published assets and signing key
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY_B64: ${{ secrets.UPDATE_RELEASE_PRIVATE_KEY_B64 }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][a-zA-Z0-9_.-]+)?$ ]]
+          test -n "$PRIVATE_KEY_B64"
+          mkdir verified-release
+          trap 'rm -f signing-private.pem' EXIT
+          printf '%s' "$PRIVATE_KEY_B64" | base64 -d > signing-private.pem
+          openssl pkey -in signing-private.pem -pubout -out verified-release/signing-public.pem
+          gh release view "$RELEASE_TAG" --json isDraft,assets > verified-release/release-assets.json
+          jq -e '.isDraft == false' verified-release/release-assets.json >/dev/null
+          gh release download "$RELEASE_TAG" --dir verified-release \
+            --pattern update-manifest.json --pattern update-manifest.sig
+          image=$(jq -er '.image' verified-release/update-manifest.json)
+          node .github/scripts/verify-managed-release.mjs "$RELEASE_TAG" "$image" \
+            verified-release/update-manifest.json verified-release/update-manifest.sig \
+            verified-release/signing-public.pem verified-release/release-assets.json
+          if [ -n "$CURRENT_VERSION" ]; then
+            jq -e --arg source "$CURRENT_VERSION" '.from_versions | index($source) != null' \
+              verified-release/update-manifest.json >/dev/null
+          fi
+          echo "VERIFIED_IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Verify anonymous image access and declared platforms
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker buildx imagetools inspect "$VERIFIED_IMAGE" --raw > verified-release/image-index.json
+          jq -e --slurpfile compatibility verified-release/update-manifest.json '
+            [.manifests[]?.platform | "\(.os)/\(.architecture)"] as $actual |
+            all($compatibility[0].platforms[]; . as $platform | $actual | index($platform) != null)
+          ' verified-release/image-index.json >/dev/null
+          sha=$(git rev-parse "$RELEASE_TAG^{commit}")
+          jq --arg commit "$sha" --arg source "$CURRENT_VERSION" \
+            '. + {commit: $commit, checked_source_version: $source, signature_verified: true, image_verified: true}' \
+            verified-release/update-manifest.json > verified-release/verification.json
+          {
+            echo "### Verified online release: $RELEASE_TAG"
+            echo "Image: $VERIFIED_IMAGE"
+            echo "Source version checked: ${CURRENT_VERSION:-not specified}"
+            echo "Commit: $sha"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain public verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: online-release-verification
+          path: verified-release/
+          retention-days: 30

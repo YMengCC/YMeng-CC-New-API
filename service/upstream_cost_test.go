@@ -535,7 +535,7 @@ func TestRecordUpstreamCostPropagatesCacheWriteMetadata(t *testing.T) {
 		channels: map[int]*upstreamCostChannelSnapshot{1: {
 			site: &model.UpstreamSite{QuotaPerUnit: 500000}, costFactor: 1, ratio: 1,
 			modelPricing: map[string]model.Pricing{"cache-model": {
-				BillingMode: "tiered_expr", BillingExpr: `tier("base", p * 2 + c * 4 + cr + cc * 3 + cc1h * 6)`,
+				BillingMode: "tiered_expr", BillingExpr: `tier("base", p * 2 + c * 4 + cr + cc * 3 + cc1h * 6 + cc12h * 6)`,
 			}},
 		}},
 	})
@@ -551,6 +551,8 @@ func TestRecordUpstreamCostPropagatesCacheWriteMetadata(t *testing.T) {
 		{name: "original total is retained", prompt: 180, metadata: map[string]any{"cache_creation_tokens": 50, "cache_write_tokens": 40}, wantCost: 245},
 		{name: "anthropic split writes", prompt: 100, metadata: map[string]any{"usage_semantic": "anthropic", "cache_tokens": 30, "cache_creation_tokens": 50, "cache_creation_tokens_5m": 10, "cache_creation_tokens_1h": 40}, wantCost: 290},
 		{name: "request format does not change token semantics", prompt: 180, metadata: map[string]any{"claude": true, "cache_tokens": 30, "cache_write_tokens": 50, "cache_creation_tokens_5m": 10, "cache_creation_tokens_1h": 40}, wantCost: 230},
+		{name: "openai 12h writes", prompt: 180, metadata: map[string]any{"cache_write_tokens": 50, "cache_creation_tokens_12h": 40}, wantCost: 305},
+		{name: "12h writes bounded by total", prompt: 180, metadata: map[string]any{"cache_write_tokens": 50, "cache_creation_tokens_12h": 80}, wantCost: 320},
 		{name: "floating point metadata", prompt: 180, metadata: map[string]any{"cache_write_tokens": float64(50)}, wantCost: 245},
 		{name: "negative writes are ignored", prompt: 180, metadata: map[string]any{"cache_creation_tokens": -50}, wantCost: 220},
 		{name: "oversized writes saturate safely", prompt: 180, metadata: map[string]any{"cache_write_tokens": math.Inf(1)}, wantCost: common.MaxQuota},
@@ -573,6 +575,31 @@ func TestRecordUpstreamCostPropagatesCacheWriteMetadata(t *testing.T) {
 			assert.Equal(t, tc.wantCost, record.CostQuota)
 			assert.Equal(t, tc.prompt, record.PromptTokens)
 			assert.Equal(t, model.UpstreamCostRecordEstimated, record.Status)
+		})
+	}
+}
+
+func TestUpstreamCostRatioPrices12hCacheWrites(t *testing.T) {
+	createRatio := 1.5
+	pricing := model.Pricing{ModelRatio: 1, CompletionRatio: 2, CreateCacheRatio: &createRatio}
+	for _, tc := range []struct {
+		name       string
+		longWrites int
+		wantQuota  float64
+	}{
+		{name: "short writes", wantQuota: 245},
+		{name: "mixed lifetimes", longWrites: 40, wantQuota: 305},
+		{name: "long writes bounded by total", longWrites: 80, wantQuota: 320},
+		{name: "negative long writes ignored", longWrites: -1, wantQuota: 245},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			usd, kind, ok := pricingBaseUSD(pricing, 500000, upstreamUsage{
+				PromptTokens: 180, CompletionTokens: 20,
+				CacheCreationTokens: 50, CacheCreationTokens12h: tc.longWrites,
+			})
+			require.True(t, ok)
+			assert.Equal(t, upstreamBillingPerToken, kind)
+			assert.InDelta(t, tc.wantQuota, usd*500000, 1e-9)
 		})
 	}
 }
