@@ -273,14 +273,23 @@ describe('model pricing badge', () => {
   async function renderSidebar(
     path: string,
     role: number,
-    issues: () => ModelPricingIssue[]
+    issues: () => ModelPricingIssue[],
+    badgeSetting: () => boolean = () => true
   ) {
-    const get = vi.spyOn(api, 'get').mockImplementation(async (url) => ({
-      data: {
-        success: true,
-        data: url === '/api/option/model_pricing/issues' ? issues() : {},
-      },
-    }))
+    const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
+      let data: object = {}
+      if (url === '/api/option/model_pricing/issues') {
+        data = issues()
+      } else if (url === '/api/option/') {
+        data = [
+          {
+            key: 'DisplayModelPricingIssueBadgeEnabled',
+            value: String(badgeSetting()),
+          },
+        ]
+      }
+      return { data: { success: true, data } }
+    })
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -348,6 +357,44 @@ describe('model pricing badge', () => {
     await waitFor(() => expect(badgedEntries()).toHaveLength(0))
   })
 
+  it('shows the count again as soon as the setting is enabled', async () => {
+    let showBadge = false
+    const { client } = await renderSidebar(
+      '/dashboard/overview',
+      ROLE.SUPER_ADMIN,
+      () => [issue('kling-v3', 'kling')],
+      () => showBadge
+    )
+    expect(
+      await screen.findByRole('list', { name: 'Badged entries' })
+    ).toBeInTheDocument()
+    expect(badgedEntries()).toHaveLength(0)
+
+    showBadge = true
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['system-options'] })
+    })
+
+    expect(await screen.findByText('System Settings: 1')).toBeInTheDocument()
+  })
+
+  it('hides the count on every navigation entry when the setting is off', async () => {
+    const { get } = await renderSidebar(
+      '/system-settings/site',
+      ROLE.SUPER_ADMIN,
+      () => [issue('kling-v3', 'kling')],
+      () => false
+    )
+
+    expect(
+      await screen.findByRole('list', { name: 'Badged entries' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Billing & Payment: 1')).not.toBeInTheDocument()
+    expect(screen.queryByText('Model Pricing: 1')).not.toBeInTheDocument()
+    expect(badgedEntries()).toHaveLength(0)
+    expect(get).toHaveBeenCalledWith('/api/option/')
+  })
+
   it('never asks for the count below the super administrator role', async () => {
     const { get } = await renderSidebar(
       '/dashboard/overview',
@@ -359,6 +406,7 @@ describe('model pricing badge', () => {
       await screen.findByRole('list', { name: 'Badged entries' })
     ).toBeInTheDocument()
     expect(get).not.toHaveBeenCalledWith('/api/option/model_pricing/issues')
+    expect(get).not.toHaveBeenCalledWith('/api/option/')
     expect(badgedEntries()).toHaveLength(0)
   })
 })
