@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -147,11 +148,17 @@ type cleanupEngine struct {
 	force                  bool
 	stopError, removeError error
 	keepAfterRemove        bool
+	keepRunning            bool
+	inspectError           error
+	inspectTarget          string
 }
 
 func (e *cleanupEngine) Pull(context.Context, string) error { return nil }
 
 func (e *cleanupEngine) Inspect(_ context.Context, id string) (dockerContainer, error) {
+	if e.inspectError != nil && id == e.inspectTarget {
+		return dockerContainer{}, e.inspectError
+	}
 	for key, container := range e.containers {
 		if key == id || container.Name == id {
 			return container, nil
@@ -165,6 +172,9 @@ func (e *cleanupEngine) Create(context.Context, string, string, dockerContainer)
 func (e *cleanupEngine) Start(context.Context, string) error { return errors.New("not used") }
 func (e *cleanupEngine) Stop(_ context.Context, id string) error {
 	e.stopCalls = append(e.stopCalls, id)
+	if e.keepRunning {
+		return e.stopError
+	}
 	container := e.containers[id]
 	container.State = dockerState{Status: "exited"}
 	container.NetworkSettings.Networks = map[string]dockerNetworkEndpoint{"managed": {NetworkID: "network-1", IPAddress: ""}}
@@ -194,10 +204,11 @@ func (p *cleanupProxy) Select(_ context.Context, _, _, target string) error {
 }
 
 type lifecycleTransport struct {
-	safe        bool
-	ready       bool
-	notDraining bool
-	drainCalls  int
+	safe          bool
+	ready         bool
+	notDraining   bool
+	drainCalls    int
+	pendingWrites int64
 }
 
 func (p *lifecycleTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -210,6 +221,7 @@ func (p *lifecycleTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 		}
 		life.Draining = !p.notDraining
 		life.SafeToStop = p.safe && life.Draining
+		life.PendingWrites = p.pendingWrites
 		if !p.safe {
 			life.ActiveRequests = 1
 		}
@@ -272,12 +284,14 @@ func TestCleanupCompletesAndAllowsNextUpdate(t *testing.T) {
 }
 
 func TestCleanupRefusesUnsafeContainersWithoutDockerMutations(t *testing.T) {
-	for _, scenario := range []string{"requests", "active-unready", "runtime-route", "disk-route", "identity", "network", "restarting"} {
+	for _, scenario := range []string{"requests", "pending-writes", "active-unready", "runtime-route", "disk-route", "identity", "network", "restarting"} {
 		t.Run(scenario, func(t *testing.T) {
 			u, engine, proxy, life := cleanupFixture(t)
 			switch scenario {
 			case "requests":
 				life.safe = false
+			case "pending-writes":
+				life.pendingWrites = 1
 			case "active-unready":
 				life.ready = false
 			case "runtime-route":
@@ -443,10 +457,10 @@ func TestLegacyDrainCanBindIDsBeforeDrainRequestWasSent(t *testing.T) {
 	require.NoError(t, u.prepareRetainedCleanup(context.Background()))
 	require.NotNil(t, u.cleanup)
 	assert.False(t, u.snapshot().CanCleanup)
-	u.resumeDrain()
+	require.NoError(t, u.resumeDrain(context.Background()))
 	assert.Equal(t, 1, life.drainCalls)
-	assert.Equal(t, "completed", u.snapshot().State)
-	assert.True(t, u.snapshot().CanCleanup)
+	assert.Equal(t, "cleaning", u.snapshot().State)
+	assert.False(t, u.snapshot().CanCleanup)
 	assert.Empty(t, engine.stopCalls)
 }
 
@@ -606,4 +620,320 @@ func TestCleanupRejectsAmbiguousSharedNetwork(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "network-1", activeRef.NetworkID)
 	assert.Equal(t, activeRef.NetworkID, oldRef.NetworkID)
+}
+
+func TestMaintenanceCleansRetainedStateWithoutStatusRequests(t *testing.T) {
+	for _, scenario := range []string{"completed", "draining", "draining-current", "legacy-completed", "legacy-draining", "cleaning", "stopped"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				u, engine, proxy, life := cleanupFixture(t)
+				wantVersion := u.status.CurrentVersion
+				switch scenario {
+				case "legacy-completed":
+					u.cleanup = nil
+				case "draining", "draining-current", "legacy-draining":
+					u.status.State, u.status.Draining = "draining", true
+					u.status.OperationID, u.status.TargetVersion = "interrupted-update", "v1.2.2"
+					wantVersion = "v1.2.2"
+					if scenario == "draining-current" {
+						u.status.TargetVersion = ""
+						wantVersion = "v1.2.1"
+					}
+					life.notDraining = true
+					if scenario == "legacy-draining" {
+						u.cleanup = nil
+					}
+				case "cleaning", "stopped":
+					u.status.State, u.status.OperationID = "cleaning", u.cleanup.CleanupID
+					u.cleanup.Phase = cleanupValidating
+					if scenario == "stopped" {
+						u.cleanup.Phase = cleanupStopRequested
+						old := engine.containers[u.cleanup.Old.ID]
+						old.State = dockerState{Status: "exited"}
+						old.NetworkSettings.Networks = nil
+						engine.containers[old.ID] = old
+					}
+				}
+				require.NoError(t, u.persist())
+				restored, err := newController(u.config, engine, &http.Client{Transport: life})
+				require.NoError(t, err)
+				restored.proxy = proxy
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go restored.runMaintenance(ctx)
+				synctest.Wait()
+				status := restored.snapshot()
+				require.Equal(t, "ready", status.State)
+				assert.Equal(t, wantVersion, status.CurrentVersion)
+				assert.True(t, *status.CanUpdate)
+				assert.Nil(t, status.Cleanup)
+				assert.Equal(t, []string{strings.Repeat("a", 64)}, engine.removeCalls)
+				assert.False(t, engine.force)
+				persisted, err := restored.store.load()
+				require.NoError(t, err)
+				assert.Nil(t, persisted.Cleanup)
+				assert.Empty(t, persisted.DrainingContainer)
+				_, _, err = restored.reserve("v1.2.3")
+				require.NoError(t, err)
+			})
+		})
+	}
+}
+
+func TestMaintenanceWaitsForRequestsAndWritesBeforeCleanup(t *testing.T) {
+	for _, scenario := range []string{"requests", "pending-writes"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				u, engine, _, life := cleanupFixture(t)
+				u.status.State, u.status.Draining = "draining", true
+				life.safe = scenario != "requests"
+				if scenario == "pending-writes" {
+					life.pendingWrites = 1
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go u.runMaintenance(ctx)
+				synctest.Wait()
+				assert.Empty(t, engine.stopCalls)
+				assert.False(t, *u.snapshot().CanUpdate)
+				life.safe, life.pendingWrites = true, 0
+				// Advance the virtual lifecycle polling clock; no wall-clock wait.
+				time.Sleep(2 * time.Second)
+				synctest.Wait()
+				assert.Equal(t, "ready", u.snapshot().State)
+				assert.Len(t, engine.stopCalls, 1)
+				assert.Len(t, engine.removeCalls, 1)
+			})
+		})
+	}
+}
+
+func TestMaintenanceRetriesTransientFailuresAfterThirtySeconds(t *testing.T) {
+	for _, scenario := range []string{"engine", "active-unready", "stop-pending", "remove", "reservation-save", "final-save"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				u, engine, _, life := cleanupFixture(t)
+				store := u.store
+				switch scenario {
+				case "engine":
+					engine.inspectTarget, engine.inspectError = u.cleanup.Old.ID, context.DeadlineExceeded
+				case "active-unready":
+					life.ready = false
+				case "stop-pending":
+					engine.keepRunning = true
+				case "remove":
+					engine.keepAfterRemove = true
+				case "reservation-save", "final-save":
+					u.store.saveOverride = func(state persistedState) error {
+						if scenario == "reservation-save" || state.Cleanup == nil {
+							return errors.New("disk full")
+						}
+						return store.save(state)
+					}
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go u.runMaintenance(ctx)
+				synctest.Wait()
+				require.Equal(t, "cleanup_failed", u.snapshot().State)
+				assert.True(t, u.snapshot().CanCleanup)
+				assert.False(t, *u.snapshot().CanUpdate)
+				stopCalls, removeCalls := len(engine.stopCalls), len(engine.removeCalls)
+				engine.inspectError, engine.keepRunning, engine.keepAfterRemove = nil, false, false
+				life.ready = true
+				u.store = store
+				time.Sleep(25 * time.Second)
+				synctest.Wait()
+				assert.Equal(t, "cleanup_failed", u.snapshot().State)
+				assert.Len(t, engine.stopCalls, stopCalls)
+				assert.Len(t, engine.removeCalls, removeCalls)
+				time.Sleep(5 * time.Second)
+				synctest.Wait()
+				assert.Equal(t, "ready", u.snapshot().State)
+				assert.True(t, *u.snapshot().CanUpdate)
+				assert.False(t, engine.force)
+				if scenario == "final-save" {
+					assert.Len(t, engine.removeCalls, 1)
+				}
+			})
+		})
+	}
+}
+
+func TestMaintenanceRetainsUnsafeIdentityOrRouteUntilManualRetry(t *testing.T) {
+	for _, scenario := range []string{"identity", "route", "draining-route"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				u, engine, proxy, _ := cleanupFixture(t)
+				old := engine.containers[u.cleanup.Old.ID]
+				if scenario == "draining-route" {
+					u.status.State, u.status.Draining = "draining", true
+				}
+				if scenario == "identity" {
+					changed := old
+					changed.Labels = nil
+					engine.containers[old.ID] = changed
+				} else {
+					proxy.target = "10.0.0.2"
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go u.runMaintenance(ctx)
+				synctest.Wait()
+				require.Equal(t, "cleanup_failed", u.snapshot().State)
+				engine.containers[old.ID], proxy.target = old, "10.0.0.3"
+				time.Sleep(30 * time.Second)
+				synctest.Wait()
+				assert.Empty(t, engine.stopCalls)
+				assert.Empty(t, engine.removeCalls)
+				id := u.cleanup.CleanupID
+				_, start, err := u.reserveCleanup(id)
+				require.NoError(t, err)
+				require.True(t, start)
+				u.runCleanup(id)
+				assert.Equal(t, "ready", u.snapshot().State)
+			})
+		})
+	}
+}
+
+func TestMaintenanceContinuesDrainAfterItsAttemptTimesOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		u, engine, _, life := cleanupFixture(t)
+		u.status.State, u.status.Draining = "draining", true
+		u.status.TargetVersion = "v1.2.2"
+		life.safe = false
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go u.runMaintenance(ctx)
+		synctest.Wait()
+		time.Sleep(150 * time.Second)
+		synctest.Wait()
+		assert.Equal(t, "draining", u.snapshot().State)
+		assert.Empty(t, engine.stopCalls)
+		assert.False(t, u.snapshot().CanCleanup)
+		life.safe = true
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		assert.Equal(t, "ready", u.snapshot().State)
+		assert.Equal(t, "v1.2.2", u.snapshot().CurrentVersion)
+		assert.Len(t, engine.removeCalls, 1)
+	})
+}
+
+func TestStatusReadDoesNotBindOrCleanLegacyRetainedState(t *testing.T) {
+	u, engine, _, _ := cleanupFixture(t)
+	u.cleanup = nil
+	request := httptest.NewRequest(http.MethodGet, "/v1/status", nil)
+	request.Header.Set("Authorization", "Bearer "+u.config.token)
+	response := httptest.NewRecorder()
+	u.serve(response, request)
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Nil(t, u.cleanup)
+	assert.Empty(t, engine.stopCalls)
+	assert.Empty(t, engine.removeCalls)
+}
+
+type updatingEngine struct {
+	*cleanupEngine
+	candidate dockerContainer
+}
+
+func (e *updatingEngine) Create(_ context.Context, name, _ string, _ dockerContainer) (string, error) {
+	e.candidate.Name = name
+	e.containers[e.candidate.ID] = e.candidate
+	return e.candidate.ID, nil
+}
+
+func (e *updatingEngine) Start(context.Context, string) error { return nil }
+
+func TestSuccessfulUpdateAutomaticallyCleansPreviousContainer(t *testing.T) {
+	u, engine, proxy, life := cleanupFixture(t)
+	from, to := u.cleanup.Old, u.cleanup.Active
+	candidate := engine.containers[to.ID]
+	delete(engine.containers, to.ID)
+	u.engine = &updatingEngine{cleanupEngine: engine, candidate: candidate}
+	u.active, u.activeRef, u.cleanup, u.drainingContainer = from.Name, &from, nil, ""
+	u.status.State, u.status.Draining = "ready", false
+	proxy.target, life.notDraining = "10.0.0.2", true
+	require.NoError(t, os.WriteFile(u.config.haproxyMap, []byte("active 10.0.0.2\n"), 0600))
+	key, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	u.config.key = key
+	manifest := siteupdate.Compatibility{
+		Version: "v1.2.2", Image: siteupdate.ImageRepository + "@sha256:" + strings.Repeat("e", 64),
+		FromVersions: []string{"v1.2.1"}, Platforms: []string{u.config.platform}, Databases: []string{u.config.database},
+		SchemaUnchanged: true, SharedStateCompatible: true,
+	}
+	manifestJSON, err := common.Marshal(manifest)
+	require.NoError(t, err)
+	releaseURL := "https://github.com/" + siteupdate.Repository + "/releases/download/v1.2.2/"
+	release := githubRelease{
+		Tag: "v1.2.2", Name: "v1.2.2",
+		Assets: []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+		}{
+			{"update-manifest.json", releaseURL + "update-manifest.json"},
+			{"update-manifest.sig", releaseURL + "update-manifest.sig"},
+		},
+	}
+	releasesJSON, err := common.Marshal([]githubRelease{release})
+	require.NoError(t, err)
+	u.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		var data []byte
+		switch r.URL.String() {
+		case "https://api.github.com/repos/" + siteupdate.Repository + "/releases?per_page=30":
+			data = releasesJSON
+		case releaseURL + "update-manifest.json":
+			data = manifestJSON
+		case releaseURL + "update-manifest.sig":
+			data = []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, manifestJSON)))
+		default:
+			return life.RoundTrip(r)
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(data))), Header: make(http.Header)}, nil
+	})
+	id, _, err := u.reserve(manifest.Version)
+	require.NoError(t, err)
+	u.runUpdate(id, manifest.Version)
+	status := u.snapshot()
+	assert.Equal(t, "ready", status.State)
+	assert.Equal(t, manifest.Version, status.CurrentVersion)
+	assert.True(t, *status.CanUpdate)
+	assert.Equal(t, []string{from.ID}, engine.stopCalls)
+	assert.Equal(t, engine.stopCalls, engine.removeCalls)
+	assert.False(t, engine.force)
+	assert.Contains(t, engine.containers, to.ID)
+	assert.Equal(t, "10.0.0.3", proxy.target)
+}
+
+func TestMaintenanceSerializesManualCleanupAndStatusReads(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		u, engine, _, life := cleanupFixture(t)
+		id := u.cleanup.CleanupID
+		blocked := make(chan struct{})
+		u.client.Transport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			<-blocked
+			return life.RoundTrip(r)
+		})
+		go u.reconcileRetainedState(context.Background())
+		synctest.Wait()
+		_, start, err := u.reserveCleanup(id)
+		require.NoError(t, err)
+		assert.False(t, start)
+		_, _, err = u.reserve("v1.2.2")
+		assert.Error(t, err)
+		request := httptest.NewRequest(http.MethodGet, "/v1/status", nil)
+		request.Header.Set("Authorization", "Bearer "+u.config.token)
+		response := httptest.NewRecorder()
+		u.serve(response, request)
+		assert.Equal(t, http.StatusOK, response.Code)
+		assert.Empty(t, engine.stopCalls)
+		close(blocked)
+		synctest.Wait()
+		assert.Len(t, engine.stopCalls, 1)
+		assert.Len(t, engine.removeCalls, 1)
+		assert.True(t, *u.snapshot().CanUpdate)
+	})
 }

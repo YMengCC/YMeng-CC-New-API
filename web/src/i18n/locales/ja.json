@@ -7889,6 +7889,8 @@
     "Search by username": "ユーザー名で検索",
     "Search by request ID": "リクエスト ID で検索",
     "Create tickets and view support conversations": "チケットの作成とサポート会話の表示",
-    "Review user tickets and reply to conversations": "ユーザーチケットの確認と返信"
+    "Review user tickets and reply to conversations": "ユーザーチケットの確認と返信",
+    "Automatic cleanup will retry in 30 seconds.": "30 秒後にクリーンアップを自動で再試行します。",
+    "The container engine is temporarily unavailable. Cleanup will retry automatically.": "コンテナエンジンは一時的に利用できません。クリーンアップを自動で再試行します。"
   }
 }

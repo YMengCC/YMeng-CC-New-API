@@ -46,7 +46,11 @@ export function ManagedUpdateSection(props: ManagedUpdateSectionProps) {
     refetchInterval: (query) => {
       if (!props.enabled) return false
       return query.state.data?.operation_id ||
-        query.state.data?.state === 'cleaning'
+        query.state.data?.draining ||
+        query.state.data?.cleanup ||
+        query.state.data?.state === 'draining' ||
+        query.state.data?.state === 'cleaning' ||
+        query.state.data?.state === 'cleanup_failed'
         ? 3000
         : false
     },

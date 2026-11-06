@@ -81,6 +81,7 @@ func (u *controller) commitSwitch() error {
 	state.Cleanup = &cleanupRecord{CleanupID: id, Active: intent.To, Old: intent.From, Phase: cleanupRetained}
 	state.SwitchIntent = nil
 	state.Status.State = "draining"
+	state.Status.ReasonCode = ""
 	state.Status.Draining = true
 	state.Status.TargetVersion = intent.TargetVersion
 	state.Status.Reason = "Traffic switched to the verified candidate; waiting for the previous container to drain."

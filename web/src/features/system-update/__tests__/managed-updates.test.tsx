@@ -44,6 +44,7 @@ let status: {
   supported: boolean
   state: string
   reason: string
+  reason_code?: string
   current_version: string
   target_version: string
   operation_id: string
@@ -203,88 +204,99 @@ describe('retained instance cleanup', () => {
     ).toBeDisabled()
   })
 
-  test('requires confirmation and obtains a proof bound to the old instance before sending cleanup', async () => {
-    retainOldInstance()
-    const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
-      if (url === '/api/verify') {
-        return {
-          data: {
-            success: true,
-            data: {
-              proof_token: 'cleanup-proof',
-              scope: 'system.update.cleanup',
-              method: 'password',
-              expires_at: Math.floor(Date.now() / 1000) + 60,
-            },
-          },
-        }
+  test.each([false, true])(
+    'requires confirmation and a bound proof when retrying a failed drain is %s',
+    async (failedDrain) => {
+      retainOldInstance()
+      if (failedDrain) {
+        status.state = 'cleanup_failed'
+        status.draining = true
       }
-      Object.assign(status, {
-        state: 'cleaning',
-        operation_id: 'cleanup-operation',
-        can_cleanup: false,
-      })
-      return { status: 202, data: { success: true, data: { ...status } } }
-    })
-    const user = userEvent.setup()
-    renderUpdates()
-    await user.click(
-      await screen.findByRole('button', { name: 'Clean up old instance' })
-    )
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('old-blue')
-    expect(post).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Continue' }))
-    await user.type(
-      await screen.findByLabelText('Password', { selector: 'input' }),
-      'local-password'
-    )
-    await user.click(screen.getByRole('button', { name: 'Verify' }))
-    await waitFor(() =>
-      expect(post).toHaveBeenCalledWith(
-        '/api/system-update/cleanup',
-        { cleanup_id: 'cleanup-1' },
-        expect.objectContaining({
-          headers: {
-            'X-Requested-With': 'YMeng-Update',
-            'X-Security-Proof': 'cleanup-proof',
-          },
-          skipAuthRefresh: true,
+      const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
+        if (url === '/api/verify') {
+          return {
+            data: {
+              success: true,
+              data: {
+                proof_token: 'cleanup-proof',
+                scope: 'system.update.cleanup',
+                method: 'password',
+                expires_at: Math.floor(Date.now() / 1000) + 60,
+              },
+            },
+          }
+        }
+        Object.assign(status, {
+          state: 'cleaning',
+          operation_id: 'cleanup-operation',
+          can_cleanup: false,
         })
+        return { status: 202, data: { success: true, data: { ...status } } }
+      })
+      const user = userEvent.setup()
+      renderUpdates()
+      await user.click(
+        await screen.findByRole('button', { name: 'Clean up old instance' })
       )
-    )
-    expect(post).toHaveBeenCalledWith(
-      '/api/verify',
-      expect.objectContaining({
-        scope: 'system.update.cleanup',
-        context: { cleanup_id: 'cleanup-1' },
-      }),
-      expect.anything()
-    )
-    expect(
-      screen.getByRole('button', { name: 'Install update' })
-    ).toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Cleaning up old instance...' })
-    ).toBeDisabled()
-    Object.assign(status, {
-      state: 'ready',
-      operation_id: '',
-      can_update: true,
-      can_cleanup: false,
-      cleanup: undefined,
-    })
-    await act(async () => {
-      await client.invalidateQueries({ queryKey: ['managed-system-update'] })
-    })
-    await waitFor(() =>
+      expect(screen.getByRole('alertdialog')).toHaveTextContent('old-blue')
+      expect(post).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('button', { name: 'Continue' }))
+      await user.type(
+        await screen.findByLabelText('Password', { selector: 'input' }),
+        'local-password'
+      )
+      await user.click(screen.getByRole('button', { name: 'Verify' }))
+      await waitFor(() =>
+        expect(post).toHaveBeenCalledWith(
+          '/api/system-update/cleanup',
+          { cleanup_id: 'cleanup-1' },
+          expect.objectContaining({
+            headers: {
+              'X-Requested-With': 'YMeng-Update',
+              'X-Security-Proof': 'cleanup-proof',
+            },
+            skipAuthRefresh: true,
+          })
+        )
+      )
+      expect(post).toHaveBeenCalledWith(
+        '/api/verify',
+        expect.objectContaining({
+          scope: 'system.update.cleanup',
+          context: { cleanup_id: 'cleanup-1' },
+        }),
+        expect.anything()
+      )
       expect(
         screen.getByRole('button', { name: 'Install update' })
-      ).toBeEnabled()
-    )
-    expect(
-      screen.queryByRole('button', { name: 'Clean up old instance' })
-    ).not.toBeInTheDocument()
-  })
+      ).toBeDisabled()
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Cleaning up old instance...'
+      )
+      expect(
+        screen.queryByRole('button', { name: 'Clean up old instance' })
+      ).not.toBeInTheDocument()
+      Object.assign(status, {
+        state: 'ready',
+        operation_id: '',
+        draining: false,
+        can_update: true,
+        can_cleanup: false,
+        cleanup: undefined,
+      })
+      await act(async () => {
+        await client.invalidateQueries({ queryKey: ['managed-system-update'] })
+      })
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Install update' })
+        ).toBeEnabled()
+      )
+      expect(
+        screen.queryByRole('button', { name: 'Clean up old instance' })
+      ).not.toBeInTheDocument()
+    }
+  )
 
   test.each(['confirmation', 'verification'] as const)(
     'cancels %s without posting cleanup',
@@ -330,84 +342,109 @@ describe('retained instance cleanup', () => {
     expect(post).not.toHaveBeenCalled()
   })
 
-  test('does not submit a proof obtained after the cleanup generation changes', async () => {
-    retainOldInstance()
-    let finishProof: ((value: unknown) => void) | undefined
-    const post = vi.spyOn(api, 'post').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishProof = resolve
+  test.each(['generation changes', 'automatic cleanup starts'])(
+    'does not submit a proof obtained after %s',
+    async (change) => {
+      retainOldInstance()
+      let finishProof: ((value: unknown) => void) | undefined
+      const post = vi.spyOn(api, 'post').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishProof = resolve
+          })
+      )
+      const user = userEvent.setup()
+      renderUpdates()
+      await user.click(
+        await screen.findByRole('button', { name: 'Clean up old instance' })
+      )
+      await user.click(screen.getByRole('button', { name: 'Continue' }))
+      await user.type(
+        await screen.findByLabelText('Password', { selector: 'input' }),
+        'local-password'
+      )
+      await user.click(screen.getByRole('button', { name: 'Verify' }))
+      if (change === 'generation changes') {
+        status.cleanup = {
+          cleanup_id: 'cleanup-2',
+          target_name: 'old-green',
+          phase: 'retained',
+        }
+      } else {
+        status.state = 'cleaning'
+        status.operation_id = 'cleanup-1'
+        status.can_cleanup = false
+      }
+      await act(async () => {
+        await client.invalidateQueries({
+          queryKey: ['managed-system-update', 'status'],
         })
-    )
-    const user = userEvent.setup()
-    renderUpdates()
-    await user.click(
-      await screen.findByRole('button', { name: 'Clean up old instance' })
-    )
-    await user.click(screen.getByRole('button', { name: 'Continue' }))
-    await user.type(
-      await screen.findByLabelText('Password', { selector: 'input' }),
-      'local-password'
-    )
-    await user.click(screen.getByRole('button', { name: 'Verify' }))
-    status.cleanup = {
-      cleanup_id: 'cleanup-2',
-      target_name: 'old-green',
-      phase: 'retained',
-    }
-    await act(async () => {
-      await client.invalidateQueries({
-        queryKey: ['managed-system-update', 'status'],
       })
-    })
-    await act(async () => {
-      finishProof?.({
-        data: {
-          success: true,
+      await act(async () => {
+        finishProof?.({
           data: {
-            proof_token: 'stale-proof',
-            scope: 'system.update.cleanup',
-            method: 'password',
-            expires_at: Math.floor(Date.now() / 1000) + 60,
+            success: true,
+            data: {
+              proof_token: 'stale-proof',
+              scope: 'system.update.cleanup',
+              method: 'password',
+              expires_at: Math.floor(Date.now() / 1000) + 60,
+            },
           },
-        },
+        })
       })
-    })
-    expect(
-      post.mock.calls.filter(([url]) => url === '/api/system-update/cleanup')
-    ).toHaveLength(0)
-  })
+      expect(
+        post.mock.calls.filter(([url]) => url === '/api/system-update/cleanup')
+      ).toHaveLength(0)
+    }
+  )
 
-  test('polls an accepted cleanup until the controller restores installation', async () => {
-    vi.useFakeTimers()
-    retainOldInstance()
-    Object.assign(status, {
-      state: 'cleaning',
-      operation_id: 'cleanup-operation',
-      can_cleanup: false,
-    })
-    renderUpdates()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    expect(
-      screen.getByRole('button', { name: 'Cleaning up old instance...' })
-    ).toBeDisabled()
-    Object.assign(status, {
-      state: 'ready',
-      operation_id: '',
-      can_update: true,
-      can_cleanup: false,
-      cleanup: undefined,
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3001)
-    })
-    expect(screen.getByRole('button', { name: 'Install update' })).toBeEnabled()
-    expect(
-      screen.queryByRole('button', { name: 'Cleaning up old instance...' })
-    ).not.toBeInTheDocument()
-  })
+  test.each(['draining', 'cleaning', 'cleanup_failed'])(
+    'polls %s without an operation ID until automatic cleanup restores installation',
+    async (state) => {
+      vi.useFakeTimers()
+      retainOldInstance()
+      Object.assign(status, {
+        state,
+        operation_id: '',
+        draining: state === 'draining',
+        can_cleanup: state === 'cleanup_failed',
+      })
+      const post = vi.spyOn(api, 'post')
+      renderUpdates()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1)
+      })
+      expect(
+        screen.getByRole('button', { name: 'Install update' })
+      ).toBeDisabled()
+      if (state === 'cleanup_failed') {
+        expect(
+          screen.getByRole('button', { name: 'Clean up old instance' })
+        ).toBeEnabled()
+      } else {
+        expect(
+          screen.queryByRole('button', { name: 'Clean up old instance' })
+        ).not.toBeInTheDocument()
+      }
+      Object.assign(status, {
+        state: 'ready',
+        operation_id: '',
+        draining: false,
+        can_update: true,
+        can_cleanup: false,
+        cleanup: undefined,
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3001)
+      })
+      expect(
+        screen.getByRole('button', { name: 'Install update' })
+      ).toBeEnabled()
+      expect(screen.queryByText('old-blue')).not.toBeInTheDocument()
+      expect(post).not.toHaveBeenCalled()
+    }
+  )
 
   test('cancels unfinished verification on unmount without submitting cleanup', async () => {
     retainOldInstance()
@@ -580,6 +617,30 @@ describe('single release list', () => {
 })
 
 describe('managed installation availability', () => {
+  test('translates automatic retry status after switching interface language', async () => {
+    retainOldInstance()
+    status.state = 'cleanup_failed'
+    status.reason_code = 'cleanup_engine_unavailable'
+    status.reason =
+      'The container engine is temporarily unavailable. Cleanup will retry automatically.'
+    renderUpdates()
+    expect(await screen.findByText(status.reason)).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Automatic cleanup will retry in 30 seconds.'
+    )
+    i18next.addResourceBundle('zhCN', 'translation', zh.translation)
+    await act(async () => {
+      await i18next.changeLanguage('zhCN')
+    })
+    expect(
+      screen.getByText('容器引擎暂时不可用，将自动重试清理。')
+    ).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '将在 30 秒后自动重试清理。'
+    )
+    expect(screen.getByRole('button', { name: '清理旧实例' })).toBeEnabled()
+  })
+
   test.each([
     { state: 'completed', operation_id: '', draining: false },
     { state: 'draining', operation_id: '', draining: true },

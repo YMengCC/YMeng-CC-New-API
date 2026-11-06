@@ -7889,6 +7889,8 @@
     "Search by username": "按使用者名稱搜尋",
     "Search by request ID": "按請求 ID 搜尋",
     "Create tickets and view support conversations": "建立工單並查看支援對話",
-    "Review user tickets and reply to conversations": "查看使用者工單並回覆對話"
+    "Review user tickets and reply to conversations": "查看使用者工單並回覆對話",
+    "Automatic cleanup will retry in 30 seconds.": "將於 30 秒後自動重試清理。",
+    "The container engine is temporarily unavailable. Cleanup will retry automatically.": "容器引擎暫時無法使用，將自動重試清理。"
   }
 }

@@ -34,6 +34,7 @@ export const STATIC_I18N_KEYS = [
   'Traffic switched, but the proxy route could not be persisted. Both instances were retained.',
   'Traffic switch could not be verified. Both instances were retained.',
   // Retained-instance cleanup status and API errors.
+  'The container engine is temporarily unavailable. Cleanup will retry automatically.',
   'The previous instance is not safely drained. Wait for its requests to finish before retrying cleanup.',
   'Cleanup is blocked because the proxy route does not match the active instance.',
   'Cleanup could not save its progress. Check controller storage and retry.',

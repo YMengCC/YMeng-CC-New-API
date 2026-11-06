@@ -7889,6 +7889,8 @@
     "Search by username": "Rechercher par nom d’utilisateur",
     "Search by request ID": "Rechercher par ID de requête",
     "Create tickets and view support conversations": "Créer des tickets et consulter les conversations",
-    "Review user tickets and reply to conversations": "Examiner les tickets et répondre aux conversations"
+    "Review user tickets and reply to conversations": "Examiner les tickets et répondre aux conversations",
+    "Automatic cleanup will retry in 30 seconds.": "Le nettoyage sera réessayé automatiquement dans 30 secondes.",
+    "The container engine is temporarily unavailable. Cleanup will retry automatically.": "Le moteur de conteneurs est temporairement indisponible. Le nettoyage sera réessayé automatiquement."
   }
 }

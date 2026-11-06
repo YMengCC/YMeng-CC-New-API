@@ -7889,6 +7889,8 @@
     "Search by username": "Поиск по имени пользователя",
     "Search by request ID": "Поиск по ID запроса",
     "Create tickets and view support conversations": "Создавать заявки и просматривать переписку",
-    "Review user tickets and reply to conversations": "Просматривать заявки и отвечать пользователям"
+    "Review user tickets and reply to conversations": "Просматривать заявки и отвечать пользователям",
+    "Automatic cleanup will retry in 30 seconds.": "Очистка будет автоматически повторена через 30 секунд.",
+    "The container engine is temporarily unavailable. Cleanup will retry automatically.": "Среда контейнеров временно недоступна. Очистка будет повторена автоматически."
   }
 }
