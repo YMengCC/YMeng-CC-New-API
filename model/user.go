@@ -608,35 +608,40 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 		return common.NewMessage("Minimum transfer quota is {{min}}!", map[string]any{"min": logger.FormatQuota(common.QuotaFromFloat(common.QuotaPerUnit))})
 	}
 
-	// 开始数据库事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return tx.Error
+	if quota <= 0 || quota > common.MaxWalletQuota {
+		return common.NewMessage("Transfer quota exceeds wallet capacity")
 	}
-	defer tx.Rollback() // 确保在函数退出时事务能回滚
-
-	// 加锁查询用户以确保数据一致性
-	err := lockForUpdate(tx).First(user, user.Id).Error
+	var current User
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := lockForUpdate(tx).First(&current, user.Id).Error; err != nil {
+			return err
+		}
+		if current.InviteQuota < int64(quota) {
+			return common.NewMessage("Invitation quota is insufficient!")
+		}
+		if current.Quota > common.MaxWalletQuota-quota {
+			return common.NewMessage("Transfer quota exceeds wallet capacity")
+		}
+		result := tx.Model(&User{}).
+			Where("id = ? AND invite_quota >= ? AND quota <= ?", user.Id, quota, common.MaxWalletQuota-quota).
+			Updates(map[string]any{
+				"invite_quota": gorm.Expr("invite_quota - ?", quota),
+				"quota":        gorm.Expr("quota + ?", quota),
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return common.NewMessage("Invitation quota is insufficient!")
+		}
+		return tx.First(&current, user.Id).Error
+	})
 	if err != nil {
 		return err
 	}
-
-	// 推广佣金余额记录在 invite_quota 上，这里以它为准。
-	if user.InviteQuota < int64(quota) {
-		return common.NewMessage("Invitation quota is insufficient!")
-	}
-
-	// 更新用户额度
-	user.InviteQuota -= int64(quota)
-	user.Quota += quota
-
-	// 保存用户状态
-	if err := tx.Save(user).Error; err != nil {
-		return err
-	}
-
-	// 提交事务
-	return tx.Commit().Error
+	*user = current
+	syncCreditUserQuotaCache(user.Id, quota, "affiliate transfer")
+	return nil
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
@@ -858,6 +863,8 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		"aff_count",
 		"aff_quota",
 		"aff_history",
+		"invite_quota",
+		"invite_reward_remainder",
 		"auth_version",
 		"avatar_version",
 	).Updates(newUser).Error; err != nil {

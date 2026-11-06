@@ -205,6 +205,22 @@ func SetApiRouter(router *gin.Engine) {
 			affiliateAnalyticsAdminRoute.GET("/commissions", controller.GetAffiliateAdminAnalyticsCommissions)
 		}
 
+		withdrawalRoute := apiRouter.Group("/withdrawal")
+		withdrawalRoute.Use(middleware.UserAuth())
+		{
+			withdrawalRoute.GET("/profile", controller.GetWithdrawalProfile)
+			withdrawalRoute.GET("/profile/qr", controller.GetWithdrawalProfileQR)
+			withdrawalRoute.PUT("/profile/qr", middleware.UploadRateLimit(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateWithdrawalQR)
+			withdrawalRoute.POST("/", middleware.UserCriticalRateLimit("withdrawal"), controller.CreateWithdrawal)
+		}
+		withdrawalAdminRoute := apiRouter.Group("/withdrawal/admin")
+		withdrawalAdminRoute.Use(middleware.AdminAuth())
+		{
+			withdrawalAdminRoute.GET("/", controller.GetAllWithdrawals)
+			withdrawalAdminRoute.GET("/:id/qr", controller.GetWithdrawalQR)
+			withdrawalAdminRoute.PATCH("/:id/status", middleware.CriticalRateLimit(), controller.SetWithdrawalStatus)
+		}
+
 		invoiceRoute := apiRouter.Group("/invoice")
 		invoiceRoute.Use(middleware.UserAuth())
 		{

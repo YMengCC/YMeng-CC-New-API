@@ -386,6 +386,8 @@ func migrateDB() error {
 		&UpstreamCostRecord{},
 		&UserAccessToken{},
 		&UserAvatar{},
+		&WithdrawalProfile{},
+		&Withdrawal{},
 		&SupportTicket{},
 		&SupportTicketMessage{},
 	)

@@ -37,6 +37,7 @@ import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { UserInvoiceDialog } from './components/dialogs/user-invoice-dialog'
+import { WithdrawalDialog } from './components/dialogs/withdrawal-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
@@ -71,7 +72,7 @@ interface WalletProps {
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { data: affiliateSummary } = useQuery({
+  const { data: affiliateSummary, isError: affiliateSummaryError } = useQuery({
     queryKey: ['affiliate', 'summary'],
     queryFn: getAffiliateSummary,
   })
@@ -87,6 +88,7 @@ export function Wallet(props: WalletProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
@@ -398,6 +400,11 @@ export function Wallet(props: WalletProps) {
               availableQuota={availableQuota}
               affiliateLink={affiliateLink}
               onTransfer={() => setTransferDialogOpen(true)}
+              onWithdraw={() => setWithdrawalDialogOpen(true)}
+              withdrawalAvailable={
+                !affiliateSummaryError &&
+                (affiliateSummary?.available_quota ?? 0) > 0
+              }
               complianceConfirmed={
                 topupInfo?.payment_compliance_confirmed !== false
               }
@@ -463,6 +470,15 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleTransfer}
         availableQuota={availableQuota}
         transferring={transferring}
+      />
+
+      <WithdrawalDialog
+        open={withdrawalDialogOpen}
+        onOpenChange={setWithdrawalDialogOpen}
+        availableQuota={
+          affiliateSummaryError ? 0 : (affiliateSummary?.available_quota ?? 0)
+        }
+        onSuccess={fetchUser}
       />
 
       <BillingHistoryDialog

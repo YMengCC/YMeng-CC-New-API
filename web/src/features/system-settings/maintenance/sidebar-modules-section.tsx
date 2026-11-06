@@ -170,6 +170,12 @@ export function SidebarModulesSection({
         title: t('Subscription Management'),
         description: t('Manage subscription plans and pricing.'),
       },
+      withdrawal: {
+        title: t('Withdrawal management'),
+        description: t(
+          'Review withdrawal requests and update manual payout status.'
+        ),
+      },
       invoice: {
         title: t('Invoice management'),
         description: t('Process invoice applications and upload PDF files.'),

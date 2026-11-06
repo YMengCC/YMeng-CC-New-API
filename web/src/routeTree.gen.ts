@@ -36,6 +36,7 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
 import { Route as AuthenticatedAdminInvoicesIndexRouteImport } from './routes/_authenticated/admin-invoices/index'
 import { Route as AuthenticatedAdminSupportTicketsIndexRouteImport } from './routes/_authenticated/admin-support-tickets/index'
+import { Route as AuthenticatedAdminWithdrawalsIndexRouteImport } from './routes/_authenticated/admin-withdrawals/index'
 import { Route as AuthenticatedAffiliateAdminIndexRouteImport } from './routes/_authenticated/affiliate-admin/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
@@ -211,6 +212,12 @@ const AuthenticatedAdminSupportTicketsIndexRoute =
   AuthenticatedAdminSupportTicketsIndexRouteImport.update({
     id: '/admin-support-tickets/',
     path: '/admin-support-tickets/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminWithdrawalsIndexRoute =
+  AuthenticatedAdminWithdrawalsIndexRouteImport.update({
+    id: '/admin-withdrawals/',
+    path: '/admin-withdrawals/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedAffiliateAdminIndexRoute =
@@ -482,6 +489,7 @@ export interface FileRoutesByFullPath {
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/admin-invoices/': typeof AuthenticatedAdminInvoicesIndexRoute
   '/admin-support-tickets/': typeof AuthenticatedAdminSupportTicketsIndexRoute
+  '/admin-withdrawals/': typeof AuthenticatedAdminWithdrawalsIndexRoute
   '/affiliate-admin/': typeof AuthenticatedAffiliateAdminIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -548,6 +556,7 @@ export interface FileRoutesByTo {
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/admin-invoices': typeof AuthenticatedAdminInvoicesIndexRoute
   '/admin-support-tickets': typeof AuthenticatedAdminSupportTicketsIndexRoute
+  '/admin-withdrawals': typeof AuthenticatedAdminWithdrawalsIndexRoute
   '/affiliate-admin': typeof AuthenticatedAffiliateAdminIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
@@ -618,6 +627,7 @@ export interface FileRoutesById {
   '/_authenticated/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/_authenticated/admin-invoices/': typeof AuthenticatedAdminInvoicesIndexRoute
   '/_authenticated/admin-support-tickets/': typeof AuthenticatedAdminSupportTicketsIndexRoute
+  '/_authenticated/admin-withdrawals/': typeof AuthenticatedAdminWithdrawalsIndexRoute
   '/_authenticated/affiliate-admin/': typeof AuthenticatedAffiliateAdminIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -687,6 +697,7 @@ export interface FileRouteTypes {
     | '/usage-logs/audit'
     | '/admin-invoices/'
     | '/admin-support-tickets/'
+    | '/admin-withdrawals/'
     | '/affiliate-admin/'
     | '/channels/'
     | '/dashboard/'
@@ -753,6 +764,7 @@ export interface FileRouteTypes {
     | '/usage-logs/audit'
     | '/admin-invoices'
     | '/admin-support-tickets'
+    | '/admin-withdrawals'
     | '/affiliate-admin'
     | '/channels'
     | '/dashboard'
@@ -822,6 +834,7 @@ export interface FileRouteTypes {
     | '/_authenticated/usage-logs/audit'
     | '/_authenticated/admin-invoices/'
     | '/_authenticated/admin-support-tickets/'
+    | '/_authenticated/admin-withdrawals/'
     | '/_authenticated/affiliate-admin/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
@@ -1066,6 +1079,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-support-tickets'
       fullPath: '/admin-support-tickets/'
       preLoaderRoute: typeof AuthenticatedAdminSupportTicketsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin-withdrawals/': {
+      id: '/_authenticated/admin-withdrawals/'
+      path: '/admin-withdrawals'
+      fullPath: '/admin-withdrawals/'
+      preLoaderRoute: typeof AuthenticatedAdminWithdrawalsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/affiliate-admin/': {
@@ -1451,6 +1471,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsageLogsAuditRoute: typeof AuthenticatedUsageLogsAuditRoute
   AuthenticatedAdminInvoicesIndexRoute: typeof AuthenticatedAdminInvoicesIndexRoute
   AuthenticatedAdminSupportTicketsIndexRoute: typeof AuthenticatedAdminSupportTicketsIndexRoute
+  AuthenticatedAdminWithdrawalsIndexRoute: typeof AuthenticatedAdminWithdrawalsIndexRoute
   AuthenticatedAffiliateAdminIndexRoute: typeof AuthenticatedAffiliateAdminIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
@@ -1482,6 +1503,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminInvoicesIndexRoute: AuthenticatedAdminInvoicesIndexRoute,
   AuthenticatedAdminSupportTicketsIndexRoute:
     AuthenticatedAdminSupportTicketsIndexRoute,
+  AuthenticatedAdminWithdrawalsIndexRoute:
+    AuthenticatedAdminWithdrawalsIndexRoute,
   AuthenticatedAffiliateAdminIndexRoute: AuthenticatedAffiliateAdminIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,

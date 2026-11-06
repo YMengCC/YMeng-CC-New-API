@@ -150,6 +150,15 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/invoice/admin/:id/file":               accessTokenScopeRule("billing:write"),
 	"GET /api/invoice/admin/:id/file":                accessTokenScopeRule("billing:read"),
 
+	// router/api-router.go: private withdrawal profiles and administration
+	"GET /api/withdrawal/profile":            accessTokenScopeRule("profile:read"),
+	"GET /api/withdrawal/profile/qr":         accessTokenScopeRule("profile:read"),
+	"PUT /api/withdrawal/profile/qr":         accessTokenScopeRule("profile:write"),
+	"POST /api/withdrawal/":                  accessTokenScopeRule("wallet:write"),
+	"GET /api/withdrawal/admin/":             accessTokenScopeRule("billing:read"),
+	"GET /api/withdrawal/admin/:id/qr":       accessTokenScopeRule("billing:read"),
+	"PATCH /api/withdrawal/admin/:id/status": accessTokenScopeRule("billing:write"),
+
 	// router/api-router.go: /api/support-ticket (browser session only)
 	"POST /api/support-ticket/":                    accessTokenSessionRule,
 	"GET /api/support-ticket/self":                 accessTokenSessionRule,

@@ -159,9 +159,9 @@ export function parseCurrencyDisplayType(
   return isCurrencyDisplayType(value) ? value : fallback
 }
 
-function getConfig(): CurrencyConfig {
+function getConfig(snapshot?: CurrencyConfig): CurrencyConfig {
   const { config } = useSystemConfigStore.getState()
-  const currency = config?.currency ?? DEFAULT_CURRENCY_CONFIG
+  const currency = snapshot ?? config?.currency ?? DEFAULT_CURRENCY_CONFIG
   return {
     ...DEFAULT_CURRENCY_CONFIG,
     ...currency,
@@ -362,8 +362,8 @@ function formatCurrencyValue(
  * This is primarily for internal use. Most consumers should use the
  * higher-level formatting functions instead.
  */
-export function getCurrencyDisplay() {
-  const config = getConfig()
+export function getCurrencyDisplay(snapshot?: CurrencyConfig) {
+  const config = getConfig(snapshot)
   const meta = getDisplayMeta(config)
   return { config, meta }
 }
@@ -407,11 +407,12 @@ export function getCurrencyDisplay() {
  */
 export function formatCurrencyFromUSD(
   amountUSD: number | null | undefined,
-  options?: CurrencyFormatOptions
+  options?: CurrencyFormatOptions,
+  snapshot?: CurrencyConfig
 ): string {
   if (amountUSD == null || Number.isNaN(amountUSD)) return '-'
 
-  const { config, meta } = getCurrencyDisplay()
+  const { config, meta } = getCurrencyDisplay(snapshot)
   const merged = mergeOptions(options)
 
   if (meta.kind === 'tokens') {
@@ -515,13 +516,14 @@ export function formatBillingCurrencyFromUSD(
  */
 export function formatQuotaWithCurrency(
   quota: number | null | undefined,
-  options?: CurrencyFormatOptions
+  options?: CurrencyFormatOptions,
+  snapshot?: CurrencyConfig
 ): string {
   if (quota == null || Number.isNaN(quota)) return '-'
 
-  const { config } = getCurrencyDisplay()
+  const { config } = getCurrencyDisplay(snapshot)
   const amountUSD = quota / config.quotaPerUnit
-  return formatCurrencyFromUSD(amountUSD, options)
+  return formatCurrencyFromUSD(amountUSD, options, snapshot)
 }
 
 /**

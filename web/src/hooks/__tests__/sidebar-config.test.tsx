@@ -183,6 +183,44 @@ describe('support ticket sidebar entries', () => {
   })
 })
 
+describe('withdrawal management navigation', () => {
+  it('adds the withdrawal entry to legacy defaults and preserves explicit administrator hiding', () => {
+    const legacy = parseSidebarModulesAdmin(
+      '{"admin":{"enabled":true,"invoice":true}}'
+    )
+    expect(legacy.admin.withdrawal).toBe(true)
+    const visible = sidebarFor(legacy)
+    expect(
+      visible.result.current.flatMap((group) => group.items)
+    ).toContainEqual(
+      expect.objectContaining({
+        title: 'Withdrawal management',
+        url: '/admin-withdrawals',
+        requiredRole: ROLE.ADMIN,
+      })
+    )
+    visible.unmount()
+    const hidden = sidebarFor({ admin: { enabled: true, withdrawal: false } })
+    expect(
+      hidden.result.current
+        .flatMap((group) => group.items)
+        .map((item) => item.title)
+    ).not.toContain('Withdrawal management')
+    const saved = parseSidebarModulesAdmin(
+      '{"admin":{"enabled":true,"withdrawal":false}}'
+    )
+    expect(saved.admin.withdrawal).toBe(false)
+  })
+  it('lets personal visibility further hide the withdrawal entry', () => {
+    const { result } = sidebarFor(undefined, {
+      admin: { enabled: true, withdrawal: false },
+    })
+    expect(
+      result.current.flatMap((group) => group.items).map((item) => item.title)
+    ).not.toContain('Withdrawal management')
+  })
+})
+
 describe('audit log sidebar entry', () => {
   it('admin settings default Audit Logs to visible and preserve its independent toggle when saved', () => {
     const config = parseSidebarModulesAdmin(

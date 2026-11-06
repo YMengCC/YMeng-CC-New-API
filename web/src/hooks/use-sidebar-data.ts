@@ -170,6 +170,12 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Share2,
           },
           {
+            title: t('Withdrawal management'),
+            url: '/admin-withdrawals',
+            icon: CreditCard,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Invoice management'),
             url: '/admin-invoices',
             icon: ReceiptText,

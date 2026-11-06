@@ -27,6 +27,7 @@ import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CheckinCalendarCard } from './components/checkin-calendar-card'
+import { CollectionQrCard } from './components/collection-qr-card'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -84,6 +85,7 @@ export function Profile() {
                   quotaRemindEnabled={quotaRemindEnabled}
                   quotaRemindThreshold={quotaRemindThreshold}
                 />
+                <CollectionQrCard />
                 <LanguagePreferencesCard
                   profile={profile}
                   onProfileUpdate={refreshProfile}

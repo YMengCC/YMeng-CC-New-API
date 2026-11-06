@@ -164,7 +164,7 @@ func CreditAffiliateCommission(record *AffiliateCommission) (bool, error) {
 		}
 
 		var inviter User
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		if err := lockForUpdate(tx).
 			Select("id", "invite_reward_remainder").
 			First(&inviter, placeholder.InviterId).Error; err != nil {
 			return err
