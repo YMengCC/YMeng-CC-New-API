@@ -85,6 +85,8 @@ export interface UserProfile {
   telegram_id?: string
   /** LinuxDO ID (OAuth) */
   linux_do_id?: string
+  /** Bumped whenever the avatar changes; 0 means no uploaded avatar */
+  avatar_version?: number
 }
 
 /**

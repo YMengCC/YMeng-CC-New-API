@@ -21,8 +21,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
 import { handleServerError } from '@/lib/handle-server-error'
+import { useAuthStore } from '@/stores/auth-store'
 
-import { getUserProfile, updateUserProfile, updateUserSettings } from '../api'
+import {
+  getUserProfile,
+  removeUserAvatar,
+  updateUserProfile,
+  updateUserSettings,
+  uploadUserAvatar,
+} from '../api'
 import type {
   UserProfile,
   UpdateUserRequest,
@@ -37,6 +44,7 @@ export function useProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [avatarUpdating, setAvatarUpdating] = useState(false)
 
   // Fetch user profile (with optional silent mode)
   const fetchProfile = useCallback(async (silent = false) => {
@@ -70,11 +78,23 @@ export function useProfile() {
   // Update user profile
   const updateProfile = useCallback(
     async (data: UpdateUserRequest): Promise<boolean> => {
+      const userId = useAuthStore.getState().auth.user?.id
       try {
         setUpdating(true)
         const response = await updateUserProfile(data)
 
         if (response.success) {
+          const auth = useAuthStore.getState().auth
+          if (
+            auth.user &&
+            auth.user.id === userId &&
+            data.display_name !== undefined
+          ) {
+            auth.setUser({
+              ...auth.user,
+              display_name: data.display_name.trim(),
+            })
+          }
           toast.success(i18next.t('Profile updated successfully'))
           await refreshProfile() // Refresh profile silently
           return true
@@ -117,6 +137,66 @@ export function useProfile() {
     [refreshProfile]
   )
 
+  // Replace the avatar; returns the new version so callers can update the
+  // signed-in user's cache key immediately.
+  const uploadAvatar = useCallback(
+    async (image: Blob): Promise<number | null> => {
+      const userId = useAuthStore.getState().auth.user?.id
+      try {
+        setAvatarUpdating(true)
+        const response = await uploadUserAvatar(image)
+        if (!response.success || response.data?.avatar_version === undefined) {
+          handleServerError(response, i18next.t('Failed to update avatar'))
+          return null
+        }
+        const auth = useAuthStore.getState().auth
+        if (auth.user && auth.user.id === userId) {
+          auth.setUser({
+            ...auth.user,
+            avatar_version: response.data.avatar_version,
+          })
+        }
+        await refreshProfile()
+        toast.success(i18next.t('Avatar updated successfully'))
+        return response.data?.avatar_version ?? null
+      } catch (error) {
+        handleServerError(error, i18next.t('Failed to update avatar'))
+        return null
+      } finally {
+        setAvatarUpdating(false)
+      }
+    },
+    [refreshProfile]
+  )
+
+  // Remove the avatar; the generated initials block takes over again.
+  const deleteAvatar = useCallback(async (): Promise<number | null> => {
+    const userId = useAuthStore.getState().auth.user?.id
+    try {
+      setAvatarUpdating(true)
+      const response = await removeUserAvatar()
+      if (!response.success || response.data?.avatar_version === undefined) {
+        handleServerError(response, i18next.t('Failed to remove avatar'))
+        return null
+      }
+      const auth = useAuthStore.getState().auth
+      if (auth.user && auth.user.id === userId) {
+        auth.setUser({
+          ...auth.user,
+          avatar_version: response.data.avatar_version,
+        })
+      }
+      await refreshProfile()
+      toast.success(i18next.t('Avatar removed successfully'))
+      return response.data?.avatar_version ?? null
+    } catch (error) {
+      handleServerError(error, i18next.t('Failed to remove avatar'))
+      return null
+    } finally {
+      setAvatarUpdating(false)
+    }
+  }, [refreshProfile])
+
   // Initial fetch
   useEffect(() => {
     fetchProfile()
@@ -126,9 +206,12 @@ export function useProfile() {
     profile,
     loading,
     updating,
+    avatarUpdating,
     fetchProfile,
     refreshProfile,
     updateProfile,
+    uploadAvatar,
+    deleteAvatar,
     updateSettings,
   }
 }

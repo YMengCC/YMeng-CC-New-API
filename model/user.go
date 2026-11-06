@@ -113,6 +113,7 @@ type User struct {
 	CreatedAt             int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt           int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	AuthVersion           int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
+	AvatarVersion         int64                      `json:"avatar_version" gorm:"type:bigint;not null;default:0;column:avatar_version"`
 	AdminPermissions      map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -197,6 +198,15 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 		return err
 	}
 	return updateUserSettingCache(userId, settingValue)
+}
+
+// UpdateUserDisplayName preserves explicit empty names and touches no security
+// or accounting fields.
+func UpdateUserDisplayName(userID int, name string) error {
+	if userID <= 0 {
+		return common.NewMessage("ID is empty!")
+	}
+	return DB.Model(&User{}).Where("id = ?", userID).UpdateColumn("display_name", name).Error
 }
 
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
@@ -541,7 +551,7 @@ func GetSelfUserById(id int) (*User, error) {
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
 		"group", "quota", "used_quota", "request_count", "aff_code", "aff_count",
 		"aff_quota", "aff_history", "inviter_id", "linux_do_id", "setting",
-		"stripe_customer", "auth_version",
+		"stripe_customer", "auth_version", "avatar_version",
 		"CASE WHEN password <> '' THEN 1 ELSE 0 END AS has_password",
 	}).First(&profile, "id = ?", id).Error
 	profile.User.HasPassword = profile.HasPassword
@@ -849,6 +859,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		"aff_quota",
 		"aff_history",
 		"auth_version",
+		"avatar_version",
 	).Updates(newUser).Error; err != nil {
 		return err
 	}

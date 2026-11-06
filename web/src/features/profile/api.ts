@@ -99,6 +99,39 @@ export async function updateUserLanguage(
 }
 
 /**
+ * Replace the current user's avatar. The caller crops the image first; the
+ * server still validates its type, size, and dimensions.
+ */
+export async function uploadUserAvatar(
+  image: Blob,
+  signal?: AbortSignal
+): Promise<ApiResponse<{ avatar_version: number }>> {
+  const form = new FormData()
+  form.append('avatar', image, 'avatar.jpg')
+  // A null Content-Type removes the JSON default so the browser can add the
+  // multipart boundary.
+  const res = await api.put('/api/user/avatar/self', form, {
+    headers: { 'Content-Type': null },
+    skipErrorHandler: true,
+    signal,
+  })
+  return res.data
+}
+
+/**
+ * Remove the current user's avatar.
+ */
+export async function removeUserAvatar(
+  signal?: AbortSignal
+): Promise<ApiResponse<{ avatar_version: number }>> {
+  const res = await api.delete('/api/user/avatar/self', {
+    skipErrorHandler: true,
+    signal,
+  })
+  return res.data
+}
+
+/**
  * Delete user account
  */
 export function deleteUserAccount(

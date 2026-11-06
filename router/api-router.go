@@ -103,6 +103,9 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateSelf)
 				selfRoute.DELETE("/self", middleware.DisableCache(), controller.DeleteSelf)
+				selfRoute.PUT("/avatar/self", middleware.UploadRateLimit(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateSelfAvatar)
+				selfRoute.DELETE("/avatar/self", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.DeleteSelfAvatar)
+				selfRoute.GET("/avatar/:id", controller.GetUserAvatar)
 				accessTokenRoute := selfRoute.Group("/access_tokens")
 				accessTokenRoute.Use(middleware.DisableCache())
 				{

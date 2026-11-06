@@ -529,6 +529,7 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"linux_do_id":       user.LinuxDOId,
 		"setting":           user.Setting,
 		"stripe_customer":   user.StripeCustomer,
+		"avatar_version":    user.AvatarVersion,
 		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":       permissions,
 	}
@@ -869,6 +870,14 @@ func UpdateSelf(c *gin.Context) {
 		return
 	}
 
+	if name, exists := requestData["display_name"]; exists {
+		if _, ok := name.(string); !ok {
+			common.ApiErrorT(c, "Invalid input")
+			return
+		}
+	}
+	user.DisplayName = strings.TrimSpace(user.DisplayName)
+
 	if err := common.Validate.StructExcept(&user, "Password"); err != nil {
 		common.ApiErrorT(c, "Invalid input")
 		return
@@ -925,7 +934,12 @@ func UpdateSelf(c *gin.Context) {
 		})
 		return
 	}
-	if err := cleanUser.Update(false); err != nil {
+	if _, exists := requestData["display_name"]; exists {
+		if err := model.UpdateUserDisplayName(cleanUser.Id, cleanUser.DisplayName); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else if err := cleanUser.Update(false); err != nil {
 		common.ApiError(c, err)
 		return
 	}

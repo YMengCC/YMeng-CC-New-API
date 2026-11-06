@@ -385,6 +385,7 @@ func migrateDB() error {
 		&UpstreamChannelMonitor{},
 		&UpstreamCostRecord{},
 		&UserAccessToken{},
+		&UserAvatar{},
 		&SupportTicket{},
 		&SupportTicketMessage{},
 	)

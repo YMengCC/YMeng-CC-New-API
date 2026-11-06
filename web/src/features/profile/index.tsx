@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { lazy, Suspense, useState } from 'react'
+
 import { Main } from '@/components/layout'
 import {
   CardStaggerContainer,
@@ -31,8 +33,22 @@ import { ProfileSettingsCard } from './components/profile-settings-card'
 import { SidebarModulesCard } from './components/sidebar-modules-card'
 import { useProfile } from './hooks'
 
+const EditProfileDialog = lazy(() =>
+  import('./components/edit-profile-dialog').then((module) => ({
+    default: module.EditProfileDialog,
+  }))
+)
+
 export function Profile() {
-  const { profile, loading, refreshProfile } = useProfile()
+  const {
+    profile,
+    loading,
+    refreshProfile,
+    updateProfile,
+    uploadAvatar,
+    deleteAvatar,
+  } = useProfile()
+  const [editOpen, setEditOpen] = useState(false)
   const { status } = useStatus()
   const permissions = useAuthStore((s) => s.auth.user?.permissions)
 
@@ -51,7 +67,11 @@ export function Profile() {
       <div className='min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-6'>
         <CardStaggerContainer className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-6'>
           <CardStaggerItem>
-            <ProfileHeader profile={profile} loading={loading} />
+            <ProfileHeader
+              profile={profile}
+              loading={loading}
+              onEdit={() => setEditOpen(true)}
+            />
           </CardStaggerItem>
 
           <CardStaggerItem>
@@ -84,6 +104,18 @@ export function Profile() {
           </CardStaggerItem>
         </CardStaggerContainer>
       </div>
+      {editOpen && profile ? (
+        <Suspense fallback={null}>
+          <EditProfileDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            profile={profile}
+            updateProfile={updateProfile}
+            uploadAvatar={uploadAvatar}
+            deleteAvatar={deleteAvatar}
+          />
+        </Suspense>
+      ) : null}
     </Main>
   )
 }

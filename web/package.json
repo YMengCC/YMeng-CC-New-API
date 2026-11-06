@@ -63,6 +63,7 @@
     "node-forge": "^1.4.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
+    "react-avatar-editor": "^15.1.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.7",
     "react-hook-form": "^7.80.0",

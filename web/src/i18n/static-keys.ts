@@ -19,6 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  'Display name must be 20 characters or fewer',
+  'Avatar upload must contain an image file',
+  'Avatar updated successfully',
+  'Avatar removed successfully',
   'Traffic switched to the verified candidate; waiting for the previous container to drain.',
   'Release compatibility has not approved schema or shared-state migration.',
   'Release is not approved for this platform.',
