@@ -168,7 +168,8 @@ export function WithdrawalDialog(props: WithdrawalDialogProps) {
           <Input
             id='withdrawal-amount'
             type='number'
-            step='any'
+            step='1'
+            inputMode='numeric'
             min={10}
             max={quotaUnitsToDollars(props.availableQuota)}
             {...form.register('amount')}
@@ -181,11 +182,14 @@ export function WithdrawalDialog(props: WithdrawalDialogProps) {
             className='text-muted-foreground text-xs'
           >
             {t(
-              'Enter an amount of at least 10 and no more than your available rewards'
+              'Enter a whole amount of at least 10 and no more than your available rewards'
             )}
           </p>
           <p className='text-muted-foreground text-xs'>
             {t('Minimum withdrawal amount is 10')}
+          </p>
+          <p className='text-muted-foreground text-xs'>
+            {t('Withdrawal amounts do not include decimals')}
           </p>
           {form.formState.errors.amount ? (
             <p role='alert' className='text-destructive text-sm'>

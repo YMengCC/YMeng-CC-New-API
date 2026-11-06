@@ -27,7 +27,11 @@ export interface CollectionQrProfile {
   sha256?: string
 }
 
-export type WithdrawalStatus = 'pending' | 'completed'
+export type WithdrawalStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'rejected'
 
 export interface Withdrawal {
   id: number
@@ -38,6 +42,10 @@ export interface Withdrawal {
   created_at: number
   updated_at: number
   updated_by: number
+  reject_reason?: string
+  rejected_at?: number
+  proof_name?: string
+  proof_size?: number
   currency_snapshot: CurrencyConfig
 }
 
@@ -125,11 +133,54 @@ export async function getAdminWithdrawals(
   return response.data
 }
 
-export async function setWithdrawalStatus(
+export async function getMyWithdrawals(
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<{
+  items: Withdrawal[]
+  total: number
+  p: number
+  page_size: number
+}> {
+  const response = requireServerSuccess(
+    (
+      await api.get('/api/withdrawal/self', {
+        params: { p: page, page_size: pageSize },
+        signal,
+        disableDuplicate: true,
+      })
+    ).data
+  )
+  return response.data
+}
+
+export async function markWithdrawalProcessing(id: number): Promise<void> {
+  requireServerSuccess(
+    (await api.post(`/api/withdrawal/admin/${id}/processing`)).data
+  )
+}
+
+export async function uploadWithdrawalProof(
   id: number,
-  status: WithdrawalStatus
+  file: File
+): Promise<void> {
+  const form = new FormData()
+  form.append('proof', file)
+  requireServerSuccess(
+    (
+      await api.post(`/api/withdrawal/admin/${id}/proof`, form, {
+        headers: { 'Content-Type': null },
+      })
+    ).data
+  )
+}
+
+export async function rejectWithdrawal(
+  id: number,
+  reason: string
 ): Promise<void> {
   requireServerSuccess(
-    (await api.patch(`/api/withdrawal/admin/${id}/status`, { status })).data
+    (await api.post(`/api/withdrawal/admin/${id}/reject`, { reason })).data
   )
 }

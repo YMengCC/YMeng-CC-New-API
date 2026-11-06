@@ -26,6 +26,7 @@ import {
 } from '@tanstack/react-router'
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -44,7 +45,7 @@ import {
 } from '@/stores/system-config-store'
 
 import { AdminWithdrawalPage } from '../admin-page'
-import type { Withdrawal, WithdrawalStatus } from '../api'
+import type { Withdrawal } from '../api'
 
 let client: QueryClient
 beforeEach(() => {
@@ -68,7 +69,8 @@ afterEach(() => {
 
 async function renderPage(
   path = '/admin-withdrawals',
-  role: number = ROLE.ADMIN
+  role: number = ROLE.ADMIN,
+  initial: Partial<Withdrawal> = {}
 ) {
   let application: Withdrawal = {
     id: 42,
@@ -84,10 +86,11 @@ async function renderPage(
       quotaDisplayType: 'CNY',
       usdExchangeRate: 7,
     },
+    ...initial,
   }
   useAuthStore.getState().auth.setUser({ id: 2, username: 'viewer', role })
   const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
-    if (url === '/api/withdrawal/admin/42/qr') {
+    if (url.endsWith('/qr') || url.endsWith('/proof')) {
       return { data: new Blob(['png'], { type: 'image/png' }) }
     }
     if (url === '/api/withdrawal/admin/') {
@@ -100,14 +103,21 @@ async function renderPage(
     }
     throw new Error(`Unexpected GET ${url}`)
   })
-  const patch = vi.spyOn(api, 'patch').mockImplementation(async (_, body) => {
-    application = {
-      ...application,
-      status: (body as { status: WithdrawalStatus }).status,
-      updated_by: 2,
-      updated_at: 1700000060,
+  const post = vi.spyOn(api, 'post').mockImplementation(async (url, body) => {
+    if (url === '/api/withdrawal/admin/42/processing') {
+      application = { ...application, status: 'processing' }
     }
-    return { data: { success: true, data: application } }
+    if (url === '/api/withdrawal/admin/42/proof') {
+      application = { ...application, status: 'completed', proof_size: 10 }
+    }
+    if (url === '/api/withdrawal/admin/42/reject') {
+      application = {
+        ...application,
+        status: 'rejected',
+        reject_reason: (body as { reason: string }).reason,
+      }
+    }
+    return { data: { success: true, data: null } }
   })
   const root = createRootRoute()
   const authenticated = createRoute({
@@ -136,83 +146,184 @@ async function renderPage(
       <RouterProvider router={router} />
     </QueryClientProvider>
   )
-  return { get, patch, router }
+  return { get, post, router }
 }
 
-it('shows snapshot money, user and status metadata without loading QR images for list rows', async () => {
+it('shows money, user and status metadata without loading QR images for list rows', async () => {
   const { get } = await renderPage()
   expect(await screen.findByText('referrer')).toBeVisible()
   expect(screen.getByText('¥3.5')).toBeVisible()
   expect(screen.getByText('Awaiting withdrawal')).toBeVisible()
   expect(screen.getByText('Updated by: -')).toBeVisible()
   expect(get.mock.calls.some(([url]) => url.endsWith('/qr'))).toBe(false)
-  expect(
-    screen.getByRole('button', { name: 'Mark as awaiting withdrawal' })
-  ).toBeDisabled()
-  expect(
-    screen.getByRole('button', { name: 'Mark withdrawal completed' })
-  ).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Start processing' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled()
 })
 
-it('loads the authenticated QR snapshot on demand and releases its object URL when closed', async () => {
+it('advances pending to processing and then uploads a PNG proof to complete', async () => {
   const user = userEvent.setup()
-  const { get } = await renderPage()
+  const { post } = await renderPage()
   await user.click(
-    await screen.findByRole('button', { name: 'View collection QR code' })
+    await screen.findByRole('button', { name: 'Start processing' })
   )
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith('/api/withdrawal/admin/42/processing')
+  )
+  expect(await screen.findByText('Processing')).toBeVisible()
+
+  const input = document.querySelector('input[type="file"]')
+  expect(input).not.toBeNull()
+  const file = new File([new Uint8Array(10)], 'proof.png', {
+    type: 'image/png',
+  })
+  fireEvent.change(input as HTMLInputElement, { target: { files: [file] } })
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/withdrawal/admin/42/proof',
+      expect.any(FormData),
+      expect.objectContaining({ headers: { 'Content-Type': null } })
+    )
+  )
+  expect(await screen.findByText('Withdrawal completed')).toBeVisible()
+  expect(
+    await screen.findByRole('button', { name: 'View proof' })
+  ).toBeVisible()
+})
+
+it('rejects a non-PNG proof without calling the upload endpoint', async () => {
+  const { post } = await renderPage('/admin-withdrawals', ROLE.ADMIN, {
+    status: 'processing',
+  })
+  const input = await waitFor(() => {
+    const found = document.querySelector('input[type="file"]')
+    expect(found).not.toBeNull()
+    return found as HTMLInputElement
+  })
+  fireEvent.change(input, {
+    target: {
+      files: [new File(['pdf'], 'proof.pdf', { type: 'application/pdf' })],
+    },
+  })
+  expect(post).not.toHaveBeenCalledWith(
+    '/api/withdrawal/admin/42/proof',
+    expect.anything(),
+    expect.anything()
+  )
+})
+
+it('requires a rejection reason, then displays it on the rejected row', async () => {
+  const user = userEvent.setup()
+  const { post } = await renderPage()
+  await user.click(await screen.findByRole('button', { name: 'Reject' }))
   const dialog = await screen.findByRole('dialog', {
-    name: 'Collection QR code snapshot',
+    name: 'Reject withdrawal application',
   })
   expect(
-    await within(dialog).findByRole('img', {
+    within(dialog).getByText(/returned to the user referral rewards/)
+  ).toBeVisible()
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Reject withdrawal' })
+  )
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(
+    'Rejection reason is required'
+  )
+  expect(post).not.toHaveBeenCalled()
+  await user.type(
+    within(dialog).getByLabelText('Rejection reason'),
+    'Incorrect Alipay account'
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Reject withdrawal' })
+  )
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith('/api/withdrawal/admin/42/reject', {
+      reason: 'Incorrect Alipay account',
+    })
+  )
+  expect(await screen.findByText('Incorrect Alipay account')).toBeVisible()
+  expect(screen.getByText('Rejected')).toBeVisible()
+})
+
+it('loads the current collection QR and the completion proof through authenticated blob requests', async () => {
+  const user = userEvent.setup()
+  const { get } = await renderPage('/admin-withdrawals', ROLE.ADMIN, {
+    status: 'completed',
+    proof_size: 10,
+  })
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Current collection QR code',
+    })
+  )
+  const qrDialog = await screen.findByRole('dialog', {
+    name: 'Current collection QR code',
+  })
+  expect(
+    await within(qrDialog).findByRole('img', {
       name: 'Collection QR code preview',
     })
   ).toHaveAttribute('src', 'blob:snapshot')
   expect(get).toHaveBeenCalledWith(
     '/api/withdrawal/admin/42/qr',
-    expect.objectContaining({
-      responseType: 'blob',
-      signal: expect.any(AbortSignal),
-    })
+    expect.objectContaining({ responseType: 'blob' })
   )
-  await user.click(within(dialog).getAllByRole('button', { name: 'Close' })[0])
-  await waitFor(() =>
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:snapshot')
+  await user.click(
+    within(qrDialog).getAllByRole('button', { name: 'Close' })[0]
+  )
+  await user.click(await screen.findByRole('button', { name: 'View proof' }))
+  const proofDialog = await screen.findByRole('dialog', {
+    name: 'Withdrawal proof',
+  })
+  expect(
+    await within(proofDialog).findByRole('img', {
+      name: 'Collection QR code preview',
+    })
+  ).toBeVisible()
+  expect(get).toHaveBeenCalledWith(
+    '/api/withdrawal/admin/42/proof',
+    expect.objectContaining({ responseType: 'blob' })
   )
 })
 
-it('requires confirmation before updating either status and refreshes administrator metadata', async () => {
+it('shows a friendly message when the user has no collection QR code', async () => {
   const user = userEvent.setup()
-  const { patch } = await renderPage()
-  await user.click(
-    await screen.findByRole('button', { name: 'Mark withdrawal completed' })
-  )
-  let confirmation = await screen.findByRole('alertdialog', {
-    name: 'Update withdrawal status',
+  const { get } = await renderPage()
+  get.mockImplementation(async (url) => {
+    if (url === '/api/withdrawal/admin/') {
+      return {
+        data: {
+          success: true,
+          data: {
+            items: [
+              {
+                id: 42,
+                user_id: 1,
+                username: 'referrer',
+                quota: 250000,
+                status: 'pending' as const,
+                created_at: 1700000000,
+                updated_at: 1700000000,
+                updated_by: 0,
+                currency_snapshot: DEFAULT_CURRENCY_CONFIG,
+              },
+            ],
+            total: 1,
+            p: 1,
+            page_size: 20,
+          },
+        },
+      }
+    }
+    throw new Error('boom')
   })
-  expect(patch).not.toHaveBeenCalled()
-  expect(
-    within(confirmation).getByText(/This only changes the status/)
-  ).toBeVisible()
-  await user.click(within(confirmation).getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(patch).toHaveBeenCalledWith('/api/withdrawal/admin/42/status', {
-      status: 'completed',
-    })
-  )
-  expect(await screen.findByText('Withdrawal completed')).toBeVisible()
-  expect(screen.getByText('Updated by: 2')).toBeVisible()
   await user.click(
-    screen.getByRole('button', { name: 'Mark as awaiting withdrawal' })
-  )
-  confirmation = await screen.findByRole('alertdialog')
-  await user.click(within(confirmation).getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(patch).toHaveBeenLastCalledWith('/api/withdrawal/admin/42/status', {
-      status: 'pending',
+    await screen.findByRole('button', {
+      name: 'Current collection QR code',
     })
   )
-  expect(await screen.findByText('Awaiting withdrawal')).toBeVisible()
+  expect(
+    await screen.findByText('The user has not configured a collection QR code')
+  ).toBeVisible()
 })
 
 it('sends validated user/status filters and pagination from the route URL', async () => {

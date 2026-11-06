@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ScanLine } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ErrorState } from '@/components/error-state'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -167,7 +169,34 @@ export function CollectionQrCard() {
           ) : null}
           {validating ? <p role='status'>{t('Validating image...')}</p> : null}
         </div>
+        {file && !cropped && !cropping ? (
+          <Alert
+            id='collection-qr-crop-alert'
+            role='status'
+            aria-live='polite'
+            className='relative overflow-hidden border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-transparent py-3 pl-3 text-amber-950 dark:text-amber-100'
+          >
+            <div className='flex items-start gap-3'>
+              <span className='flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 ring-1 ring-amber-500/40 dark:text-amber-300'>
+                <ScanLine className='size-4' aria-hidden='true' />
+              </span>
+              <div className='min-w-0 space-y-1'>
+                <AlertTitle className='font-semibold'>
+                  {t('Select the QR code area first')}
+                </AlertTitle>
+                <AlertDescription className='text-amber-900/80 dark:text-amber-100/80'>
+                  {t(
+                    'Drag on the image above to draw a square around the QR code. Saving stays disabled until you select an area.'
+                  )}
+                </AlertDescription>
+              </div>
+            </div>
+          </Alert>
+        ) : null}
         <Button
+          aria-describedby={
+            file && !cropped ? 'collection-qr-crop-alert' : undefined
+          }
           disabled={!cropped || validating || cropping || save.isPending}
           onClick={() => {
             if (cropped) save.mutate(cropped)

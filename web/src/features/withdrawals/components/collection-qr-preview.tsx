@@ -50,6 +50,7 @@ export function CollectionQrPreview(props: {
   path: string
   revision?: string | number
   onReadyChange?: (ready: boolean) => void
+  errorTitle?: string
 }) {
   const { t } = useTranslation()
   const userId = useAuthStore((state) => state.auth.user?.id)
@@ -69,7 +70,7 @@ export function CollectionQrPreview(props: {
   if (image.isError) {
     return (
       <ErrorState
-        title={t('Failed to load collection QR code')}
+        title={t(props.errorTitle ?? 'Failed to load collection QR code')}
         onRetry={() => void image.refetch()}
         className='min-h-36'
       />

@@ -33,6 +33,7 @@ import { formatQuota } from '@/lib/format'
 import type { UserWalletData } from '../types'
 import { AffiliateCommissionsDialog } from './dialogs/affiliate-commissions-dialog'
 import { AffiliateInviteesDialog } from './dialogs/affiliate-invitees-dialog'
+import { WithdrawalRecordsDialog } from './dialogs/withdrawal-records-dialog'
 
 interface AffiliateRewardsCardProps {
   user: UserWalletData | null
@@ -60,6 +61,7 @@ export function AffiliateRewardsCard({
   const { t } = useTranslation()
   const [commissionsDialogOpen, setCommissionsDialogOpen] = useState(false)
   const [inviteesDialogOpen, setInviteesDialogOpen] = useState(false)
+  const [withdrawalRecordsOpen, setWithdrawalRecordsOpen] = useState(false)
 
   if (loading) {
     return (
@@ -158,7 +160,6 @@ export function AffiliateRewardsCard({
               <Button
                 onClick={onWithdraw}
                 disabled={!withdrawalAvailable || !complianceConfirmed}
-                variant='outline'
                 className='h-9 px-3'
                 size='sm'
               >
@@ -198,6 +199,15 @@ export function AffiliateRewardsCard({
               {t('Invited users')}
               <ArrowRight className='size-3' />
             </Button>
+            <Button
+              variant='link'
+              size='sm'
+              className='h-auto p-0 text-xs'
+              onClick={() => setWithdrawalRecordsOpen(true)}
+            >
+              {t('Withdrawal records')}
+              <ArrowRight className='size-3' />
+            </Button>
             {summary && !summary.enabled ? (
               <p className='text-muted-foreground text-xs'>
                 {t(
@@ -223,6 +233,10 @@ export function AffiliateRewardsCard({
       <AffiliateInviteesDialog
         open={inviteesDialogOpen}
         onOpenChange={setInviteesDialogOpen}
+      />
+      <WithdrawalRecordsDialog
+        open={withdrawalRecordsOpen}
+        onOpenChange={setWithdrawalRecordsOpen}
       />
     </>
   )

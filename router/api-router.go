@@ -211,6 +211,7 @@ func SetApiRouter(router *gin.Engine) {
 			withdrawalRoute.GET("/profile", controller.GetWithdrawalProfile)
 			withdrawalRoute.GET("/profile/qr", controller.GetWithdrawalProfileQR)
 			withdrawalRoute.PUT("/profile/qr", middleware.UploadRateLimit(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateWithdrawalQR)
+			withdrawalRoute.GET("/self", controller.GetMyWithdrawals)
 			withdrawalRoute.POST("/", middleware.UserCriticalRateLimit("withdrawal"), controller.CreateWithdrawal)
 		}
 		withdrawalAdminRoute := apiRouter.Group("/withdrawal/admin")
@@ -218,7 +219,10 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			withdrawalAdminRoute.GET("/", controller.GetAllWithdrawals)
 			withdrawalAdminRoute.GET("/:id/qr", controller.GetWithdrawalQR)
-			withdrawalAdminRoute.PATCH("/:id/status", middleware.CriticalRateLimit(), controller.SetWithdrawalStatus)
+			withdrawalAdminRoute.GET("/:id/proof", controller.GetWithdrawalProof)
+			withdrawalAdminRoute.POST("/:id/processing", middleware.CriticalRateLimit(), controller.MarkWithdrawalProcessing)
+			withdrawalAdminRoute.POST("/:id/proof", middleware.UploadRateLimit(), middleware.CriticalRateLimit(), controller.UploadWithdrawalProof)
+			withdrawalAdminRoute.POST("/:id/reject", middleware.CriticalRateLimit(), controller.RejectWithdrawal)
 		}
 
 		invoiceRoute := apiRouter.Group("/invoice")

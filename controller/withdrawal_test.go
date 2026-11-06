@@ -224,13 +224,22 @@ func testWithdrawalAccounting(t *testing.T) {
 	assert.Equal(t, originalSnapshot, replayed.CurrencySnapshot)
 	_, err = model.CreateWithdrawal(user.Id, 2, requestID)
 	assert.ErrorIs(t, err, model.ErrWithdrawalRequestConflict)
-	pngData, err := model.GetWithdrawalQR(application.Id)
+	// New applications validate whole displayed amounts; restore TOKENS so the
+	// remaining accounting cases do not depend on the changed CUSTOM settings.
+	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeTokens
+	// Administrators see the latest profile QR, not the application snapshot.
+	pngData, err := model.GetWithdrawalUserQR(application.Id)
 	require.NoError(t, err)
-	assert.Equal(t, []byte("original-png"), pngData)
-	for _, status := range []string{model.WithdrawalStatusCompleted, model.WithdrawalStatusCompleted, model.WithdrawalStatusPending} {
-		require.NoError(t, model.SetWithdrawalStatus(application.Id, 99, status))
-	}
-	assert.ErrorIs(t, model.SetWithdrawalStatus(application.Id, 99, "rejected"), model.ErrWithdrawalStatusInvalid)
+	assert.Equal(t, []byte("replacement-png"), pngData)
+	// Completing requires processing first, and status changes never move money.
+	assert.ErrorIs(t, model.CompleteWithdrawal(application.Id, 99, &model.WithdrawalProof{Data: []byte("proof")}), model.ErrWithdrawalStatusInvalid)
+	require.NoError(t, model.MarkWithdrawalProcessing(application.Id, 99))
+	assert.ErrorIs(t, model.MarkWithdrawalProcessing(application.Id, 99), model.ErrWithdrawalStatusInvalid)
+	require.NoError(t, model.CompleteWithdrawal(application.Id, 99, &model.WithdrawalProof{Name: "proof.png", Data: []byte("proof"), Sha256: strings.Repeat("c", 64)}))
+	proof, err := model.GetWithdrawalProof(application.Id)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("proof"), proof)
+	assert.ErrorIs(t, model.RejectWithdrawal(application.Id, 99, "too late"), model.ErrWithdrawalStatusInvalid)
 	var after model.User
 	require.NoError(t, model.DB.First(&after, user.Id).Error)
 	assert.Equal(t, int64(290), after.InviteQuota)
@@ -262,6 +271,21 @@ func testWithdrawalAccounting(t *testing.T) {
 	require.NoError(t, err, "withdrawing all available quota succeeds")
 	require.NoError(t, model.DB.First(&after, user.Id).Error)
 	assert.Zero(t, after.InviteQuota)
+	require.NoError(t, model.DB.Model(&user).UpdateColumn("invite_quota", 300).Error)
+	refundable, err := model.CreateWithdrawal(user.Id, 100, uuid.NewString())
+	require.NoError(t, err)
+	assert.ErrorIs(t, model.RejectWithdrawal(refundable.Id, 99, "   "), model.ErrWithdrawalRejectReason)
+	require.NoError(t, model.RejectWithdrawal(refundable.Id, 99, "请补充收款信息"))
+	require.NoError(t, model.DB.First(&after, user.Id).Error)
+	assert.Equal(t, int64(300), after.InviteQuota, "rejection refunds exactly once")
+	assert.ErrorIs(t, model.RejectWithdrawal(refundable.Id, 99, "again"), model.ErrWithdrawalStatusInvalid)
+	require.NoError(t, model.DB.First(&after, user.Id).Error)
+	assert.Equal(t, int64(300), after.InviteQuota, "repeated rejection never refunds again")
+	var rejected model.Withdrawal
+	require.NoError(t, model.DB.First(&rejected, refundable.Id).Error)
+	assert.Equal(t, model.WithdrawalStatusRejected, rejected.Status)
+	assert.Equal(t, "请补充收款信息", rejected.RejectReason)
+	assert.NotZero(t, rejected.RejectedAt)
 	full := withdrawalTestUser(t, "wallet-full", 100)
 	require.NoError(t, model.DB.Model(&full).UpdateColumn("quota", common.MaxWalletQuota).Error)
 	assert.Error(t, full.TransferAffQuotaToQuota(100))
@@ -378,11 +402,15 @@ func withdrawalTestRouter() *gin.Engine {
 	user.GET("/profile", GetWithdrawalProfile)
 	user.GET("/profile/qr", GetWithdrawalProfileQR)
 	user.PUT("/profile/qr", UpdateWithdrawalQR)
+	user.GET("/self", GetMyWithdrawals)
 	user.POST("/", CreateWithdrawal)
 	admin := r.Group("/api/withdrawal/admin", middleware.AdminAuth())
 	admin.GET("/", GetAllWithdrawals)
 	admin.GET("/:id/qr", GetWithdrawalQR)
-	admin.PATCH("/:id/status", SetWithdrawalStatus)
+	admin.GET("/:id/proof", GetWithdrawalProof)
+	admin.POST("/:id/processing", MarkWithdrawalProcessing)
+	admin.POST("/:id/proof", UploadWithdrawalProof)
+	admin.POST("/:id/reject", RejectWithdrawal)
 	return r
 }
 
@@ -411,6 +439,18 @@ func withdrawalUploadRequest(t *testing.T, r http.Handler, token string, data []
 	return withdrawalAPIRequest(r, http.MethodPut, "/api/withdrawal/profile/qr", token, body.Bytes(), writer.FormDataContentType())
 }
 
+func withdrawalUploadNamed(t *testing.T, r http.Handler, token string, id int, field string, data []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile(field, "withdrawal-proof.png")
+	require.NoError(t, err)
+	_, err = part.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return withdrawalAPIRequest(r, http.MethodPost, "/api/withdrawal/admin/"+strconv.Itoa(id)+"/"+field, token, body.Bytes(), writer.FormDataContentType())
+}
+
 func testWithdrawalAPI(t *testing.T) {
 	user := withdrawalTestUser(t, "api", 100)
 	other := withdrawalTestUser(t, "other", 100)
@@ -418,6 +458,7 @@ func testWithdrawalAPI(t *testing.T) {
 	require.NoError(t, model.DB.Model(&admin).UpdateColumn("role", common.RoleAdminUser).Error)
 	ownerRead, _ := createScopedAccessToken(t, user.Id, 0, "profile:read")
 	ownerWrite, _ := createScopedAccessToken(t, user.Id, 0, "profile:write")
+	walletRead, _ := createScopedAccessToken(t, user.Id, 0, "wallet:read")
 	walletWrite, _ := createScopedAccessToken(t, user.Id, 0, "wallet:write")
 	otherRead, _ := createScopedAccessToken(t, other.Id, 0, "profile:read", "billing:read", "billing:write")
 	adminRead, _ := createScopedAccessToken(t, admin.Id, 0, "billing:read")
@@ -497,23 +538,65 @@ func testWithdrawalAPI(t *testing.T) {
 	assert.Equal(t, user.Username, list.Data.Items[0].Username)
 	assert.NotContains(t, response.Body.String(), "request_id")
 	assert.NotContains(t, response.Body.String(), "qr_data")
-	for _, query := range []string{"status=rejected", "p=0", "page_size=101"} {
+	for _, query := range []string{"status=bogus", "p=0", "page_size=101"} {
 		response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/admin/?"+query, adminRead, nil, "")
 		assert.Contains(t, response.Body.String(), `"success":false`)
 	}
-	assert.Equal(t, http.StatusForbidden, withdrawalAPIRequest(r, "PATCH", "/api/withdrawal/admin/"+id+"/status", adminRead, []byte(`{"status":"completed"}`), "application/json").Code)
-	for _, status := range []string{"completed", "completed", "pending"} {
-		response = withdrawalAPIRequest(r, "PATCH", "/api/withdrawal/admin/"+id+"/status", adminWrite, []byte(fmt.Sprintf(`{"status":%q}`, status)), "application/json")
-		assert.Contains(t, response.Body.String(), `"success":true`)
-	}
+	// Administrators may only advance pending -> processing -> completed.
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+id+"/proof", adminWrite, nil, "")
+	assert.Contains(t, response.Body.String(), `"success":false`, "cannot complete before processing")
+	response = withdrawalAPIRequest(r, "PATCH", "/api/withdrawal/admin/"+id+"/status", adminWrite, []byte(`{"status":"completed"}`), "application/json")
+	assert.Equal(t, http.StatusNotFound, response.Code, "free-form status updates are removed")
+	assert.Equal(t, http.StatusForbidden, withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+id+"/processing", adminRead, nil, "").Code)
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+id+"/processing", adminWrite, nil, "")
+	assert.Contains(t, response.Body.String(), `"success":true`, response.Body.String())
+	response = withdrawalUploadNamed(t, r, adminWrite, result.Data.Id, "proof", valid.Bytes())
+	require.Contains(t, response.Body.String(), `"success":true`, response.Body.String())
+	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/admin/"+id+"/proof", adminRead, nil, "")
+	assert.Equal(t, valid.Bytes(), response.Body.Bytes())
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+id+"/reject", adminWrite, []byte(`{"reason":"already paid"}`), "application/json")
+	assert.Contains(t, response.Body.String(), `"success":false`, "completed applications cannot be rejected")
 	var stored model.Withdrawal
 	require.NoError(t, model.DB.First(&stored, result.Data.Id).Error)
+	assert.Equal(t, model.WithdrawalStatusCompleted, stored.Status)
 	assert.Equal(t, admin.Id, stored.UpdatedBy)
-	var auditCount int64
-	require.NoError(t, model.LOG_DB.Model(&model.AuditLog{}).Where("user_id = ? AND category = ?", admin.Id, model.AuditCategoryOperation).Count(&auditCount).Error)
-	assert.GreaterOrEqual(t, auditCount, int64(3))
+	// The user's own records list only their applications and expose the reason.
+	assert.Equal(t, http.StatusForbidden, withdrawalAPIRequest(r, "GET", "/api/withdrawal/self?p=1&page_size=5", ownerRead, nil, "").Code)
+	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/self?p=1&page_size=5", walletRead, nil, "")
+	var mine struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Items []model.Withdrawal `json:"items"`
+			Total int                `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(response.Body.Bytes(), &mine))
+	require.True(t, mine.Success, response.Body.String())
+	assert.Equal(t, 1, mine.Data.Total)
+	assert.NotContains(t, response.Body.String(), "request_id")
+	// A rejected application refunds the referral balance exactly once.
+	rejectable, err := model.CreateWithdrawal(user.Id, 10, uuid.NewString())
+	require.NoError(t, err)
+	refundID := strconv.Itoa(rejectable.Id)
+	assert.Equal(t, http.StatusForbidden, withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+refundID+"/reject", adminRead, []byte(`{"reason":"x"}`), "application/json").Code)
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+refundID+"/reject", adminWrite, []byte(`{"reason":""}`), "application/json")
+	assert.Contains(t, response.Body.String(), `"success":false`)
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+refundID+"/reject", adminWrite, []byte(`{"reason":"Incorrect Alipay account"}`), "application/json")
+	require.Contains(t, response.Body.String(), `"success":true`, response.Body.String())
 	var after model.User
 	require.NoError(t, model.DB.First(&after, user.Id).Error)
 	assert.Equal(t, int64(90), after.InviteQuota)
 	assert.Equal(t, user.Quota, after.Quota)
+	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/self?p=1&page_size=5", walletRead, nil, "")
+	assert.Contains(t, response.Body.String(), "Incorrect Alipay account")
+	var rejected model.Withdrawal
+	require.NoError(t, model.DB.First(&rejected, rejectable.Id).Error)
+	assert.Equal(t, model.WithdrawalStatusRejected, rejected.Status)
+	response = withdrawalAPIRequest(r, "POST", "/api/withdrawal/admin/"+refundID+"/reject", adminWrite, []byte(`{"reason":"again"}`), "application/json")
+	assert.Contains(t, response.Body.String(), `"success":false`)
+	require.NoError(t, model.DB.First(&after, user.Id).Error)
+	assert.Equal(t, int64(90), after.InviteQuota, "repeated rejection must not refund twice")
+	var auditCount int64
+	require.NoError(t, model.LOG_DB.Model(&model.AuditLog{}).Where("user_id = ? AND category = ?", admin.Id, model.AuditCategoryOperation).Count(&auditCount).Error)
+	assert.GreaterOrEqual(t, auditCount, int64(2))
 }

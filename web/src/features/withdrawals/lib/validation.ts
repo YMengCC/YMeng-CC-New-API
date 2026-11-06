@@ -28,24 +28,33 @@ export function parseWithdrawalQuota(
   return amount >= 10 ? Math.max(quota, minimumQuota) : quota
 }
 
+/** Withdrawals are whole display units: no decimals are accepted. */
 export function withdrawalAmountSchema(
   availableQuota: number,
   minimumQuota = 1
 ) {
   return z.object({
-    amount: z.string().refine((value) => {
-      const amount = Number(value)
-      const quota = parseWithdrawalQuota(amount, minimumQuota)
-      return (
-        value.trim() !== '' &&
-        Number.isFinite(amount) &&
-        amount >= 10 &&
-        Number.isSafeInteger(quota) &&
-        quota > 0 &&
-        quota <= availableQuota &&
-        amount <= quotaUnitsToDollars(availableQuota)
+    amount: z
+      .string()
+      .refine(
+        (value) =>
+          value.trim() !== '' &&
+          Number.isInteger(Number(value)) &&
+          Number(value) > 0,
+        'Withdrawal amount must be an integer'
       )
-    }, 'Enter an amount of at least 10 and no more than your available rewards'),
+      .refine((value) => {
+        const amount = Number(value)
+        const quota = parseWithdrawalQuota(amount, minimumQuota)
+        return (
+          Number.isFinite(amount) &&
+          amount >= 10 &&
+          Number.isSafeInteger(quota) &&
+          quota > 0 &&
+          quota <= availableQuota &&
+          amount <= quotaUnitsToDollars(availableQuota)
+        )
+      }, 'Enter an amount of at least 10 and no more than your available rewards'),
   })
 }
 

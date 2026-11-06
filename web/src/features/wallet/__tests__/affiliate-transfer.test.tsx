@@ -299,9 +299,34 @@ it('shows a retryable metadata error without claiming the QR is missing', async 
   expect(within(dialog).queryByRole('spinbutton')).not.toBeInTheDocument()
 })
 
+it('rejects a withdrawal amount with decimals', async () => {
+  const user = userEvent.setup()
+  const { post } = await renderWallet(5000000)
+  await user.click(screen.getByRole('button', { name: 'Withdraw' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Withdraw rewards' })
+  await within(dialog).findByRole('img')
+  const input = within(dialog).getByRole('spinbutton', {
+    name: 'Withdrawal amount',
+  })
+  expect(input).toHaveAttribute('step', '1')
+  expect(
+    within(dialog).getByText('Withdrawal amounts do not include decimals')
+  ).toBeVisible()
+  await user.type(input, '10.5')
+  expect(
+    within(dialog).getByRole('button', { name: 'Request withdrawal' })
+  ).toBeDisabled()
+  expect(post).not.toHaveBeenCalledWith('/api/withdrawal/', expect.anything())
+  await user.clear(input)
+  await user.type(input, '10')
+  expect(
+    within(dialog).getByRole('button', { name: 'Request withdrawal' })
+  ).toBeEnabled()
+})
+
 it.each([
   [5000000, 10],
-  [6250000, 12.5],
+  [6500000, 13],
 ])(
   'withdraws all %s quota at or above the withdrawal minimum and refreshes the displayed balance',
   async (available, displayAmount) => {
@@ -378,6 +403,52 @@ it('blocks a withdrawal below 10 even when all available rewards are selected', 
   expect(
     post.mock.calls.filter(([url]) => url === '/api/withdrawal/')
   ).toHaveLength(0)
+})
+
+it('opens the withdrawal records dialog from the referral card', async () => {
+  const user = userEvent.setup()
+  const { get } = await renderWallet(5000000)
+  get.mockImplementation(async (url) => {
+    if (url === '/api/withdrawal/self') {
+      return {
+        data: {
+          success: true,
+          data: {
+            items: [
+              {
+                id: 7,
+                user_id: 1,
+                username: 'referrer',
+                quota: 5000000,
+                status: 'rejected',
+                reject_reason: 'Incorrect Alipay account',
+                created_at: 1700000000,
+                updated_at: 1700000000,
+                updated_by: 2,
+                currency_snapshot: {
+                  ...useSystemConfigStore.getState().config.currency,
+                },
+              },
+            ],
+            total: 1,
+            p: 1,
+            page_size: 10,
+          },
+        },
+      }
+    }
+    throw new Error(`Unexpected GET ${url}`)
+  })
+  await user.click(screen.getByRole('button', { name: 'Withdrawal records' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Withdrawal records',
+  })
+  expect(await within(dialog).findByText('Rejected')).toBeVisible()
+  expect(within(dialog).getByText('Incorrect Alipay account')).toBeVisible()
+  expect(get).toHaveBeenCalledWith(
+    '/api/withdrawal/self',
+    expect.objectContaining({ params: { p: 1, page_size: 10 } })
+  )
 })
 
 it.each([

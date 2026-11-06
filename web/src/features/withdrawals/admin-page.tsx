@@ -22,7 +22,6 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTablePage, useDataTable } from '@/components/data-table'
 import { Dialog } from '@/components/dialog'
 import { ErrorState } from '@/components/error-state'
@@ -32,29 +31,42 @@ import { Input } from '@/components/ui/input'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   getAdminWithdrawals,
-  setWithdrawalStatus,
+  markWithdrawalProcessing,
+  rejectWithdrawal,
+  uploadWithdrawalProof,
   type Withdrawal,
   type WithdrawalStatus,
 } from './api'
-import { useAdminWithdrawalColumns } from './components/admin-withdrawal-columns'
+import {
+  useAdminWithdrawalColumns,
+  useWithdrawalStatusLabels,
+} from './components/admin-withdrawal-columns'
 import { CollectionQrPreview } from './components/collection-qr-preview'
+import { RejectWithdrawalDialog } from './components/reject-withdrawal-dialog'
 
 const route = getRouteApi('/_authenticated/admin-withdrawals/')
+
+const statusOptions: WithdrawalStatus[] = [
+  'pending',
+  'processing',
+  'completed',
+  'rejected',
+]
 
 export function AdminWithdrawalPage() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const statusLabel = useWithdrawalStatusLabels()
   const client = useQueryClient()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const [preview, setPreview] = useState<Withdrawal | null>(null)
-  const [confirmation, setConfirmation] = useState<{
-    row: Withdrawal
-    status: WithdrawalStatus
-  } | null>(null)
+  const [proof, setProof] = useState<Withdrawal | null>(null)
+  const [rejecting, setRejecting] = useState<Withdrawal | null>(null)
   const {
     columnFilters,
     onColumnFiltersChange,
@@ -85,23 +97,61 @@ export function AdminWithdrawalPage() {
     placeholderData: (previous) => previous,
     meta: { errorToast: false },
   })
-  const update = useMutation({
-    mutationFn: (input: { row: Withdrawal; status: WithdrawalStatus }) =>
-      setWithdrawalStatus(input.row.id, input.status),
+  const processing = useMutation({
+    mutationFn: (row: Withdrawal) => markWithdrawalProcessing(row.id),
     onSuccess: async () => {
-      setConfirmation(null)
-      toast.success(t('Withdrawal status updated'))
+      toast.success(t('Withdrawal marked as processing'))
       await client.invalidateQueries({ queryKey: ['admin-withdrawals'] })
     },
+    onError: (error) => handleServerError(error),
   })
+  const upload = useMutation({
+    mutationFn: (input: { id: number; file: File }) =>
+      uploadWithdrawalProof(input.id, input.file),
+    onSuccess: async () => {
+      toast.success(t('Withdrawal proof uploaded'))
+      await client.invalidateQueries({ queryKey: ['admin-withdrawals'] })
+    },
+    onError: (error) => handleServerError(error),
+  })
+  const reject = useMutation({
+    mutationFn: (input: { id: number; reason: string }) =>
+      rejectWithdrawal(input.id, input.reason),
+    onSuccess: async () => {
+      setRejecting(null)
+      toast.success(t('Withdrawal application rejected'))
+      await client.invalidateQueries({ queryKey: ['admin-withdrawals'] })
+      await client.invalidateQueries({ queryKey: ['affiliate', 'summary'] })
+    },
+    onError: (error) => handleServerError(error),
+  })
+  let pendingAction: 'processing' | 'proof' | undefined
+  let pendingId: number | undefined
+  if (processing.isPending) {
+    pendingAction = 'processing'
+    pendingId = processing.variables?.id
+  } else if (upload.isPending) {
+    pendingAction = 'proof'
+    pendingId = upload.variables?.id
+  }
   const actions = useMemo(
     () => ({
-      pending: update.isPending,
+      pendingId,
+      pendingAction,
       onPreview: setPreview,
-      onStatus: (row: Withdrawal, status: WithdrawalStatus) =>
-        setConfirmation({ row, status }),
+      onProof: setProof,
+      onProcessing: (row: Withdrawal) => processing.mutate(row),
+      onUpload: (row: Withdrawal, file?: File) => {
+        if (!file) return
+        if (file.type !== 'image/png' && !file.name.endsWith('.png')) {
+          toast.error(t('Please select a PNG file'))
+          return
+        }
+        upload.mutate({ id: row.id, file })
+      },
+      onReject: setRejecting,
     }),
-    [update.isPending]
+    [pendingAction, pendingId, processing, t, upload]
   )
   const columns = useAdminWithdrawalColumns(actions)
   const { table } = useDataTable({
@@ -176,10 +226,10 @@ export function AdminWithdrawalPage() {
                     columnId: 'status',
                     title: t('Status'),
                     singleSelect: true,
-                    options: [
-                      { value: 'pending', label: t('Awaiting withdrawal') },
-                      { value: 'completed', label: t('Withdrawal completed') },
-                    ],
+                    options: statusOptions.map((status) => ({
+                      value: status,
+                      label: statusLabel(status),
+                    })),
                   },
                 ],
                 hasAdditionalFilters: !!search.keyword,
@@ -193,7 +243,7 @@ export function AdminWithdrawalPage() {
       {preview ? (
         <Dialog
           open
-          title={t('Collection QR code snapshot')}
+          title={t('Current collection QR code')}
           description={`${preview.username} · ${formatQuotaWithCurrency(preview.quota, { abbreviate: false, digitsLarge: 8, digitsSmall: 12, locale }, preview.currency_snapshot)}`}
           contentClassName='sm:max-w-md'
           onOpenChange={(open) => {
@@ -208,22 +258,41 @@ export function AdminWithdrawalPage() {
           <CollectionQrPreview
             path={`/api/withdrawal/admin/${preview.id}/qr`}
             revision={preview.id}
+            errorTitle='The user has not configured a collection QR code'
           />
         </Dialog>
       ) : null}
-      {confirmation ? (
-        <ConfirmDialog
+      {proof ? (
+        <Dialog
           open
-          title={t('Update withdrawal status')}
-          desc={`${confirmation.row.username} · ${confirmation.status === 'completed' ? t('Withdrawal completed') : t('Awaiting withdrawal')}. ${t('This only changes the status. Pay manually before marking a withdrawal completed; changing status never moves money.')}`}
-          confirmText={t('Save')}
-          isLoading={update.isPending}
+          title={t('Withdrawal proof')}
+          description={proof.username}
+          contentClassName='sm:max-w-md'
           onOpenChange={(open) => {
-            if (!open && !update.isPending) setConfirmation(null)
+            if (!open) setProof(null)
           }}
-          handleConfirm={() => {
-            if (!update.isPending) update.mutate(confirmation)
+          footer={
+            <Button variant='outline' onClick={() => setProof(null)}>
+              {t('Close')}
+            </Button>
+          }
+        >
+          <CollectionQrPreview
+            path={`/api/withdrawal/admin/${proof.id}/proof`}
+            revision={proof.id}
+            errorTitle='Failed to load withdrawal proof'
+          />
+        </Dialog>
+      ) : null}
+      {rejecting ? (
+        <RejectWithdrawalDialog
+          open
+          username={rejecting.username}
+          pending={reject.isPending}
+          onOpenChange={(open) => {
+            if (!open) setRejecting(null)
           }}
+          onReject={(reason) => reject.mutate({ id: rejecting.id, reason })}
         />
       ) : null}
     </>

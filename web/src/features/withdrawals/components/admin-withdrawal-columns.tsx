@@ -17,12 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
+import { Eye, ImageUp, XCircle } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TruncatedCell } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatTimestamp } from '@/lib/format'
@@ -30,9 +32,33 @@ import { formatTimestamp } from '@/lib/format'
 import type { Withdrawal, WithdrawalStatus } from '../api'
 
 interface WithdrawalActions {
-  pending: boolean
+  pendingId?: number
+  pendingAction?: 'processing' | 'proof'
   onPreview: (row: Withdrawal) => void
-  onStatus: (row: Withdrawal, status: WithdrawalStatus) => void
+  onProof: (row: Withdrawal) => void
+  onProcessing: (row: Withdrawal) => void
+  onUpload: (row: Withdrawal, file?: File) => void
+  onReject: (row: Withdrawal) => void
+}
+
+export function withdrawalStatusVariant(status: WithdrawalStatus) {
+  if (status === 'completed') return 'success' as const
+  if (status === 'rejected') return 'danger' as const
+  if (status === 'processing') return 'info' as const
+  return 'warning' as const
+}
+
+export function useWithdrawalStatusLabels() {
+  const { t } = useTranslation()
+  return (status: WithdrawalStatus) => {
+    const labels: Record<WithdrawalStatus, string> = {
+      pending: t('Awaiting withdrawal'),
+      processing: t('Processing'),
+      completed: t('Withdrawal completed'),
+      rejected: t('Rejected'),
+    }
+    return labels[status]
+  }
 }
 
 export function useAdminWithdrawalColumns(
@@ -40,6 +66,7 @@ export function useAdminWithdrawalColumns(
 ): ColumnDef<Withdrawal>[] {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const label = useWithdrawalStatusLabels()
   return useMemo(
     () => [
       {
@@ -93,51 +120,102 @@ export function useAdminWithdrawalColumns(
         header: t('Status'),
         meta: { mobileBadge: true },
         cell: ({ row }) => (
-          <StatusBadge
-            copyable={false}
-            variant={
-              row.original.status === 'completed' ? 'success' : 'warning'
-            }
-            label={
-              row.original.status === 'completed'
-                ? t('Withdrawal completed')
-                : t('Awaiting withdrawal')
-            }
-          />
+          <div className='space-y-1'>
+            <StatusBadge
+              copyable={false}
+              variant={withdrawalStatusVariant(row.original.status)}
+              label={label(row.original.status)}
+            />
+            {row.original.status === 'rejected' &&
+            row.original.reject_reason ? (
+              <p className='text-muted-foreground max-w-64 text-xs wrap-anywhere whitespace-pre-wrap'>
+                {row.original.reject_reason}
+              </p>
+            ) : null}
+          </div>
         ),
       },
       {
         id: 'actions',
         header: t('Actions'),
-        cell: ({ row }) => (
-          <div className='flex flex-wrap justify-end gap-2'>
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={() => actions.onPreview(row.original)}
-            >
-              {t('View collection QR code')}
-            </Button>
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={actions.pending || row.original.status === 'pending'}
-              onClick={() => actions.onStatus(row.original, 'pending')}
-            >
-              {t('Mark as awaiting withdrawal')}
-            </Button>
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={actions.pending || row.original.status === 'completed'}
-              onClick={() => actions.onStatus(row.original, 'completed')}
-            >
-              {t('Mark withdrawal completed')}
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const application = row.original
+          const pendingProcessing =
+            actions.pendingId === application.id &&
+            actions.pendingAction === 'processing'
+          const pendingProof =
+            actions.pendingId === application.id &&
+            actions.pendingAction === 'proof'
+          return (
+            <div className='flex flex-wrap justify-end gap-2'>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => actions.onPreview(application)}
+              >
+                <Eye data-icon='inline-start' aria-hidden='true' />
+                {t('Current collection QR code')}
+              </Button>
+              {application.status === 'pending' ? (
+                <Button
+                  size='sm'
+                  variant='outline'
+                  disabled={pendingProcessing}
+                  onClick={() => actions.onProcessing(application)}
+                >
+                  {t('Start processing')}
+                </Button>
+              ) : null}
+              {application.status === 'processing' ? (
+                <label className='inline-flex'>
+                  <Input
+                    type='file'
+                    accept='image/png,.png'
+                    className='sr-only'
+                    disabled={pendingProof}
+                    onChange={(event) => {
+                      actions.onUpload(application, event.target.files?.[0])
+                      event.target.value = ''
+                    }}
+                  />
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    render={<span />}
+                    nativeButton={false}
+                    disabled={pendingProof}
+                  >
+                    <ImageUp data-icon='inline-start' aria-hidden='true' />
+                    {pendingProof ? t('Uploading...') : t('Upload proof')}
+                  </Button>
+                </label>
+              ) : null}
+              {application.status === 'completed' && application.proof_size ? (
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => actions.onProof(application)}
+                >
+                  <Eye data-icon='inline-start' aria-hidden='true' />
+                  {t('View proof')}
+                </Button>
+              ) : null}
+              {application.status === 'pending' ||
+              application.status === 'processing' ? (
+                <Button
+                  size='sm'
+                  variant='destructive'
+                  onClick={() => actions.onReject(application)}
+                >
+                  <XCircle data-icon='inline-start' aria-hidden='true' />
+                  {t('Reject')}
+                </Button>
+              ) : null}
+            </div>
+          )
+        },
       },
     ],
-    [actions, locale, t]
+    [actions, label, locale, t]
   )
 }

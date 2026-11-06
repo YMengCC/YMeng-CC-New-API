@@ -151,13 +151,17 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/invoice/admin/:id/file":                accessTokenScopeRule("billing:read"),
 
 	// router/api-router.go: private withdrawal profiles and administration
-	"GET /api/withdrawal/profile":            accessTokenScopeRule("profile:read"),
-	"GET /api/withdrawal/profile/qr":         accessTokenScopeRule("profile:read"),
-	"PUT /api/withdrawal/profile/qr":         accessTokenScopeRule("profile:write"),
-	"POST /api/withdrawal/":                  accessTokenScopeRule("wallet:write"),
-	"GET /api/withdrawal/admin/":             accessTokenScopeRule("billing:read"),
-	"GET /api/withdrawal/admin/:id/qr":       accessTokenScopeRule("billing:read"),
-	"PATCH /api/withdrawal/admin/:id/status": accessTokenScopeRule("billing:write"),
+	"GET /api/withdrawal/profile":               accessTokenScopeRule("profile:read"),
+	"GET /api/withdrawal/profile/qr":            accessTokenScopeRule("profile:read"),
+	"PUT /api/withdrawal/profile/qr":            accessTokenScopeRule("profile:write"),
+	"GET /api/withdrawal/self":                  accessTokenScopeRule("wallet:read"),
+	"POST /api/withdrawal/":                     accessTokenScopeRule("wallet:write"),
+	"GET /api/withdrawal/admin/":                accessTokenScopeRule("billing:read"),
+	"GET /api/withdrawal/admin/:id/qr":          accessTokenScopeRule("billing:read"),
+	"GET /api/withdrawal/admin/:id/proof":       accessTokenScopeRule("billing:read"),
+	"POST /api/withdrawal/admin/:id/processing": accessTokenScopeRule("billing:write"),
+	"POST /api/withdrawal/admin/:id/proof":      accessTokenScopeRule("billing:write"),
+	"POST /api/withdrawal/admin/:id/reject":     accessTokenScopeRule("billing:write"),
 
 	// router/api-router.go: /api/support-ticket (browser session only)
 	"POST /api/support-ticket/":                    accessTokenSessionRule,

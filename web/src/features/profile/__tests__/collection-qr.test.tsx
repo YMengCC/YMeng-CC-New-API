@@ -255,6 +255,35 @@ it('keeps the selection and cropped upload after an upload failure, then retries
   await waitFor(() => expect(put).toHaveBeenCalledTimes(2))
 })
 
+it('shows a prominent warning card until the QR area is selected', async () => {
+  configureImage(400, 400)
+  renderCard()
+  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+    target: { files: [pngFile()] },
+  })
+  const cropArea = await loadCropImage()
+  expect(screen.getByText('Select the QR code area first')).toBeVisible()
+  const save = screen.getByRole('button', {
+    name: 'Save collection QR code',
+  })
+  expect(save).toBeDisabled()
+  expect(save).toHaveAttribute('aria-describedby', 'collection-qr-crop-alert')
+
+  fireEvent.pointerDown(cropArea, { clientX: 0, clientY: 0, pointerId: 1 })
+  fireEvent.pointerMove(cropArea, { clientX: 120, clientY: 120, pointerId: 1 })
+  fireEvent.pointerUp(cropArea, { clientX: 120, clientY: 120, pointerId: 1 })
+  await waitFor(() =>
+    expect(
+      screen.queryByText('Select the QR code area first')
+    ).not.toBeInTheDocument()
+  )
+  expect(
+    screen.queryByText(
+      'Drag on the image above to draw a square around the QR code. Saving stays disabled until you select an area.'
+    )
+  ).not.toBeInTheDocument()
+})
+
 it('clamps a touch selection to the image and enforces the minimum square size', async () => {
   configureImage(200, 200)
   renderCard()
