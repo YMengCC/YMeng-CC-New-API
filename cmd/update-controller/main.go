@@ -134,6 +134,7 @@ type controller struct {
 	lastCleanupID     string
 	persistenceFailed bool
 	workerRunning     bool
+	nextReconcile     time.Time
 	proxy             proxyRuntime
 }
 
@@ -194,7 +195,7 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 	controller.switchIntent = state.SwitchIntent
 	controller.lastCleanupID = state.LastCleanupID
 	if engine != nil && (controller.cleanup != nil || controller.switchIntent != nil || controller.drainingContainer != "") {
-		controller.recoverRetainedState()
+		// The background worker reconciles retained state before any cleanup.
 		return controller, nil
 	}
 	if controller.status.OperationID != "" && controller.status.State != "draining" {
@@ -244,9 +245,6 @@ func newController(config updateConfig, engine dockerEngine, client *http.Client
 		if err := controller.persist(); err != nil {
 			return controller, err
 		}
-	}
-	if controller.drainingContainer != "" && engine != nil {
-		go controller.resumeDrain()
 	}
 	return controller, nil
 }
@@ -473,7 +471,10 @@ func (u *controller) startUpdate(ctx context.Context, tag string) (siteupdate.St
 }
 
 func (u *controller) runUpdate(operationID, tag string) {
-	defer func() { u.mu.Lock(); u.workerRunning = false; u.mu.Unlock() }()
+	defer func() {
+		u.releaseWorker(operationID)
+		u.reconcileRetainedState(context.Background())
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), u.config.operationTimeout)
 	defer cancel()
 	fail := func(reason string, _ string) {
@@ -600,29 +601,6 @@ func (u *controller) runUpdate(operationID, tag string) {
 		common.SysError("managed update state persistence failed after traffic switch")
 		return
 	}
-
-	if _, err := u.lifecycle(ctx, oldAddress, http.MethodPost); err != nil {
-		_ = u.setStatus(func(status *siteupdate.Status) {
-			status.State = "draining"
-			status.Reason = "Traffic switched, but the previous container did not acknowledge drain; it was retained for manual recovery."
-		})
-		return
-	}
-	if err := u.waitDrained(ctx, oldAddress); err != nil {
-		_ = u.setStatus(func(status *siteupdate.Status) {
-			status.State = "draining"
-			status.Reason = "Traffic switched; the previous container is still draining and was retained."
-		})
-		return
-	}
-	_ = u.setStatus(func(status *siteupdate.Status) {
-		status.State = "completed"
-		status.CurrentVersion = tag
-		status.TargetVersion = ""
-		status.OperationID = ""
-		status.Draining = false
-		status.Reason = "Update completed; the previous container was retained after draining. Manual cleanup is required before another update."
-	})
 }
 
 type containerAddressInfo struct {
@@ -706,7 +684,8 @@ func (u *controller) waitDrained(ctx context.Context, address containerAddressIn
 	defer ticker.Stop()
 	for {
 		snapshot, err := u.lifecycle(ctx, address, http.MethodGet)
-		if err == nil && snapshot.Protocol == lifecycleProtocol && snapshot.SafeToStop {
+		if err == nil && snapshot.Protocol == lifecycleProtocol && snapshot.Ready && snapshot.Draining &&
+			snapshot.SafeToStop && snapshot.ActiveRequests == 0 && snapshot.PendingWrites == 0 {
 			return nil
 		}
 		select {
@@ -717,39 +696,52 @@ func (u *controller) waitDrained(ctx context.Context, address containerAddressIn
 	}
 }
 
-func (u *controller) resumeDrain() {
-	ctx, cancel := context.WithTimeout(context.Background(), u.config.operationTimeout)
-	defer cancel()
+func (u *controller) resumeDrain(ctx context.Context) error {
 	u.mu.Lock()
-	containerName := u.drainingContainer
-	if u.cleanup != nil {
-		containerName = u.cleanup.Old.ID
+	if u.cleanup == nil {
+		u.mu.Unlock()
+		return fmt.Errorf("cleanup_identity_mismatch")
 	}
+	record := *u.cleanup
 	u.mu.Unlock()
-	container, err := u.engine.Inspect(ctx, containerName)
-	if err != nil {
-		return
+	if err := u.validateCleanupActive(ctx, record); err != nil {
+		return err
 	}
-	address, err := u.containerAddress(container)
+	container, err := u.engine.Inspect(ctx, record.Old.ID)
 	if err != nil {
-		return
+		if dockerNotFound(err) {
+			return fmt.Errorf("cleanup_identity_mismatch")
+		}
+		return fmt.Errorf("cleanup_engine_unavailable")
 	}
-	// Drain is idempotent and is repeated only after a controller restart, when
-	// the persisted state proves that HAProxy had already switched traffic.
+	if container.ID != record.Old.ID || container.Labels[managedLabel] != "true" || !container.State.Running || container.State.Restarting || container.State.Dead {
+		return fmt.Errorf("cleanup_identity_mismatch")
+	}
+	address, err := addressOnNetwork(container, record.Old.NetworkID)
+	if err != nil {
+		return fmt.Errorf("cleanup_identity_mismatch")
+	}
+	// Repeating drain is safe only after verifying the committed active route.
 	if _, err := u.lifecycle(ctx, address, http.MethodPost); err != nil {
-		return
+		return fmt.Errorf("cleanup_not_drained")
 	}
 	if err := u.waitDrained(ctx, address); err != nil {
-		return
+		return fmt.Errorf("cleanup_not_drained")
 	}
-	_ = u.setStatus(func(status *siteupdate.Status) {
-		status.State = "completed"
-		status.CurrentVersion = status.TargetVersion
+	if err := u.setStatus(func(status *siteupdate.Status) {
+		status.State = "cleaning"
+		if status.TargetVersion != "" {
+			status.CurrentVersion = status.TargetVersion
+		}
 		status.TargetVersion = ""
 		status.OperationID = ""
 		status.Draining = false
-		status.Reason = "Update completed; the previous container was retained after draining. Manual cleanup is required before another update."
-	})
+		status.ReasonCode = ""
+		status.Reason = "Cleaning up the previous instance. The active service remains available."
+	}); err != nil {
+		return fmt.Errorf("cleanup_persistence_failed")
+	}
+	return nil
 }
 
 func switchHAProxyMap(ctx context.Context, socketPath, mapPath, key, target string) error {
@@ -795,7 +787,6 @@ func (u *controller) serve(w http.ResponseWriter, r *http.Request) {
 	var result any
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/status":
-		u.refreshRetainedState(r.Context())
 		result = u.snapshot()
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/cleanup":
 		var fields map[string]string
@@ -865,6 +856,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	go controller.runMaintenance(context.Background())
 	server := &http.Server{
 		Addr:              ":8080",
 		Handler:           http.HandlerFunc(controller.serve),

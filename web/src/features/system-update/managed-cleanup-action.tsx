@@ -36,26 +36,46 @@ export function ManagedCleanupAction(props: ManagedCleanupActionProps) {
   const status = props.status
   if (!status?.cleanup_supported || !status.cleanup) return null
   const cleaning = status.state === 'cleaning'
+  const manualCleanup =
+    status.state === 'cleanup_failed' || status.state === 'completed'
+  const retrying =
+    status.state === 'cleanup_failed' &&
+    !!status.reason_code &&
+    [
+      'cleanup_active_unavailable',
+      'cleanup_engine_unavailable',
+      'cleanup_not_drained',
+      'cleanup_persistence_failed',
+      'cleanup_stop_pending',
+      'cleanup_remove_failed',
+    ].includes(status.reason_code)
 
   return (
     <div className='flex min-w-0 flex-col items-start gap-2'>
-      <p className='text-sm font-medium'>
-        {t('Old instance awaiting cleanup')}
-      </p>
+      {manualCleanup && (
+        <p className='text-sm font-medium'>
+          {t('Old instance awaiting cleanup')}
+        </p>
+      )}
       <p className='text-muted-foreground text-sm wrap-anywhere'>
         {status.cleanup.target_name}
       </p>
       {cleaning && <p role='status'>{t('Cleaning up old instance...')}</p>}
-      <Button
-        type='button'
-        variant='outline'
-        disabled={!cleanup.canClean || cleanup.pending || cleaning}
-        onClick={cleanup.openConfirmation}
-      >
-        {cleaning
-          ? t('Cleaning up old instance...')
-          : t('Clean up old instance')}
-      </Button>
+      {retrying && (
+        <p role='status' className='text-muted-foreground text-sm'>
+          {t('Automatic cleanup will retry in 30 seconds.')}
+        </p>
+      )}
+      {manualCleanup && (
+        <Button
+          type='button'
+          variant='outline'
+          disabled={!cleanup.canClean || cleanup.pending}
+          onClick={cleanup.openConfirmation}
+        >
+          {t('Clean up old instance')}
+        </Button>
+      )}
       <ConfirmDialog
         open={cleanup.confirmation !== null}
         onOpenChange={(open) => {

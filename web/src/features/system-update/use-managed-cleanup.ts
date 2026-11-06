@@ -52,7 +52,7 @@ export function useManagedCleanup(
     status.can_cleanup &&
     cleanupId &&
     !status.operation_id &&
-    !status.draining &&
+    (!status.draining || status.state === 'cleanup_failed') &&
     status.state !== 'cleaning'
   )
   const current = useRef({ canClean, cleanupId })
@@ -60,7 +60,11 @@ export function useManagedCleanup(
   const previousState = useRef(status?.state)
 
   useEffect(() => {
-    if (previousState.current === 'cleaning' && status?.state !== 'cleaning') {
+    if (
+      previousState.current &&
+      previousState.current !== 'ready' &&
+      status?.state === 'ready'
+    ) {
       void client.invalidateQueries({
         queryKey: ['managed-system-update', 'releases'],
       })
@@ -117,7 +121,7 @@ export function useManagedCleanup(
         !latestStatus.can_cleanup ||
         !latestStatus.supported ||
         !latestStatus.cleanup_supported ||
-        latestStatus.draining ||
+        (latestStatus.draining && latestStatus.state !== 'cleanup_failed') ||
         latestStatus.operation_id ||
         latestStatus.state === 'cleaning' ||
         current.current.cleanupId !== cleanupId ||

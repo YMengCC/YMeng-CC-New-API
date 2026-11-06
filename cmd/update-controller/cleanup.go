@@ -19,6 +19,8 @@ const (
 	cleanupStopRequested   = "stop_requested"
 	cleanupStopped         = "stopped"
 	cleanupRemoveRequested = "remove_requested"
+	reconcileInterval      = 5 * time.Second
+	cleanupRetryInterval   = 30 * time.Second
 )
 
 func validHexID(value string, size int) bool {
@@ -76,7 +78,8 @@ func (u *controller) snapshotLocked() siteupdate.Status {
 	if u.workerRunning && status.OperationID == "" {
 		status.OperationID = "finishing"
 	}
-	status.CanCleanup = u.status.Supported && u.cleanup != nil && !u.workerRunning && u.switchIntent == nil && !u.status.Draining && u.status.OperationID == ""
+	status.CanCleanup = u.status.Supported && u.cleanup != nil && u.status.State == "cleanup_failed" &&
+		!u.workerRunning && u.switchIntent == nil && u.status.OperationID == ""
 	if u.cleanup != nil {
 		status.Cleanup = &siteupdate.CleanupStatus{CleanupID: u.cleanup.CleanupID, TargetName: u.cleanup.Old.Name, Phase: u.cleanup.Phase, LastErrorCode: u.cleanup.LastErrorCode}
 	}
@@ -86,6 +89,10 @@ func (u *controller) snapshotLocked() siteupdate.Status {
 func (u *controller) cleanupFailure(code string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	u.cleanupFailureLocked(code)
+}
+
+func (u *controller) cleanupFailureLocked(code string) {
 	if u.cleanup == nil {
 		return
 	}
@@ -96,6 +103,11 @@ func (u *controller) cleanupFailure(code string) {
 	u.status.OperationID = ""
 	u.status.ReasonCode = code
 	u.status.Reason = cleanupReason(code)
+	if code == "cleanup_not_drained" && u.status.Draining {
+		u.status.State = "draining"
+		u.status.Reason = "Traffic switched; the previous container is still draining and was retained."
+	}
+	u.nextReconcile = time.Now().Add(cleanupRetryInterval)
 	common.SysLog(common.LogText("managed cleanup failed: cleanup_id=%s old_id=%s reason=%s", record.CleanupID, record.Old.ID, code))
 	if err := u.persistLocked(); err != nil {
 		common.SysError("managed cleanup failure could not be persisted")
@@ -116,6 +128,8 @@ func cleanupReason(code string) string {
 		return "The previous instance could not be removed. Check the controller and retry cleanup."
 	case "cleanup_identity_mismatch":
 		return "Cleanup could not verify the retained instance identity. No container was removed."
+	case "cleanup_engine_unavailable":
+		return "The container engine is temporarily unavailable. Cleanup will retry automatically."
 	default:
 		return "Cleanup could not verify the active instance. Check the controller and retry."
 	}
@@ -152,9 +166,15 @@ func (u *controller) reserveCleanup(id string) (siteupdate.Status, bool, error) 
 		}
 		return u.snapshotLocked(), false, cleanupError("cleanup_conflict")
 	}
-	if !u.status.Supported || u.status.Draining || u.status.OperationID != "" {
+	if !u.status.Supported || (u.status.Draining && u.status.State != "cleanup_failed") || u.status.OperationID != "" {
 		return u.snapshotLocked(), false, cleanupError("cleanup_unavailable")
 	}
+	return u.acceptCleanupLocked()
+}
+
+// acceptCleanupLocked persists a cleanup reservation while the caller owns the worker.
+func (u *controller) acceptCleanupLocked() (siteupdate.Status, bool, error) {
+	id := u.cleanup.CleanupID
 	record := *u.cleanup
 	if record.Phase == cleanupRetained {
 		record.Phase = cleanupValidating
@@ -168,6 +188,7 @@ func (u *controller) reserveCleanup(id string) (siteupdate.Status, bool, error) 
 	state.Status.Reason = "Cleaning up the previous instance. The active service remains available."
 	if err := u.store.save(state); err != nil {
 		u.persistenceFailed = true
+		u.cleanupFailureLocked("cleanup_persistence_failed")
 		return u.snapshotLocked(), false, cleanupError("cleanup_persistence_failed")
 	}
 	u.cleanup, u.status = &record, state.Status
@@ -205,7 +226,16 @@ func (u *controller) cleanupPhase(id, phase string) error {
 
 func (u *controller) validateCleanupActive(ctx context.Context, record cleanupRecord) error {
 	active, err := u.engine.Inspect(ctx, record.Active.ID)
-	if err != nil || active.ID != record.Active.ID || active.ID == record.Old.ID || active.Labels[managedLabel] != "true" || !active.State.Running || active.State.Restarting || active.State.Dead {
+	if err != nil {
+		if dockerNotFound(err) {
+			return fmt.Errorf("cleanup_identity_mismatch")
+		}
+		return fmt.Errorf("cleanup_active_unavailable")
+	}
+	if active.ID != record.Active.ID || active.ID == record.Old.ID || active.Labels[managedLabel] != "true" {
+		return fmt.Errorf("cleanup_identity_mismatch")
+	}
+	if !active.State.Running || active.State.Restarting || active.State.Dead {
 		return fmt.Errorf("cleanup_active_unavailable")
 	}
 	address, err := addressOnNetwork(active, record.Active.NetworkID)
@@ -236,6 +266,19 @@ func (u *controller) runCleanup(id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), max(u.config.operationTimeout, 150*time.Second))
 	defer cancel()
 	u.mu.Lock()
+	draining := u.status.Draining
+	u.mu.Unlock()
+	if draining {
+		if err := u.resumeDrain(ctx); err != nil {
+			u.cleanupFailure(err.Error())
+			return
+		}
+	}
+	u.cleanupInstance(ctx, id)
+}
+
+func (u *controller) cleanupInstance(ctx context.Context, id string) {
+	u.mu.Lock()
 	if u.cleanup == nil || u.cleanup.CleanupID != id {
 		u.mu.Unlock()
 		return
@@ -249,6 +292,10 @@ func (u *controller) runCleanup(id string) {
 	old, err := u.engine.Inspect(ctx, record.Old.ID)
 	if dockerNotFound(err) && record.Phase != cleanupRetained && record.Phase != cleanupValidating {
 		u.finishCleanup(id)
+		return
+	}
+	if err != nil && !dockerNotFound(err) {
+		u.cleanupFailure("cleanup_engine_unavailable")
 		return
 	}
 	if err != nil || old.ID != record.Old.ID || old.Labels[managedLabel] != "true" {
@@ -356,37 +403,38 @@ func (u *controller) finishCleanup(id string) {
 	state.Status.Draining = false
 	state.Status.Reason = "Previous instance cleanup completed. New updates can now be installed."
 	if err := u.store.save(state); err != nil {
-		u.persistenceFailed = true
-		u.status.State = "cleanup_failed"
-		u.status.OperationID = ""
-		u.status.ReasonCode = "cleanup_persistence_failed"
-		u.status.Reason = cleanupReason(u.status.ReasonCode)
+		u.cleanupFailureLocked("cleanup_persistence_failed")
 		return
 	}
 	u.status, u.cleanup, u.drainingContainer, u.lastCleanupID = state.Status, nil, "", id
 	u.persistenceFailed = false
-	u.workerRunning = false
+	u.nextReconcile = time.Time{}
 	common.SysLog(common.LogText("managed cleanup completed: cleanup_id=%s active_id=%s", id, state.ActiveRef.ID))
 }
 
 // prepareRetainedCleanup upgrades legacy name-only state while the old instance
-// can still prove its identity and drain state. A missing name is not success.
+// can still prove its identity and drain state. The caller owns the worker.
+// A missing name is not success.
 func (u *controller) prepareRetainedCleanup(ctx context.Context) error {
 	u.mu.Lock()
-	if u.cleanup != nil || u.drainingContainer == "" || u.workerRunning || u.switchIntent != nil {
+	if u.cleanup != nil || u.drainingContainer == "" || u.switchIntent != nil {
 		u.mu.Unlock()
 		return nil
 	}
 	activeName, oldName := u.active, u.drainingContainer
-	resumingDrain := u.status.State == "draining"
-	u.workerRunning = true
+	resumingDrain := u.status.Draining || u.status.State == "draining"
 	u.mu.Unlock()
-	defer func() { u.mu.Lock(); u.workerRunning = false; u.mu.Unlock() }()
 	active, err := u.engine.Inspect(ctx, activeName)
 	if err != nil {
+		if !dockerNotFound(err) {
+			return fmt.Errorf("cleanup_engine_unavailable")
+		}
 		return fmt.Errorf("cleanup_identity_mismatch")
 	}
 	old, err := u.engine.Inspect(ctx, oldName)
+	if err != nil && !dockerNotFound(err) {
+		return fmt.Errorf("cleanup_engine_unavailable")
+	}
 	if err != nil || active.ID == old.ID || old.Labels[managedLabel] != "true" || !old.State.Running {
 		return fmt.Errorf("cleanup_identity_mismatch")
 	}
@@ -429,66 +477,84 @@ func writeCleanupError(w http.ResponseWriter, status int, operationError *siteup
 	_, _ = w.Write(data)
 }
 
-func (u *controller) refreshRetainedState(ctx context.Context) {
-	u.mu.Lock()
-	needsSwitch := u.switchIntent != nil && !u.workerRunning
-	if needsSwitch {
-		u.workerRunning = true
-	}
-	u.mu.Unlock()
-	if needsSwitch {
-		err := u.reconcileSwitch(ctx)
-		u.mu.Lock()
-		u.workerRunning = false
-		if err != nil {
-			u.status.State = "blocked"
-			u.status.Reason = cleanupReason("cleanup_route_mismatch")
+func (u *controller) runMaintenance(ctx context.Context) {
+	ticker := time.NewTicker(reconcileInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
 		}
-		u.mu.Unlock()
-	}
-	if u.engine != nil {
-		if err := u.prepareRetainedCleanup(ctx); err != nil {
-			u.mu.Lock()
-			u.status.ReasonCode, u.status.Reason = err.Error(), cleanupReason(err.Error())
-			u.mu.Unlock()
+		u.reconcileRetainedState(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
-	}
-	u.mu.Lock()
-	resume := u.status.State == "draining" && u.cleanup != nil && !u.workerRunning && u.switchIntent == nil
-	if resume {
-		u.workerRunning = true
-	}
-	u.mu.Unlock()
-	if resume {
-		go func() {
-			defer func() { u.mu.Lock(); u.workerRunning = false; u.mu.Unlock() }()
-			u.resumeDrain()
-		}()
 	}
 }
 
-func (u *controller) recoverRetainedState() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if u.switchIntent != nil {
-		if err := u.reconcileSwitch(ctx); err != nil {
-			u.status.State = "blocked"
-			u.status.ReasonCode = "cleanup_route_mismatch"
-			u.status.Reason = cleanupReason(u.status.ReasonCode)
-			return
-		}
-	}
-	if u.cleanup == nil {
-		if err := u.prepareRetainedCleanup(ctx); err != nil {
-			u.status.ReasonCode = err.Error()
-			u.status.Reason = cleanupReason(err.Error())
-			return
-		}
-	}
-	if u.cleanup != nil && u.cleanup.Phase != cleanupRetained && u.status.State == "cleaning" {
-		u.workerRunning = true
-		go u.runCleanup(u.cleanup.CleanupID)
+func (u *controller) reconcileRetainedState(parent context.Context) {
+	u.mu.Lock()
+	if u.engine == nil || !u.status.Supported || u.workerRunning ||
+		(u.cleanup == nil && u.switchIntent == nil && u.drainingContainer == "") || time.Now().Before(u.nextReconcile) {
+		u.mu.Unlock()
 		return
 	}
-	u.refreshRetainedState(ctx)
+	if u.switchIntent == nil && (u.status.ReasonCode == "cleanup_identity_mismatch" || u.status.ReasonCode == "cleanup_route_mismatch") {
+		u.mu.Unlock()
+		return
+	}
+	u.workerRunning = true
+	needsSwitch := u.switchIntent != nil
+	u.mu.Unlock()
+	defer func() {
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		u.workerRunning = false
+		if u.cleanup != nil || u.drainingContainer != "" || u.switchIntent != nil {
+			u.nextReconcile = time.Now().Add(cleanupRetryInterval)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(parent, max(u.config.operationTimeout, 150*time.Second))
+	defer cancel()
+	if needsSwitch {
+		if err := u.reconcileSwitch(ctx); err != nil {
+			_ = u.setStatus(func(status *siteupdate.Status) {
+				status.State = "blocked"
+				status.OperationID = ""
+				status.ReasonCode = "cleanup_route_mismatch"
+				status.Reason = cleanupReason(status.ReasonCode)
+			})
+			return
+		}
+	}
+	if err := u.prepareRetainedCleanup(ctx); err != nil {
+		_ = u.setStatus(func(status *siteupdate.Status) {
+			status.State = "cleanup_failed"
+			status.OperationID = ""
+			status.ReasonCode, status.Reason = err.Error(), cleanupReason(err.Error())
+		})
+		return
+	}
+	u.mu.Lock()
+	if u.cleanup == nil || u.switchIntent != nil {
+		u.mu.Unlock()
+		return
+	}
+	resume := u.status.Draining || u.status.State == "draining"
+	id := u.cleanup.CleanupID
+	u.mu.Unlock()
+	if resume {
+		if err := u.resumeDrain(ctx); err != nil {
+			u.cleanupFailure(err.Error())
+			return
+		}
+	}
+	u.mu.Lock()
+	_, start, err := u.acceptCleanupLocked()
+	u.mu.Unlock()
+	if err != nil || !start {
+		return
+	}
+	u.cleanupInstance(ctx, id)
 }
