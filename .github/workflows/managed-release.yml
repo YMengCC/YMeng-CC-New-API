@@ -260,18 +260,19 @@ jobs:
             verified-release/signing-public.pem <(jq -c '.from_versions' .github/update-compatibility.json) \
             .github/managed-update-evidence.json .github/direct-upgrade-results.json \
             verified-release/update-manifest.new.json
-          cmp verified-release/update-manifest.json verified-release/update-manifest.new.json && {
-            echo '::error::The evidence ledger did not add any approved direct-upgrade sources.'
-            exit 1
-          }
+          jq -e --slurpfile previous verified-release/update-manifest.json \
+            '(.from_versions | length) > ($previous[0].from_versions | length)' \
+            verified-release/update-manifest.new.json >/dev/null
           openssl pkeyutl -sign -inkey signing-private.pem -rawin \
             -in verified-release/update-manifest.new.json -out verified-release/update-manifest.new.sig
           base64 -w 0 verified-release/update-manifest.new.sig > verified-release/update-manifest.sig.b64
           mv verified-release/update-manifest.sig.b64 verified-release/update-manifest.sig.new
+          cp verified-release/update-manifest.new.json verified-release/update-manifest.json
+          cp verified-release/update-manifest.sig.new verified-release/update-manifest.sig
           gh release upload "$RELEASE_TAG" \
-            verified-release/update-manifest.new.json --clobber
+            verified-release/update-manifest.json --clobber
           gh release upload "$RELEASE_TAG" \
-            verified-release/update-manifest.sig.new --clobber
+            verified-release/update-manifest.sig --clobber
 
       - name: Re-download and verify the signed direct-upgrade manifest
         env:
