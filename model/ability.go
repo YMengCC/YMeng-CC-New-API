@@ -116,7 +116,7 @@ func GetChannel(
 	if err != nil {
 		return nil, err
 	}
-	abilities = filterAbilitiesByConstraints(abilities, model, filters)
+	abilities = selectableChannelAbilities(abilities, model, filters)
 	// Like the memory cache, retry with the routing name (for example without
 	// @ modifiers) when no channel serves the exact name.
 	if normalized := ratio_setting.RoutingMatchModelName(model); len(abilities) == 0 && normalized != "" && normalized != model {
@@ -124,7 +124,7 @@ func GetChannel(
 		if err != nil {
 			return nil, err
 		}
-		abilities = filterAbilitiesByConstraints(abilities, model, filters)
+		abilities = selectableChannelAbilities(abilities, model, filters)
 	}
 	if len(abilities) > 0 {
 		priorities := make([]int64, 0)
@@ -170,6 +170,25 @@ func GetChannel(
 	}
 	err = DB.First(&channel, "id = ?", channel.Id).Error
 	return &channel, err
+}
+
+// selectableChannelAbilities applies request filters, then removes channels
+// that this request has already attempted. Keeping every candidate when the
+// exclusion leaves none preserves the last upstream error.
+func selectableChannelAbilities(abilities []Ability, modelName string, filters []dto.ChannelFilter) []Ability {
+	filtered := filterAbilitiesByConstraints(abilities, modelName, filters)
+	excluded := excludedChannelIDs(filters)
+	if len(excluded) == 0 {
+		return filtered
+	}
+	selectable := lo.Filter(filtered, func(ability Ability, _ int) bool {
+		_, excludedID := excluded[ability.ChannelId]
+		return !excludedID
+	})
+	if len(selectable) == 0 {
+		return filtered
+	}
+	return selectable
 }
 
 // filterAbilitiesByConstraints applies the same ChannelSatisfiesFilters

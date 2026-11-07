@@ -40,6 +40,7 @@ const (
 	FilterTaskPluginEndpoint ChannelFilterKind = "task_plugin_endpoint"
 	FilterTaskPluginIdentity ChannelFilterKind = "task_plugin_identity"
 	FilterResponsesWebSocket ChannelFilterKind = "responses_websocket"
+	FilterExcludedChannelIDs ChannelFilterKind = "excluded_channel_ids"
 )
 
 type ChannelFilter struct {
@@ -51,6 +52,7 @@ type ChannelFilter struct {
 	// TaskPluginRelayOnly excludes endpoint candidates after an ordinary relay
 	// channel wins selection, so retries keep using the same protocol handler.
 	TaskPluginRelayOnly bool
+	ExcludedChannelIDs  map[int]struct{}
 }
 
 type ChannelConstraints struct {
@@ -70,6 +72,27 @@ func (cc *ChannelConstraints) AddFilter(f ChannelFilter) {
 		return
 	}
 	cc.Filters = append(cc.Filters, f)
+}
+
+// ExcludeChannelID keeps a failed channel out of this request's remaining
+// ordinary channel selections. A pinned channel is intentionally still allowed.
+func (cc *ChannelConstraints) ExcludeChannelID(channelID int) {
+	if cc == nil || channelID == 0 {
+		return
+	}
+	for i := range cc.Filters {
+		if cc.Filters[i].Kind == FilterExcludedChannelIDs {
+			if cc.Filters[i].ExcludedChannelIDs == nil {
+				cc.Filters[i].ExcludedChannelIDs = make(map[int]struct{})
+			}
+			cc.Filters[i].ExcludedChannelIDs[channelID] = struct{}{}
+			return
+		}
+	}
+	cc.AddFilter(ChannelFilter{
+		Kind:               FilterExcludedChannelIDs,
+		ExcludedChannelIDs: map[int]struct{}{channelID: {}},
+	})
 }
 
 // ResolvedPin returns the winning pin after priority resolution.

@@ -218,6 +218,12 @@ func TestDecideRelayRetryReasons(t *testing.T) {
 			RequestPolicy(c).SessionModeSource = "global"
 		}, want: PolicyDecision{Action: "stop", Reason: "strict_session", Source: "global"}},
 		{name: "nil error", retries: 1, want: PolicyDecision{Action: "stop", Reason: "request_completed", Source: "system"}},
+		{name: "response already written", err: upstream(http.StatusForbidden), retries: 1, setup: func(c *gin.Context) {
+			_, _ = c.Writer.WriteString("forbidden")
+		}, want: PolicyDecision{Action: "stop", Reason: "response_written", Source: "system"}},
+		{name: "keepalive headers committed without content", err: upstream(http.StatusForbidden), retries: 1, setup: func(c *gin.Context) {
+			c.Writer.WriteHeader(http.StatusOK)
+		}, want: PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())

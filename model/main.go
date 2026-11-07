@@ -63,6 +63,12 @@ func initCol() {
 	}
 }
 
+// InitModelColumnNamesForTest initializes the dialect-quoted column names when
+// a test opens a database without running the server's startup sequence.
+func InitModelColumnNamesForTest() {
+	initCol()
+}
+
 var DB *gorm.DB
 
 var LOG_DB *gorm.DB

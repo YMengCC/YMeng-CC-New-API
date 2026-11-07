@@ -314,3 +314,53 @@ func TestChannelRetrySkippingUnavailableGroupClearsAffinityOffset(t *testing.T) 
 	require.NotNil(t, channel)
 	assert.Equal(t, 2502, channel.Id)
 }
+
+func TestChannelRetryExcludesFailedChannelAcrossPrioritiesAndGroups(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	common.RetryTimes = 2
+	previousDBType := common.MainDatabaseType()
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	model.InitModelColumnNamesForTest()
+	t.Cleanup(func() {
+		common.SetMainDatabaseType(previousDBType)
+		model.InitModelColumnNamesForTest()
+	})
+	const modelName = "failed-channel-exclusion-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2601, "vip", modelName, 20)
+	createChannelSelectAutoGroupsChannel(t, db, 2602, "vip", modelName, 10)
+	createChannelSelectAutoGroupsChannel(t, db, 2701, "default", modelName, 20)
+	model.InitChannelCache()
+
+	for _, cacheEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cache=%t", cacheEnabled), func(t *testing.T) {
+			common.MemoryCacheEnabled = cacheEnabled
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+			common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []string{"vip", "default"})
+			common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+			param := &RetryParam{Ctx: ctx, TokenGroup: "vip", ModelName: modelName, Retry: common.GetPointer(0)}
+			first, group, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, first)
+			require.Equal(t, 2601, first.Id)
+			assert.Equal(t, "vip", group)
+			decision := PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}
+			ExcludeFailedChannelForRetry(ctx, first.Id, decision)
+			require.True(t, param.AdvanceAfterFailure())
+			second, _, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, second)
+			assert.Equal(t, 2602, second.Id)
+			ExcludeFailedChannelForRetry(ctx, second.Id, decision)
+			require.True(t, param.AdvanceAfterFailure())
+			assert.True(t, param.canMoveToNextGroup(), "another group is still available after both vip channels fail")
+			param.groupIndex++
+			param.SetRetry(0)
+			third, group, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, third)
+			assert.Equal(t, 2701, third.Id)
+			assert.Equal(t, "default", group)
+		})
+	}
+}

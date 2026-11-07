@@ -237,6 +237,78 @@ func TestChannelAffinityRetryPriorities(t *testing.T) {
 	}
 }
 
+func TestUpstream403FallsBackToHealthyChannel(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			dsn := ""
+			if dialect.env != "" {
+				dsn = os.Getenv(dialect.env)
+				if dsn == "" {
+					t.Skipf("%s not configured", dialect.env)
+				}
+			}
+			db := modelManagementDB(t, dialect.kind, dsn)
+			previousRetryTimes := common.RetryTimes
+			previousMemoryCacheEnabled := common.MemoryCacheEnabled
+			common.RetryTimes = 1
+			t.Cleanup(func() {
+				common.RetryTimes = previousRetryTimes
+				common.MemoryCacheEnabled = previousMemoryCacheEnabled
+			})
+			const modelName = "403-fallback-model"
+			for _, id := range []int{31, 32} {
+				channel := model.Channel{
+					Id: id, Name: fmt.Sprintf("channel-%d", id), Type: constant.ChannelTypeOpenAI,
+					Key: "test-only", Status: common.ChannelStatusEnabled, Models: modelName, Group: "default",
+					Priority: common.GetPointer(int64(0)), Weight: common.GetPointer(uint(1)),
+				}
+				require.NoError(t, db.Create(&channel).Error)
+				require.NoError(t, channel.AddAbilities(db))
+			}
+
+			for _, cached := range []bool{false, true} {
+				t.Run(fmt.Sprintf("cache=%t", cached), func(t *testing.T) {
+					common.MemoryCacheEnabled = cached
+					model.InitChannelCache()
+					ctx := newPinRetryContext()
+					common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+					common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []string{"default"})
+					common.SetContextKey(ctx, constant.ContextKeyChannelId, 31)
+					constraints := service.GetChannelConstraints(ctx)
+					param := &service.RetryParam{Ctx: ctx, TokenGroup: "default", ModelName: modelName, Retry: common.GetPointer(0)}
+					bad, _, err := service.CacheGetRandomSatisfiedChannel(param)
+					require.NoError(t, err)
+					require.NotNil(t, bad)
+					decision := service.DecideRelayRetry(ctx, types.NewOpenAIError(errors.New("upstream forbidden"), types.ErrorCodeBadResponseStatusCode, http.StatusForbidden), param.RemainingRetryBudget())
+					assert.Equal(t, service.PolicyDecision{Action: "retry", Reason: "retry_status_matched", Source: "global"}, decision)
+					service.ExcludeFailedChannelForRetry(ctx, bad.Id, decision)
+					require.True(t, param.AdvanceAfterFailure())
+					healthy, group, err := service.CacheGetRandomSatisfiedChannel(param)
+					require.NoError(t, err)
+					require.NotNil(t, healthy)
+					assert.NotEqual(t, bad.Id, healthy.Id, "a same-priority retry must not reselect the failed channel")
+					assert.Equal(t, "default", group)
+
+					decision = service.DecideRelayRetry(ctx, types.NewOpenAIError(errors.New("upstream forbidden"), types.ErrorCodeBadResponseStatusCode, http.StatusForbidden), param.RemainingRetryBudget())
+					assert.Equal(t, service.PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}, decision, "one default retry is enough for two channels")
+					service.ExcludeFailedChannelForRetry(ctx, healthy.Id, decision)
+					assert.Len(t, constraints.Filters, 1, "a terminal failure does not change the exclusion set")
+
+					constraints.ExcludeChannelID(healthy.Id)
+					exhausted, _, err := service.CacheGetRandomSatisfiedChannel(param)
+					require.NoError(t, err)
+					require.NotNil(t, exhausted)
+					assert.Contains(t, []int{31, 32}, exhausted.Id, "an exhausted candidate set keeps the last upstream error context")
+					written := newPinRetryContext()
+					_, _ = written.Writer.WriteString("forbidden")
+					assert.Equal(t, service.PolicyDecision{Action: "stop", Reason: "response_written", Source: "system"}, service.DecideRelayRetry(written, types.NewOpenAIError(errors.New("upstream forbidden"), types.ErrorCodeBadResponseStatusCode, http.StatusForbidden), 1))
+				})
+			}
+		})
+	}
+}
+
 func TestRequestPolicyRoutingDatabaseMatrix(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {

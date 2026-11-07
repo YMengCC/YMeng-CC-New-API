@@ -129,12 +129,12 @@ func GetRandomSatisfiedChannel(
 	defer channelSyncLock.RUnlock()
 
 	// First, try to find channels with the exact model name.
-	channels, _ := filterCandidateIDs(group2model2channels[group][model], model, filters)
+	channels := selectableCachedChannelIDs(group2model2channels[group][model], model, filters)
 
 	// If no channels found, try to find channels with the normalized model name.
 	if len(channels) == 0 {
 		normalizedModel := ratio_setting.RoutingMatchModelName(model)
-		channels, _ = filterCandidateIDs(group2model2channels[group][normalizedModel], model, filters)
+		channels = selectableCachedChannelIDs(group2model2channels[group][normalizedModel], model, filters)
 	}
 
 	if len(channels) == 0 {
@@ -149,11 +149,11 @@ func GetRandomSatisfiedChannel(
 	}
 
 	uniquePriorities := make(map[int]bool)
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
+	for _, channelID := range channels {
+		if channel, ok := channelsIDM[channelID]; ok {
 			uniquePriorities[int(channel.GetPriority())] = true
 		} else {
-			return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channelId)
+			return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channelID)
 		}
 	}
 	var sortedUniquePriorities []int
@@ -170,14 +170,14 @@ func GetRandomSatisfiedChannel(
 	// get the priority for the given retry number
 	var sumWeight = 0
 	var targetChannels []*Channel
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
+	for _, channelID := range channels {
+		if channel, ok := channelsIDM[channelID]; ok {
 			if channel.GetPriority() == targetPriority {
 				sumWeight += channel.GetWeight()
 				targetChannels = append(targetChannels, channel)
 			}
 		} else {
-			return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channelId)
+			return nil, fmt.Errorf("database consistency error: channel #%d does not exist, please contact the administrator", channelID)
 		}
 	}
 

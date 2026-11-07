@@ -237,6 +237,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if decision.Action != "retry" || !retryParam.AdvanceAfterFailure() {
 			break
 		}
+		service.ExcludeFailedChannelForRetry(c, channel.Id, decision)
 	}
 
 	useChannel := c.GetStringSlice("use_channel")
@@ -637,6 +638,7 @@ func executeTaskSubmissionWith(
 		} else if !retryParam.AdvanceAfterFailure() {
 			break
 		}
+		service.ExcludeFailedChannelForRetry(c, channel.Id, decision)
 	}
 
 	useChannel := c.GetStringSlice("use_channel")

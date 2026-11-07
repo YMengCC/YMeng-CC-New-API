@@ -336,6 +336,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				if decision.Action != "retry" || !retry.AdvanceAfterFailure() {
 					return apiErr
 				}
+				service.ExcludeFailedChannelForRetry(c, channel.Id, decision)
 				continue
 			}
 			if !s.setTarget(target) {

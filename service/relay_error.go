@@ -21,6 +21,9 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if err == nil {
 		return PolicyDecision{Action: "stop", Reason: "request_completed", Source: "system"}
 	}
+	if c != nil && c.Writer != nil && c.Writer.Written() && c.Writer.Size() > 0 {
+		return PolicyDecision{Action: "stop", Reason: "response_written", Source: "system"}
+	}
 	if ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		source := RequestPolicy(c).SessionModeSource
 		if source == "" {
@@ -58,6 +61,16 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 
 func ShouldRetryRelayError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	return DecideRelayRetry(c, openaiErr, retryTimes).Action == "retry"
+}
+
+// ExcludeFailedChannelForRetry marks the channel as attempted for this request
+// only when another attempt can still be made. It does not disable a channel
+// globally or change its health.
+func ExcludeFailedChannelForRetry(c *gin.Context, channelID int, decision PolicyDecision) {
+	if c == nil || decision.Action != "retry" {
+		return
+	}
+	GetChannelConstraints(c).ExcludeChannelID(channelID)
 }
 
 func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo) {

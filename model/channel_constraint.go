@@ -63,6 +63,36 @@ func filterCandidateIDs(ids []int, modelName string, filters []dto.ChannelFilter
 	return kept, ""
 }
 
+func excludedChannelIDs(filters []dto.ChannelFilter) map[int]struct{} {
+	for _, filter := range filters {
+		if filter.Kind == dto.FilterExcludedChannelIDs {
+			return filter.ExcludedChannelIDs
+		}
+	}
+	return nil
+}
+
+// selectableCachedChannelIDs applies request filters, then removes channels
+// already attempted by this request. Keeping every candidate when the
+// exclusion leaves none preserves the last upstream error.
+func selectableCachedChannelIDs(ids []int, modelName string, filters []dto.ChannelFilter) []int {
+	filtered, _ := filterCandidateIDs(ids, modelName, filters)
+	excluded := excludedChannelIDs(filters)
+	if len(excluded) == 0 {
+		return filtered
+	}
+	selectable := make([]int, 0, len(filtered))
+	for _, channelID := range filtered {
+		if _, excludedID := excluded[channelID]; !excludedID {
+			selectable = append(selectable, channelID)
+		}
+	}
+	if len(selectable) == 0 {
+		return filtered
+	}
+	return selectable
+}
+
 func filtersByKind(filters []dto.ChannelFilter, kind dto.ChannelFilterKind) []dto.ChannelFilter {
 	var matched []dto.ChannelFilter
 	for _, filter := range filters {
