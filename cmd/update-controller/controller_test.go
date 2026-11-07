@@ -94,15 +94,20 @@ func TestCompatibilityRequiresAllSignedDeploymentDimensions(t *testing.T) {
 	manifest := siteupdate.Compatibility{
 		Version:               "v1.1.0",
 		Image:                 siteupdate.ImageRepository + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		FromVersions:          []string{"v1.0.0"},
+		FromVersions:          []string{"v1.0.0", "v0.9.0", "v0.8.0"},
 		SchemaUnchanged:       true,
 		SharedStateCompatible: true,
 		Platforms:             []string{"linux/amd64"},
 		Databases:             []string{"postgres"},
 	}
-	compatible, reason := controller.compatibility(manifest, "v1.0.0")
-	require.True(t, compatible)
-	assert.Empty(t, reason)
+	for _, source := range []string{"v1.0.0", "v0.9.0", "v0.8.0"} {
+		compatible, reason := controller.compatibility(manifest, source)
+		require.True(t, compatible, "direct upgrade from %s", source)
+		assert.Empty(t, reason)
+	}
+	compatible, reason := controller.compatibility(manifest, "v0.7.0")
+	assert.False(t, compatible)
+	assert.Equal(t, "Release is not approved from the current version.", reason)
 
 	manifest.Databases = []string{"mysql"}
 	compatible, reason = controller.compatibility(manifest, "v1.0.0")

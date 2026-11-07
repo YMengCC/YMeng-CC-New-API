@@ -11,9 +11,9 @@ const compatibility = {
 };
 
 test('only explicitly approved versions enter the signed manifest', () => {
-  const approval = { version: tag, from_versions: ['v1.2.12'] };
+  const approval = { version: tag, from_versions: ['v1.2.10', 'v1.2.11', 'v1.2.12'] };
   const result = buildManagedManifest(tag, image, compatibility, approval);
-  assert.deepEqual(result.from_versions, ['v1.2.12']);
+  assert.deepEqual(result.from_versions, ['v1.2.10', 'v1.2.11', 'v1.2.12']);
   assert.equal(result.version, tag);
   assert.equal(result.image, image);
   assert.deepEqual(result.platforms, compatibility.platforms);

@@ -154,7 +154,7 @@ curl -fsS http://localhost:3000/api/status
 
 #### 一次性配置
 
-完成以下部署配置后，用户可在后台点“一键更新”。维护者每次发布前，还需在 `.github/update-compatibility.json` 中记录本次版本及已验证的来源版本。
+完成以下部署配置后，用户可在后台点“一键更新”。维护者每次发布前，还需在 `.github/update-compatibility.json` 中记录本次版本及每个经过直接验证的旧来源版本，并在 `.github/managed-update-evidence.json` 写入对应目标 tag/镜像 digest 的三数据库测试证据。多个来源并列时，这些旧版本均可直接更新到本版，无需逐级递增。
 
 **1. GitHub Secrets（2 个）**
 
@@ -214,6 +214,8 @@ git push origin main && git push origin v1.1.30
 
 推送 tag 后，GitHub Actions 自动构建并推送多平台镜像，生成签名兼容性清单。CI 只会采用 `.github/update-compatibility.json` 中明确列出的来源版本，不会根据 tag 推断迁移兼容性。镜像、平台二进制、checksums、清单与签名均验证齐全后，Managed update image release 工作流才会将 draft Release 发布。
 
+若已发布的版本需要补充已实测的直接升级来源，可手动触发该工作流的 `workflow_dispatch` 重签名任务，指定原发布 tag 并启用 `re_sign_sources`。任务要求每个来源都有目标 tag 与原始不可变镜像 digest 对应的证据台账记录；只允许扩展 `from_versions`，保留版本、镜像、schema/共享状态、平台/数据库字段和现有签名密钥；重新签名后会重新下载验证签名、资产与镜像平台，Release 仍保持公开状态。该操作不重建镜像，也不把未实测的版本对写入清单。
+
 #### 工作原理
 
 - `NEW_API_IMAGE` 使用已验证的不可变 digest；两实例共享主数据库、日志数据库、Redis、`SESSION_SECRET`、`CRYPTO_SECRET` 和 `update_assets` 卷。
@@ -241,7 +243,7 @@ HAProxy 配置变更需先在隔离环境使用 HAProxy 3.2 校验，再通过�
 | 一键更新按钮灰色 | Release 缺少签名清单 | 检查 managed-release.yml workflow 是否成功；确认 Secrets 已配置 |
 | 更新时提示镜像拉取失败 | GHCR 包为私有 | 将包设为 Public |
 | workflow 报 secrets 缺失 | 未配置 GitHub Secrets | 按上方"一次性配置"添加 2 个 Secrets |
-| 提示不兼容当前版本 | 当前版本不在 from_versions 中 | 当前版本尚无经过验证的升级批准；维护者需验证并更新明确的来源版本清单，不能只添加标签绕过校验 |
+| 提示不兼容当前版本 | 当前版本不在签名的 from_versions 中 | 为该旧版到目标版本的直接升级补充三数据库及共享状态证据，经重签名任务加入清单；不能只添加 tag 绕过校验 |
 
 首次把直接访问 `new-api:3000` 的站点迁移到代理入口，必须先在独立端口验证并通过 Nginx graceful reload；不能保证改入口本身不影响已有连接。SQLite、破坏性 schema 迁移和未验证的后台任务交接不支持在线安装。必须先在测试环境验证，再处理生产入口。
 

@@ -28,6 +28,12 @@ function fixture(overrides = {}) {
 
 test('complete signed release assets permit publication', () => {
   assert.equal(verifyManagedRelease(fixture()).version, tag);
+  const directUpgrade = fixture({ from_versions: ['v1.2.2', 'v1.2.3', 'v1.2.4'] });
+  assert.deepEqual(verifyManagedRelease(directUpgrade).from_versions, ['v1.2.2', 'v1.2.3', 'v1.2.4']);
+  directUpgrade.manifestBytes = Buffer.from(
+    directUpgrade.manifestBytes.toString().replace('v1.2.2', 'v1.2.1')
+  );
+  assert.throws(() => verifyManagedRelease(directUpgrade), /signature/);
 });
 
 for (const name of ['update-manifest.json', 'update-manifest.sig', `new-api-${tag}`, 'checksums-windows.txt']) {

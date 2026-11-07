@@ -12,6 +12,11 @@ on:
       current_version:
         description: 'Optional installed version that must be approved by the manifest'
         required: false
+      re_sign_sources:
+        description: 'Re-sign only from_versions of an already published release using its verified evidence ledger'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -203,9 +208,115 @@ jobs:
             echo "Verified manifest, signature, platform binaries and image: $VERIFIED_IMAGE"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  re-sign-existing:
+    name: Re-sign approved direct-upgrade sources
+    if: github.event_name == 'workflow_dispatch' && inputs.re_sign_sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout signed evidence and tools
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test evidence and re-signing guards
+        run: |
+          node --test .github/scripts/build-managed-manifest.test.mjs \
+            .github/scripts/managed-manifest-sources.test.mjs \
+            .github/scripts/verify-managed-release.test.mjs
+
+      - name: Verify the published release and its signature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY_B64: ${{ secrets.UPDATE_RELEASE_PRIVATE_KEY_B64 }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][a-zA-Z0-9_.-]+)?$ ]]
+          test -n "$PRIVATE_KEY_B64"
+          mkdir verified-release
+          trap 'rm -f signing-private.pem' EXIT
+          printf '%s' "$PRIVATE_KEY_B64" | base64 -d > signing-private.pem
+          openssl pkey -in signing-private.pem -pubout -out verified-release/signing-public.pem
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,assets > verified-release/release-assets.json
+          jq -e '.isDraft == false and .isPrerelease == false' verified-release/release-assets.json >/dev/null
+          gh release download "$RELEASE_TAG" --dir verified-release \
+            --pattern update-manifest.json --pattern update-manifest.sig
+          IMAGE=$(jq -er '.image' verified-release/update-manifest.json)
+          node .github/scripts/verify-managed-release.mjs "$RELEASE_TAG" "$IMAGE" \
+            verified-release/update-manifest.json verified-release/update-manifest.sig \
+            verified-release/signing-public.pem verified-release/release-assets.json
+          jq -e --arg tag "$RELEASE_TAG" '.version == $tag' .github/update-compatibility.json >/dev/null
+          while IFS= read -r source; do
+            git rev-parse --verify "refs/tags/$source^{commit}" >/dev/null
+            git merge-base --is-ancestor "refs/tags/$source^{commit}" "$RELEASE_TAG^{commit}"
+          done < <(jq -r '.from_versions | unique[]' .github/update-compatibility.json)
+          node .github/scripts/managed-manifest-sources.mjs "$RELEASE_TAG" "$IMAGE" \
+            verified-release/update-manifest.json verified-release/update-manifest.sig \
+            verified-release/signing-public.pem <(jq -c '.from_versions' .github/update-compatibility.json) \
+            .github/managed-update-evidence.json .github/direct-upgrade-results.json \
+            verified-release/update-manifest.new.json
+          cmp verified-release/update-manifest.json verified-release/update-manifest.new.json && {
+            echo '::error::The evidence ledger did not add any approved direct-upgrade sources.'
+            exit 1
+          }
+          openssl pkeyutl -sign -inkey signing-private.pem -rawin \
+            -in verified-release/update-manifest.new.json -out verified-release/update-manifest.new.sig
+          base64 -w 0 verified-release/update-manifest.new.sig > verified-release/update-manifest.sig.b64
+          mv verified-release/update-manifest.sig.b64 verified-release/update-manifest.sig.new
+          gh release upload "$RELEASE_TAG" \
+            verified-release/update-manifest.new.json --clobber
+          gh release upload "$RELEASE_TAG" \
+            verified-release/update-manifest.sig.new --clobber
+
+      - name: Re-download and verify the signed direct-upgrade manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY_B64: ${{ secrets.UPDATE_RELEASE_PRIVATE_KEY_B64 }}
+        run: |
+          mkdir rechecked
+          trap 'rm -f rechecked/signing-private.pem' EXIT
+          printf '%s' "$PRIVATE_KEY_B64" | base64 -d > rechecked/signing-private.pem
+          openssl pkey -in rechecked/signing-private.pem -pubout -out rechecked/signing-public.pem
+          gh release download "$RELEASE_TAG" --dir rechecked \
+            --pattern update-manifest.json --pattern update-manifest.sig --clobber
+          IMAGE=$(jq -er '.image' rechecked/update-manifest.json)
+          gh release view "$RELEASE_TAG" --json isDraft,assets > rechecked/release-assets.json
+          jq -e '.isDraft == false' rechecked/release-assets.json >/dev/null
+          node .github/scripts/verify-managed-release.mjs "$RELEASE_TAG" "$IMAGE" \
+            rechecked/update-manifest.json rechecked/update-manifest.sig \
+            rechecked/signing-public.pem rechecked/release-assets.json
+          node -e '
+            const fs = require("node:fs");
+            const manifest = JSON.parse(fs.readFileSync("rechecked/update-manifest.json"));
+            const approval = JSON.parse(fs.readFileSync(".github/update-compatibility.json"));
+            const ledger = JSON.parse(fs.readFileSync(".github/managed-update-evidence.json"));
+            if (JSON.stringify(manifest.from_versions) !== JSON.stringify(approval.from_versions)) throw new Error("Published sources differ from approval");
+            for (const source of manifest.from_versions) {
+              if (!ledger.entries.some(e => e.tag === manifest.version && e.source === source && e.image_digest === manifest.image)) throw new Error("Missing evidence for " + source);
+            }
+            console.log("Approved direct upgrade sources: " + manifest.from_versions.join(", "));
+          '
+          docker buildx imagetools inspect "$IMAGE" --raw > rechecked/image-index.json
+          jq -e --slurpfile compatibility rechecked/update-manifest.json '
+            [.manifests[]?.platform | "\(.os)/\(.architecture)"] as $actual |
+            all($compatibility[0].platforms[]; . as $platform | $actual | index($platform) != null)
+          ' rechecked/image-index.json >/dev/null
+
+      - name: Retain public verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: direct-upgrade-resign-verification
+          path: rechecked/
+          retention-days: 30
+
   verify-existing:
     name: Verify an existing online release
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.re_sign_sources
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
