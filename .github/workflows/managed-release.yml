@@ -295,7 +295,9 @@ jobs:
             const manifest = JSON.parse(fs.readFileSync("rechecked/update-manifest.json"));
             const approval = JSON.parse(fs.readFileSync(".github/update-compatibility.json"));
             const ledger = JSON.parse(fs.readFileSync(".github/managed-update-evidence.json"));
-            if (JSON.stringify(manifest.from_versions) !== JSON.stringify(approval.from_versions)) throw new Error("Published sources differ from approval");
+            const publishedSources = [...manifest.from_versions].sort();
+            const approvedSources = [...approval.from_versions].sort();
+            if (JSON.stringify(publishedSources) !== JSON.stringify(approvedSources)) throw new Error("Published sources differ from approval");
             for (const source of manifest.from_versions) {
               if (!ledger.entries.some(e => e.tag === manifest.version && e.source === source && e.image_digest === manifest.image)) throw new Error("Missing evidence for " + source);
             }
