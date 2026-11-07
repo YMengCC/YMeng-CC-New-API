@@ -154,7 +154,7 @@ curl -fsS http://localhost:3000/api/status
 
 #### 一次性配置
 
-完成以下配置后，**之后每次发布新版本都不需要再改任何配置**，用户只需在后台点"一键更新"按钮。
+完成以下部署配置后，用户可在后台点“一键更新”。维护者每次发布前，还需在 `.github/update-compatibility.json` 中记录本次版本及已验证的来源版本。
 
 **1. GitHub Secrets（2 个）**
 
@@ -163,7 +163,7 @@ curl -fsS http://localhost:3000/api/status
 | Secret 名称 | 内容 | 说明 |
 | --- | --- | --- |
 | `UPDATE_RELEASE_PRIVATE_KEY_B64` | Ed25519 私钥的 base64 编码（PKCS8 PEM 格式） | 用于签名更新兼容性清单 |
-| `UPDATE_COMPATIBILITY_JSON` | `{"schema_unchanged":true,"shared_state_compatible":true,"platforms":["linux/amd64","linux/arm64"],"databases":["sqlite","mysql","postgres"]}` | 声明兼容的平台和数据库；`from_versions` 由 CI 自动从 git tags 推导，无需手动维护 |
+| `UPDATE_COMPATIBILITY_JSON` | `{"schema_unchanged":true,"shared_state_compatible":true,"platforms":["linux/amd64","linux/arm64"],"databases":["sqlite","mysql","postgres"]}` | 声明兼容的平台和数据库；`from_versions` 只使用 `.github/update-compatibility.json` 中本次明确验证的来源版本 |
 
 生成密钥对的方法（需要 OpenSSL 3.x）：
 
@@ -201,18 +201,18 @@ docker compose -f docker-compose.managed.yml up -d
 配置完成后，发布新版本的流程：
 
 ```bash
-# 1. 更新 VERSION 文件
+# 1. 验证升级与共享状态兼容性，并更新 .github/update-compatibility.json
+#    version 须与本次发布一致，from_versions 只填已经验证的来源版本
+# 2. 更新 VERSION 文件
 echo "v1.1.30" > VERSION
-git add VERSION && git commit -m "release: v1.1.30"
+git add VERSION .github/update-compatibility.json && git commit -m "release: v1.1.30"
 
-# 2. 打 tag 并推送（自动触发镜像构建 + 签名清单上传）
+# 3. 打 tag 并推送（自动触发镜像构建 + 签名清单上传）
 git tag -a v1.1.30 -m "Release v1.1.30"
 git push origin main && git push origin v1.1.30
 ```
 
-推送 tag 后，GitHub Actions 自动完成：构建多平台镜像 → 推送 GHCR → 生成并签名兼容性清单 → 上传到 Release。
-
-用户到管理后台点"一键更新"，选择新版本即可。CI 会自动把最近 30 个 git tag 写入 `from_versions`，所以任何近期版本都能升级。
+推送 tag 后，GitHub Actions 自动构建并推送多平台镜像，生成签名兼容性清单。CI 只会采用 `.github/update-compatibility.json` 中明确列出的来源版本，不会根据 tag 推断迁移兼容性。镜像、平台二进制、checksums、清单与签名均验证齐全后，Managed update image release 工作流才会将 draft Release 发布。
 
 #### 工作原理
 
@@ -241,7 +241,7 @@ HAProxy 配置变更需先在隔离环境使用 HAProxy 3.2 校验，再通过�
 | 一键更新按钮灰色 | Release 缺少签名清单 | 检查 managed-release.yml workflow 是否成功；确认 Secrets 已配置 |
 | 更新时提示镜像拉取失败 | GHCR 包为私有 | 将包设为 Public |
 | workflow 报 secrets 缺失 | 未配置 GitHub Secrets | 按上方"一次性配置"添加 2 个 Secrets |
-| 提示不兼容当前版本 | 当前版本不在 from_versions 中 | 当前版本过旧（超出最近 30 个 tag），需手动升级 |
+| 提示不兼容当前版本 | 当前版本不在 from_versions 中 | 当前版本尚无经过验证的升级批准；维护者需验证并更新明确的来源版本清单，不能只添加标签绕过校验 |
 
 首次把直接访问 `new-api:3000` 的站点迁移到代理入口，必须先在独立端口验证并通过 Nginx graceful reload；不能保证改入口本身不影响已有连接。SQLite、破坏性 schema 迁移和未验证的后台任务交接不支持在线安装。必须先在测试环境验证，再处理生产入口。
 

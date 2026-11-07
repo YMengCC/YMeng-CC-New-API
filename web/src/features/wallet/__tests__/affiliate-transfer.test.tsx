@@ -36,10 +36,12 @@ import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import type { Withdrawal } from '@/features/withdrawals/api'
 import { api } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { WithdrawalRecordsDialog } from '../components/dialogs/withdrawal-records-dialog'
 import { Wallet } from '../index'
 
 const clients: QueryClient[] = []
@@ -449,6 +451,231 @@ it('opens the withdrawal records dialog from the referral card', async () => {
     '/api/withdrawal/self',
     expect.objectContaining({ params: { p: 1, page_size: 10 } })
   )
+})
+
+async function openWithdrawalRecords(pages: Withdrawal[][]) {
+  const { get } = await renderWallet(5000000)
+  let failProof = false
+  get.mockImplementation(async (url, config) => {
+    if (url === '/api/withdrawal/self') {
+      const page = Number(
+        (config?.params as { p?: number } | undefined)?.p ?? 1
+      )
+      return {
+        data: {
+          success: true,
+          data: {
+            items: pages[page - 1] ?? [],
+            total: pages.length * 10,
+            p: page,
+            page_size: 10,
+          },
+        },
+      }
+    }
+    if (url.startsWith('/api/withdrawal/self/') && url.endsWith('/proof')) {
+      if (failProof) {
+        return { data: new Blob(['{}'], { type: 'application/json' }) }
+      }
+      return { data: new Blob(['payment-proof'], { type: 'image/png' }) }
+    }
+    throw new Error(`Unexpected GET ${url}`)
+  })
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Withdrawal records' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Withdrawal records',
+  })
+  await within(dialog).findAllByText('Withdrawal completed')
+  return {
+    user,
+    get,
+    dialog,
+    setProofFailure: (value: boolean) => {
+      failProof = value
+    },
+  }
+}
+
+function completedWithdrawal(
+  id: number,
+  changes: Partial<Withdrawal> = {}
+): Withdrawal {
+  return {
+    id,
+    user_id: 1,
+    username: 'referrer',
+    quota: 5000000,
+    status: 'completed',
+    proof_size: 25,
+    created_at: 1700000000,
+    updated_at: 1700000060,
+    updated_by: 2,
+    currency_snapshot: { ...useSystemConfigStore.getState().config.currency },
+    ...changes,
+  }
+}
+
+it('shows proof only for completed records with files and hides the reason column when none are rejected', async () => {
+  const { user, get, dialog } = await openWithdrawalRecords([
+    [
+      completedWithdrawal(7),
+      completedWithdrawal(8, { proof_size: 0 }),
+      completedWithdrawal(9, { status: 'processing' }),
+      completedWithdrawal(10, { status: 'pending' }),
+    ],
+  ])
+  expect(
+    within(dialog).queryByRole('columnheader', { name: 'Rejection reason' })
+  ).not.toBeInTheDocument()
+  const buttons = within(dialog).getAllByRole('button', { name: 'View proof' })
+  expect(buttons).toHaveLength(1)
+  expect(get.mock.calls.some(([url]) => url.endsWith('/proof'))).toBe(false)
+  await user.click(buttons[0])
+  const preview = await screen.findByRole('dialog', {
+    name: 'Withdrawal proof',
+  })
+  expect(
+    await within(preview).findByRole('img', { name: 'Withdrawal proof' })
+  ).toHaveAttribute('src', 'blob:collection-qr')
+  expect(get).toHaveBeenCalledWith(
+    '/api/withdrawal/self/7/proof',
+    expect.objectContaining({
+      responseType: 'blob',
+      signal: expect.any(AbortSignal),
+    })
+  )
+  await user.keyboard('{Escape}')
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Withdrawal proof' })
+    ).not.toBeInTheDocument()
+  )
+  expect(dialog).toBeVisible()
+  await waitFor(() => expect(buttons[0]).toHaveFocus())
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:collection-qr')
+})
+
+it('shows the reason column for mixed rejected rows and hides it again on a page with no rejected records', async () => {
+  const { user, dialog } = await openWithdrawalRecords([
+    [
+      completedWithdrawal(7),
+      completedWithdrawal(8, {
+        status: 'rejected',
+        reject_reason: 'Incorrect Alipay account',
+      }),
+    ],
+    [completedWithdrawal(9)],
+  ])
+  expect(
+    within(dialog).getByRole('columnheader', { name: 'Rejection reason' })
+  ).toBeVisible()
+  expect(within(dialog).getByText('Incorrect Alipay account')).toBeVisible()
+  const rows = within(dialog).getAllByRole('row')
+  expect(within(rows[1]).getAllByRole('cell')).toHaveLength(5)
+  expect(within(rows[2]).getAllByRole('cell')).toHaveLength(5)
+  await user.click(within(dialog).getByRole('button', { name: 'Next page' }))
+  await waitFor(() =>
+    expect(
+      within(dialog).queryByRole('columnheader', { name: 'Rejection reason' })
+    ).not.toBeInTheDocument()
+  )
+  expect(within(dialog).getAllByRole('row')).toHaveLength(2)
+  expect(
+    within(within(dialog).getAllByRole('row')[1]).getAllByRole('cell')
+  ).toHaveLength(4)
+})
+
+it('rejects non-PNG proof responses, supports retry and clears the preview when records close', async () => {
+  const { user, dialog, setProofFailure } = await openWithdrawalRecords([
+    [completedWithdrawal(7)],
+  ])
+  setProofFailure(true)
+  await user.click(within(dialog).getByRole('button', { name: 'View proof' }))
+  const preview = await screen.findByRole('dialog', {
+    name: 'Withdrawal proof',
+  })
+  expect(
+    await within(preview).findByText('Failed to load withdrawal proof')
+  ).toBeVisible()
+  expect(within(preview).queryByRole('img')).not.toBeInTheDocument()
+  setProofFailure(false)
+  await user.click(within(preview).getByRole('button', { name: 'Retry' }))
+  expect(
+    await within(preview).findByRole('img', { name: 'Withdrawal proof' })
+  ).toBeVisible()
+  await user.click(within(preview).getAllByRole('button', { name: 'Close' })[0])
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Withdrawal proof' })
+    ).not.toBeInTheDocument()
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Close' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
+  await user.click(screen.getByRole('button', { name: 'Withdrawal records' }))
+  await screen.findByRole('dialog', { name: 'Withdrawal records' })
+  expect(
+    screen.queryByRole('dialog', { name: 'Withdrawal proof' })
+  ).not.toBeInTheDocument()
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:collection-qr')
+})
+
+it('clears the selected proof if the records dialog is closed externally and reopened', async () => {
+  const user = userEvent.setup()
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  clients.push(client)
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/withdrawal/self') {
+      return {
+        data: {
+          success: true,
+          data: {
+            items: [completedWithdrawal(7)],
+            total: 1,
+            p: 1,
+            page_size: 10,
+          },
+        },
+      }
+    }
+    if (url === '/api/withdrawal/self/7/proof') {
+      return { data: new Blob(['proof'], { type: 'image/png' }) }
+    }
+    throw new Error(`Unexpected GET ${url}`)
+  })
+  const onOpenChange = vi.fn()
+  const view = render(
+    <QueryClientProvider client={client}>
+      <WithdrawalRecordsDialog open onOpenChange={onOpenChange} />
+    </QueryClientProvider>
+  )
+  await user.click(await screen.findByRole('button', { name: 'View proof' }))
+  expect(
+    await screen.findByRole('img', { name: 'Withdrawal proof' })
+  ).toBeVisible()
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <WithdrawalRecordsDialog open={false} onOpenChange={onOpenChange} />
+    </QueryClientProvider>
+  )
+  await waitFor(() =>
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:collection-qr')
+  )
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <WithdrawalRecordsDialog open onOpenChange={onOpenChange} />
+    </QueryClientProvider>
+  )
+  expect(
+    await screen.findByRole('dialog', { name: 'Withdrawal records' })
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('dialog', { name: 'Withdrawal proof' })
+  ).not.toBeInTheDocument()
 })
 
 it.each([

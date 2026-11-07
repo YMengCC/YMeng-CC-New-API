@@ -319,6 +319,25 @@ func GetWithdrawalProof(id int) ([]byte, error) {
 	return application.ProofData, nil
 }
 
+func GetUserWithdrawalProof(id, userId int) ([]byte, error) {
+	if id <= 0 || userId <= 0 {
+		return nil, ErrWithdrawalNotFound
+	}
+	var application Withdrawal
+	if err := DB.Select("proof_data").
+		Where("id = ? AND user_id = ? AND status = ? AND proof_size > 0", id, userId, WithdrawalStatusCompleted).
+		First(&application).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWithdrawalNotFound
+		}
+		return nil, err
+	}
+	if len(application.ProofData) == 0 {
+		return nil, ErrWithdrawalNotFound
+	}
+	return application.ProofData, nil
+}
+
 // GetUserWithdrawals lists the caller's own applications for the wallet record
 // dialog. Binary columns never leave the database.
 func GetUserWithdrawals(userId int, page *common.PageInfo) ([]*Withdrawal, int64, error) {

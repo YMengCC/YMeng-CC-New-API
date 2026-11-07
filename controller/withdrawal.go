@@ -167,6 +167,26 @@ func GetWithdrawalProof(c *gin.Context) {
 	c.Data(http.StatusOK, "image/png", data)
 }
 
+func GetUserWithdrawalProof(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	id, parseErr := strconv.Atoi(c.Param("id"))
+	if parseErr != nil || id <= 0 {
+		common.ApiErrorStatus(c, http.StatusNotFound, model.ErrWithdrawalNotFound)
+		return
+	}
+	data, err := model.GetUserWithdrawalProof(id, c.GetInt("id"))
+	if errors.Is(err, model.ErrWithdrawalNotFound) {
+		common.ApiErrorStatus(c, http.StatusNotFound, model.ErrWithdrawalNotFound)
+		return
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "image/png", data)
+}
+
 func GetMyWithdrawals(c *gin.Context) {
 	page := common.GetPageQuery(c)
 	if err := validateInvoicePageQuery(c, page); err != nil || page.Page > math.MaxInt/page.PageSize {

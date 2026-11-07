@@ -114,17 +114,14 @@ jobs:
       - name: Generate checksums
         run: sha256sum new-api-* > checksums-linux.txt
 
-      - name: Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+      - name: Upload Linux assets without changing publication state
         if: startsWith(github.ref, 'refs/tags/')
-        with:
-          draft: true
-          body_path: release-notes.md
-          files: |
-            new-api-*
-            checksums-linux.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release edit "$VERSION" --notes-file release-notes.md
+          gh release upload "$VERSION" "new-api-$VERSION" "new-api-arm64-$VERSION" checksums-linux.txt --clobber
 
   macos:
     needs: prepare
@@ -205,17 +202,14 @@ jobs:
       - name: Generate checksums
         run: shasum -a 256 new-api-macos-* > checksums-macos.txt
 
-      - name: Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+      - name: Upload macOS assets without changing publication state
         if: startsWith(github.ref, 'refs/tags/')
-        with:
-          draft: true
-          body_path: release-notes.md
-          files: |
-            new-api-macos-*
-            checksums-macos.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release edit "$VERSION" --notes-file release-notes.md
+          gh release upload "$VERSION" "new-api-macos-$VERSION" checksums-macos.txt --clobber
 
   windows:
     needs: prepare
@@ -298,14 +292,11 @@ jobs:
       - name: Generate checksums
         run: sha256sum new-api-*.exe > checksums-windows.txt
 
-      - name: Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+      - name: Upload Windows assets without changing publication state
         if: startsWith(github.ref, 'refs/tags/')
-        with:
-          draft: true
-          body_path: release-notes.md
-          files: |
-            new-api-*.exe
-            checksums-windows.txt
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release edit "$VERSION" --notes-file release-notes.md
+          gh release upload "$VERSION" "new-api-$VERSION.exe" checksums-windows.txt --clobber

@@ -26,7 +26,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { fetchCollectionQr } from '../api'
 
-export function CollectionQrImage(props: { blob: Blob }) {
+export function CollectionQrImage(props: { blob: Blob; alt?: string }) {
   const { t } = useTranslation()
   const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(
     null
@@ -40,7 +40,7 @@ export function CollectionQrImage(props: { blob: Blob }) {
   return (
     <img
       src={preview.url}
-      alt={t('Collection QR code preview')}
+      alt={props.alt ?? t('Collection QR code preview')}
       className='mx-auto max-h-72 max-w-full rounded-md border bg-white object-contain p-2'
     />
   )
@@ -51,6 +51,8 @@ export function CollectionQrPreview(props: {
   revision?: string | number
   onReadyChange?: (ready: boolean) => void
   errorTitle?: string
+  imageAlt?: string
+  loadingLabel?: string
 }) {
   const { t } = useTranslation()
   const userId = useAuthStore((state) => state.auth.user?.id)
@@ -83,9 +85,9 @@ export function CollectionQrPreview(props: {
         className='flex items-center justify-center gap-2 py-8'
       >
         <Spinner />
-        {t('Loading collection QR code...')}
+        {props.loadingLabel ?? t('Loading collection QR code...')}
       </div>
     )
   }
-  return <CollectionQrImage blob={image.data} />
+  return <CollectionQrImage blob={image.data} alt={props.imageAlt} />
 }

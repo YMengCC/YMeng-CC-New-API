@@ -155,6 +155,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/withdrawal/profile/qr":            accessTokenScopeRule("profile:read"),
 	"PUT /api/withdrawal/profile/qr":            accessTokenScopeRule("profile:write"),
 	"GET /api/withdrawal/self":                  accessTokenScopeRule("wallet:read"),
+	"GET /api/withdrawal/self/:id/proof":        accessTokenScopeRule("wallet:read"),
 	"POST /api/withdrawal/":                     accessTokenScopeRule("wallet:write"),
 	"GET /api/withdrawal/admin/":                accessTokenScopeRule("billing:read"),
 	"GET /api/withdrawal/admin/:id/qr":          accessTokenScopeRule("billing:read"),

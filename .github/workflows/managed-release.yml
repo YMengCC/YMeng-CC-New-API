@@ -31,6 +31,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Test explicit source-version approval
+        run: |
+          node --test .github/scripts/build-managed-manifest.test.mjs .github/scripts/verify-managed-release.test.mjs
+          node .github/scripts/build-managed-manifest.mjs "$GITHUB_REF_NAME" \
+            "${IMAGE_NAME}@sha256:$(printf '0%.0s' {1..64})" \
+            <(printf '%s' '{"schema_unchanged":true,"shared_state_compatible":true}') \
+            .github/update-compatibility.json >/dev/null
+
       - name: Verify managed-update secrets are configured
         env:
           COMPATIBILITY: ${{ secrets.UPDATE_COMPATIBILITY_JSON }}
@@ -42,7 +50,7 @@ jobs:
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Managed update secrets are missing: ${missing[*]}"
             echo "::error::Add them under Settings > Secrets and variables > Actions, then re-run this workflow."
-            echo "::error::UPDATE_COMPATIBILITY_JSON must contain schema_unchanged/shared_state_compatible/platforms/databases. from_versions is auto-derived from git tags; version and image are injected here."
+            echo "::error::UPDATE_COMPATIBILITY_JSON must contain schema_unchanged/shared_state_compatible/platforms/databases. Approved source versions come from .github/update-compatibility.json; version and image are injected here."
             echo "::error::UPDATE_RELEASE_PRIVATE_KEY_B64 must be the base64-encoded PKCS8 PEM of the Ed25519 release private key."
             exit 1
           fi
@@ -93,22 +101,15 @@ jobs:
           test -n "$PRIVATE_KEY_B64" || { echo 'UPDATE_RELEASE_PRIVATE_KEY_B64 is required'; exit 1; }
           printf '%s' "$COMPATIBILITY" > compatibility-input.json
 
-          # Auto-derive from_versions from recent git tags so a new release
-          # approves upgrades from every recent previous release without the
-          # maintainer having to edit the compatibility secret each time.
-          # Any from_versions the secret already declares are kept and merged.
-          git tag --list 'v*' --sort=-v:refname | head -30 | jq -R . | jq -s . > recent-tags.json
-          if [ ! -s recent-tags.json ] || [ "$(jq 'length' recent-tags.json)" -eq 0 ]; then
-            echo 'No git tags found; refusing to publish a manifest with empty from_versions.' >&2
-            exit 1
-          fi
-          jq --arg version "${GITHUB_REF_NAME}" \
-             --arg image "${IMAGE_NAME}@${{ steps.image.outputs.digest }}" \
-             --slurpfile tags recent-tags.json \
-             '.from_versions = (((.from_versions // []) + $tags[0]) | unique)
-              | .version = $version
-              | .image = $image' \
-             compatibility-input.json > update-manifest.json
+          # A tag alone is not an approval of migration or online cutover.
+          # Keep source approvals explicit and versioned with the release.
+          node .github/scripts/build-managed-manifest.mjs \
+            "$GITHUB_REF_NAME" "${IMAGE_NAME}@${{ steps.image.outputs.digest }}" \
+            compatibility-input.json .github/update-compatibility.json > update-manifest.json
+          while IFS= read -r source; do
+            git rev-parse --verify "refs/tags/$source^{commit}" >/dev/null
+            git merge-base --is-ancestor "refs/tags/$source^{commit}" "$GITHUB_SHA"
+          done < <(jq -r '.from_versions[]' update-manifest.json)
 
           jq -e --arg version "${GITHUB_REF_NAME}" --arg image "${IMAGE_NAME}@${{ steps.image.outputs.digest }}" \
              '(.version == $version) and (.image == $image) and (.schema_unchanged == true) and (.shared_state_compatible == true) and (.from_versions|type == "array" and length > 0) and (.databases|type == "array") and (.platforms|type == "array")' \
@@ -118,7 +119,7 @@ jobs:
           openssl pkeyutl -sign -inkey release-key.pem -rawin -in update-manifest.json -out update-manifest.sig
           base64 -w 0 update-manifest.sig > update-manifest.sig.b64
           mv update-manifest.sig.b64 update-manifest.sig
-          rm -f release-key.pem compatibility-input.json recent-tags.json
+          rm -f release-key.pem compatibility-input.json
 
       - name: Wait for the release record
         env:

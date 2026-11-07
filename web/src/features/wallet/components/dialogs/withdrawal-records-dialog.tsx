@@ -34,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getMyWithdrawals, type Withdrawal } from '@/features/withdrawals/api'
+import { CollectionQrPreview } from '@/features/withdrawals/components/collection-qr-preview'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatTimestamp } from '@/lib/format'
@@ -49,6 +50,8 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const [page, setPage] = useState(1)
+  const [proof, setProof] = useState<Withdrawal | null>(null)
+  if (!props.open && proof) setProof(null)
   const records = useQuery({
     queryKey: ['my-withdrawals', page],
     queryFn: ({ signal }) => getMyWithdrawals(page, PAGE_SIZE, signal),
@@ -57,6 +60,7 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
     meta: { errorToast: false },
   })
   const items = records.data?.items ?? []
+  const showRejectReason = items.some((item) => item.status === 'rejected')
   const total = records.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const statusLabel = (status: Withdrawal['status']) => {
@@ -97,7 +101,10 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
   return (
     <Dialog
       open={props.open}
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        if (!open) setProof(null)
+        props.onOpenChange(open)
+      }}
       title={t('Withdrawal records')}
       contentClassName='flex max-h-(--dialog-available-height) flex-col max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-3xl'
       contentHeight='auto'
@@ -114,7 +121,10 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
                     {t('Withdrawal amount')}
                   </TableHead>
                   <TableHead>{t('Status')}</TableHead>
-                  <TableHead>{t('Rejection reason')}</TableHead>
+                  {showRejectReason ? (
+                    <TableHead>{t('Rejection reason')}</TableHead>
+                  ) : null}
+                  <TableHead>{t('Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -142,10 +152,26 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
                         label={statusLabel(item.status)}
                       />
                     </TableCell>
-                    <TableCell className='text-muted-foreground max-w-64 text-xs wrap-anywhere whitespace-pre-wrap'>
-                      {item.status === 'rejected' && item.reject_reason
-                        ? item.reject_reason
-                        : '-'}
+                    {showRejectReason ? (
+                      <TableCell className='text-muted-foreground max-w-64 text-xs wrap-anywhere whitespace-pre-wrap'>
+                        {item.status === 'rejected' && item.reject_reason
+                          ? item.reject_reason
+                          : '-'}
+                      </TableCell>
+                    ) : null}
+                    <TableCell>
+                      {item.status === 'completed' &&
+                      (item.proof_size ?? 0) > 0 ? (
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => setProof(item)}
+                        >
+                          {t('View proof')}
+                        </Button>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -189,6 +215,31 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
           </div>
         ) : null}
       </div>
+      {props.open && proof ? (
+        <Dialog
+          open
+          title={t('Withdrawal proof')}
+          contentHeight='auto'
+          contentClassName='sm:max-w-lg'
+          onOpenChange={(open) => {
+            if (!open) setProof(null)
+          }}
+          footer={
+            <Button variant='outline' onClick={() => setProof(null)}>
+              {t('Close')}
+            </Button>
+          }
+        >
+          <CollectionQrPreview
+            key={proof.id}
+            path={`/api/withdrawal/self/${proof.id}/proof`}
+            revision={proof.id}
+            errorTitle='Failed to load withdrawal proof'
+            imageAlt={t('Withdrawal proof')}
+            loadingLabel={t('Loading...')}
+          />
+        </Dialog>
+      ) : null}
     </Dialog>
   )
 }
