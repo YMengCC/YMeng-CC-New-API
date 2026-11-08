@@ -49,12 +49,12 @@ func UpdateWithdrawalQR(c *gin.Context) {
 	defer c.Request.MultipartForm.RemoveAll()
 	files := c.Request.MultipartForm.File
 	if len(files) != 1 || len(files["qr"]) != 1 {
-		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Payout QR upload must contain one PNG file"))
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Payout QR upload must contain one image file"))
 		return
 	}
 	uploaded, err := service.ReadPayoutQRUpload(files["qr"][0])
 	if err != nil {
-		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid payout QR image"))
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Please choose a JPEG, PNG, or WebP image"))
 		return
 	}
 	profile := &model.WithdrawalProfile{
@@ -66,6 +66,14 @@ func UpdateWithdrawalQR(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{"has_qr": true, "updated_at": profile.UpdatedAt, "sha256": profile.Sha256, "minimum_quota": minimum})
+}
+
+// servePayoutImage sends a previously validated QR or proof with the image's
+// actual format. Unknown bytes fall back to a safe binary type.
+func servePayoutImage(c *gin.Context, data []byte) {
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Data(http.StatusOK, service.PayoutImageContentType(data), data)
 }
 
 func GetWithdrawalProfileQR(c *gin.Context) {
@@ -80,7 +88,7 @@ func GetWithdrawalProfileQR(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.Data(http.StatusOK, "image/png", profile.Data)
+	servePayoutImage(c, profile.Data)
 }
 
 func CreateWithdrawal(c *gin.Context) {
@@ -144,7 +152,7 @@ func GetWithdrawalQR(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.Data(http.StatusOK, "image/png", data)
+	servePayoutImage(c, data)
 }
 
 func GetWithdrawalProof(c *gin.Context) {
@@ -164,7 +172,7 @@ func GetWithdrawalProof(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.Data(http.StatusOK, "image/png", data)
+	servePayoutImage(c, data)
 }
 
 func GetUserWithdrawalProof(c *gin.Context) {
@@ -184,7 +192,7 @@ func GetUserWithdrawalProof(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.Data(http.StatusOK, "image/png", data)
+	servePayoutImage(c, data)
 }
 
 func GetMyWithdrawals(c *gin.Context) {
@@ -231,15 +239,15 @@ func UploadWithdrawalProof(c *gin.Context) {
 	defer c.Request.MultipartForm.RemoveAll()
 	files := c.Request.MultipartForm.File
 	if len(files) != 1 || len(files["proof"]) != 1 {
-		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Payout proof upload must contain one PNG file"))
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Payout proof upload must contain one image file"))
 		return
 	}
 	uploaded, err := service.ReadPayoutQRUpload(files["proof"][0])
 	if err != nil {
-		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid payout proof image"))
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Please choose a JPEG, PNG, or WebP image"))
 		return
 	}
-	proof := &model.WithdrawalProof{Name: "withdrawal-proof.png", Data: uploaded.Data, Sha256: uploaded.Sha256}
+	proof := &model.WithdrawalProof{Name: "withdrawal-proof", Data: uploaded.Data, Sha256: uploaded.Sha256}
 	if err := model.CompleteWithdrawal(id, c.GetInt("id"), proof); err != nil {
 		common.ApiError(c, err)
 		return

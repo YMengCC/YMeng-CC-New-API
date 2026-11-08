@@ -96,7 +96,7 @@ export async function fetchCollectionQr(
     signal,
     disableDuplicate: true,
   })
-  if (response.data.type !== 'image/png') {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(response.data.type)) {
     throw new Error('Failed to load collection QR code')
   }
   return response.data

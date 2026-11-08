@@ -39,9 +39,11 @@ beforeEach(() => {
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     drawImage: vi.fn(),
+    fillRect: vi.fn(),
+    fillStyle: '',
   } as unknown as CanvasRenderingContext2D)
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
-    (callback) => callback(pngFile(100, 100))
+    (callback) => callback(pngFile())
   )
   HTMLElement.prototype.setPointerCapture = () => undefined
   HTMLElement.prototype.releasePointerCapture = () => undefined
@@ -64,14 +66,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function pngFile(width = 1, height = 1) {
-  const bytes = new Uint8Array(24)
-  bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
-  bytes.set([73, 72, 68, 82], 12)
-  const header = new DataView(bytes.buffer)
-  header.setUint32(16, width)
-  header.setUint32(20, height)
-  return new File([bytes], 'alipay.png', { type: 'image/png' })
+function imageFile(name: string, type: string, size = 24) {
+  return new File([new Uint8Array(size)], name, { type })
+}
+function pngFile() {
+  return imageFile('alipay.png', 'image/png')
 }
 function configureImage(width: number, height: number) {
   vi.stubGlobal(
@@ -79,6 +78,8 @@ function configureImage(width: number, height: number) {
     class {
       onload: (() => void) | null = null
       onerror: (() => void) | null = null
+      naturalWidth = width
+      naturalHeight = height
       set src(_: string) {
         queueMicrotask(() => this.onload?.())
       }
@@ -132,28 +133,20 @@ function renderCard(hasQr = false) {
 
 it.each([
   [
-    'a renamed JPEG',
-    () => new File(['jpeg'], 'fake.png', { type: 'image/png' }),
-    'Please select a valid PNG image',
+    'an unsupported image format',
+    () => imageFile('fake.gif', 'image/gif'),
+    'Please choose a JPEG, PNG, or WebP image',
   ],
   [
     'an oversized image',
-    () =>
-      new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'large.png', {
-        type: 'image/png',
-      }),
-    'PNG image must not exceed 5 MiB',
-  ],
-  [
-    'an excessive image dimension',
-    () => pngFile(4097, 1),
-    'PNG dimensions must not exceed 4096 × 4096 pixels',
+    () => imageFile('large.png', 'image/png', 5 * 1024 * 1024 + 1),
+    'Image must not exceed 5 MiB',
   ],
 ])(
   'rejects %s before uploading and exposes an accessible error',
   async (_, makeFile, error) => {
     const { put } = renderCard()
-    const input = screen.getByLabelText('PNG collection QR code')
+    const input = screen.getByLabelText('Collection QR code image')
     fireEvent.change(input, { target: { files: [makeFile()] } })
     expect(await screen.findByRole('alert')).toHaveTextContent(error)
     expect(input).toHaveAttribute('aria-invalid', 'true')
@@ -164,7 +157,49 @@ it.each([
   }
 )
 
-it('rejects an image with a PNG header when the browser cannot decode its contents', async () => {
+it('rejects a supported image type with dimensions larger than 4096 pixels', async () => {
+  configureImage(4097, 1)
+  const { put } = renderCard()
+  const input = screen.getByLabelText('Collection QR code image')
+  fireEvent.change(input, { target: { files: [pngFile()] } })
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Image dimensions must not exceed 4096 × 4096 pixels'
+  )
+  expect(put).not.toHaveBeenCalled()
+})
+
+it.each([
+  ['JPEG', imageFile('alipay.jpg', 'image/jpeg')],
+  ['WebP', imageFile('alipay.webp', 'image/webp')],
+])(
+  'accepts a %s source and normalizes the square crop to PNG',
+  async (_, file) => {
+    configureImage(800, 600)
+    const { put } = renderCard()
+    const input = screen.getByLabelText('Collection QR code image')
+    fireEvent.change(input, { target: { files: [file] } })
+    const cropArea = await loadCropImage()
+    fireEvent.pointerDown(cropArea, { clientX: 0, clientY: 0, pointerId: 1 })
+    fireEvent.pointerMove(cropArea, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+    })
+    fireEvent.pointerUp(cropArea, { clientX: 100, clientY: 100, pointerId: 1 })
+    const save = screen.getByRole('button', { name: 'Save collection QR code' })
+    await waitFor(() => expect(save).toBeEnabled())
+    fireEvent.click(save)
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+    const uploaded = (put.mock.calls[0][1] as FormData).get('qr') as File
+    expect(uploaded.type).toBe('image/png')
+    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      'image/png'
+    )
+  }
+)
+
+it('rejects a supported image type when the browser cannot decode its contents', async () => {
   vi.stubGlobal(
     'Image',
     class {
@@ -175,11 +210,11 @@ it('rejects an image with a PNG header when the browser cannot decode its conten
     }
   )
   const { put } = renderCard()
-  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+  fireEvent.change(screen.getByLabelText('Collection QR code image'), {
     target: { files: [pngFile()] },
   })
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Please select a valid PNG image'
+    'Please choose a JPEG, PNG, or WebP image'
   )
   expect(put).not.toHaveBeenCalled()
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:qr')
@@ -189,8 +224,8 @@ it('requires a square selection before saving and uploads the cropped PNG at sou
   configureImage(800, 600)
   const { put, get, unmount } = renderCard()
   const file = pngFile()
-  const input = screen.getByLabelText('PNG collection QR code')
-  expect(input).toHaveAttribute('accept', 'image/png,.png')
+  const input = screen.getByLabelText('Collection QR code image')
+  expect(input).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp')
   fireEvent.change(input, { target: { files: [file] } })
   const cropArea = await loadCropImage()
   expect(
@@ -237,7 +272,7 @@ it('keeps the selection and cropped upload after an upload failure, then retries
   configureImage(800, 600)
   const { put } = renderCard()
   put.mockRejectedValueOnce(new Error('upload unavailable'))
-  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+  fireEvent.change(screen.getByLabelText('Collection QR code image'), {
     target: { files: [pngFile()] },
   })
   const cropArea = await loadCropImage()
@@ -258,7 +293,7 @@ it('keeps the selection and cropped upload after an upload failure, then retries
 it('shows a prominent warning card until the QR area is selected', async () => {
   configureImage(400, 400)
   renderCard()
-  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+  fireEvent.change(screen.getByLabelText('Collection QR code image'), {
     target: { files: [pngFile()] },
   })
   const cropArea = await loadCropImage()
@@ -287,7 +322,7 @@ it('shows a prominent warning card until the QR area is selected', async () => {
 it('clamps a touch selection to the image and enforces the minimum square size', async () => {
   configureImage(200, 200)
   renderCard()
-  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+  fireEvent.change(screen.getByLabelText('Collection QR code image'), {
     target: { files: [pngFile()] },
   })
   const cropArea = await loadCropImage()
@@ -326,7 +361,7 @@ it('clamps a touch selection to the image and enforces the minimum square size',
 it('moves and resizes the square selection with the keyboard', async () => {
   configureImage(400, 400)
   renderCard()
-  fireEvent.change(screen.getByLabelText('PNG collection QR code'), {
+  fireEvent.change(screen.getByLabelText('Collection QR code image'), {
     target: { files: [pngFile()] },
   })
   const cropArea = await loadCropImage()

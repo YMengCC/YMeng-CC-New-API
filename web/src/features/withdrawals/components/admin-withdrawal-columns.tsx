@@ -170,7 +170,7 @@ export function useAdminWithdrawalColumns(
                 <label className='inline-flex'>
                   <Input
                     type='file'
-                    accept='image/png,.png'
+                    accept='image/jpeg,image/png,image/webp'
                     className='sr-only'
                     disabled={pendingProof}
                     onChange={(event) => {

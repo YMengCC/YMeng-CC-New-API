@@ -477,9 +477,19 @@ func testWithdrawalAPI(t *testing.T) {
 	require.NoError(t, png.Encode(&valid, image.NewRGBA(image.Rect(0, 0, 32, 48))))
 	require.NoError(t, jpeg.Encode(&jpegData, image.NewRGBA(image.Rect(0, 0, 16, 16)), nil))
 	require.NoError(t, png.Encode(&tooWide, image.NewRGBA(image.Rect(0, 0, service.MaxPayoutQRDimension+1, 1))))
-	for name, data := range map[string][]byte{"empty": nil, "jpeg": jpegData.Bytes(), "svg": []byte("<svg/>"), "truncated": valid.Bytes()[:40], "too-wide": tooWide.Bytes(), "too-large": bytes.Repeat([]byte{0}, int(service.MaxPayoutQRSize)+1)} {
+	webpData, err := os.ReadFile(filepath.Join(os.TempDir(), "newapi-withdrawal-EW0J8I", "webp-fixture.webp"))
+	require.NoError(t, err)
+	require.Contains(t, string(http.DetectContentType(webpData)), "image/webp")
+	for name, data := range map[string][]byte{"empty": nil, "svg": []byte("<svg/>"), "script": []byte("<script>alert(1)</script>"), "gif": []byte("GIF89a........"), "truncated": valid.Bytes()[:40], "too-wide": tooWide.Bytes(), "too-large": bytes.Repeat([]byte{0}, int(service.MaxPayoutQRSize)+1), "mislabeled": append([]byte("<svg/>"), valid.Bytes()...)} {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, withdrawalUploadRequest(t, r, ownerWrite, data).Code)
+		})
+	}
+	for name, data := range map[string][]byte{"png": valid.Bytes(), "jpeg": jpegData.Bytes(), "webp": webpData} {
+		t.Run("accept_"+name, func(t *testing.T) {
+			response := withdrawalUploadRequest(t, r, ownerWrite, data)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Contains(t, response.Body.String(), `"has_qr":true`)
 		})
 	}
 	assert.Equal(t, http.StatusForbidden, withdrawalUploadRequest(t, r, ownerRead, valid.Bytes()).Code)
@@ -489,8 +499,15 @@ func testWithdrawalAPI(t *testing.T) {
 	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/profile/qr?user_id="+strconv.Itoa(other.Id), ownerRead, nil, "")
 	assert.Equal(t, valid.Bytes(), response.Body.Bytes())
 	assert.Equal(t, "image/png", response.Header().Get("Content-Type"))
+	response = withdrawalUploadRequest(t, r, ownerWrite, jpegData.Bytes())
+	require.Contains(t, response.Body.String(), `"has_qr":true`)
+	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/profile/qr", ownerRead, nil, "")
+	assert.Equal(t, jpegData.Bytes(), response.Body.Bytes())
+	assert.Equal(t, "image/jpeg", response.Header().Get("Content-Type"))
 	assert.Equal(t, "private, no-store", response.Header().Get("Cache-Control"))
 	assert.Equal(t, "nosniff", response.Header().Get("X-Content-Type-Options"))
+	response = withdrawalUploadRequest(t, r, ownerWrite, valid.Bytes())
+	require.Contains(t, response.Body.String(), `"has_qr":true`)
 	response = withdrawalAPIRequest(r, "GET", "/api/withdrawal/profile/qr?user_id="+strconv.Itoa(user.Id), otherRead, nil, "")
 	assert.Equal(t, http.StatusNotFound, response.Code, "query cannot select another user's QR")
 	for _, quota := range []string{"0", "-1", "101", "9007199254740992", "9223372036854775808", "1.5"} {

@@ -19,9 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
-  'Please select a valid PNG image',
-  'PNG image must not exceed 5 MiB',
-  'PNG dimensions must not exceed 4096 × 4096 pixels',
+  'Please choose a JPEG, PNG, or WebP image',
+  'Image must not exceed 5 MiB',
+  'Image dimensions must not exceed 4096 × 4096 pixels',
   'Withdrawal quota must be a positive safe integer',
   'Withdrawal request ID must be a UUID',
   'Withdrawal request ID was already used for a different amount',
@@ -29,7 +29,7 @@ export const STATIC_I18N_KEYS = [
   'Withdrawal application not found',
   'Withdrawal status must be pending or completed',
   'Invalid payout QR image',
-  'Payout QR upload must contain one PNG file',
+  'Payout QR upload must contain one image file',
   'Invalid withdrawal request',
   'Invalid withdrawal filters',
   'Invalid withdrawal pagination',
@@ -42,7 +42,7 @@ export const STATIC_I18N_KEYS = [
   'Withdrawal status transition is invalid',
   'Withdrawal rejection reason is required and must be 500 characters or fewer',
   'Invalid payout proof image',
-  'Payout proof upload must contain one PNG file',
+  'Payout proof upload must contain one image file',
   'The user has not configured a collection QR code',
   'Failed to load withdrawal proof',
   'Display name must be 20 characters or fewer',

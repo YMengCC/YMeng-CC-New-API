@@ -47,6 +47,7 @@ import {
 } from './components/admin-withdrawal-columns'
 import { CollectionQrPreview } from './components/collection-qr-preview'
 import { RejectWithdrawalDialog } from './components/reject-withdrawal-dialog'
+import { isSupportedPayoutImage } from './lib/validation'
 
 const route = getRouteApi('/_authenticated/admin-withdrawals/')
 
@@ -143,8 +144,8 @@ export function AdminWithdrawalPage() {
       onProcessing: (row: Withdrawal) => processing.mutate(row),
       onUpload: (row: Withdrawal, file?: File) => {
         if (!file) return
-        if (file.type !== 'image/png' && !file.name.endsWith('.png')) {
-          toast.error(t('Please select a PNG file'))
+        if (!isSupportedPayoutImage(file)) {
+          toast.error(t('Please choose a JPEG, PNG, or WebP image'))
           return
         }
         upload.mutate({ id: row.id, file })

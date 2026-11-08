@@ -453,7 +453,10 @@ it('opens the withdrawal records dialog from the referral card', async () => {
   )
 })
 
-async function openWithdrawalRecords(pages: Withdrawal[][]) {
+async function openWithdrawalRecords(
+  pages: Withdrawal[][],
+  proofType = 'image/png'
+) {
   const { get } = await renderWallet(5000000)
   let failProof = false
   get.mockImplementation(async (url, config) => {
@@ -477,7 +480,7 @@ async function openWithdrawalRecords(pages: Withdrawal[][]) {
       if (failProof) {
         return { data: new Blob(['{}'], { type: 'application/json' }) }
       }
-      return { data: new Blob(['payment-proof'], { type: 'image/png' }) }
+      return { data: new Blob(['payment-proof'], { type: proofType }) }
     }
     throw new Error(`Unexpected GET ${url}`)
   })
@@ -555,6 +558,27 @@ it('shows proof only for completed records with files and hides the reason colum
   await waitFor(() => expect(buttons[0]).toHaveFocus())
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:collection-qr')
 })
+
+it.each(['image/jpeg', 'image/png', 'image/webp'])(
+  'shows a %s proof preview from the user records',
+  async (proofType) => {
+    const { user, get, dialog } = await openWithdrawalRecords(
+      [[completedWithdrawal(7)]],
+      proofType
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'View proof' }))
+    const preview = await screen.findByRole('dialog', {
+      name: 'Withdrawal proof',
+    })
+    expect(
+      await within(preview).findByRole('img', { name: 'Withdrawal proof' })
+    ).toHaveAttribute('src', 'blob:collection-qr')
+    expect(get).toHaveBeenCalledWith(
+      '/api/withdrawal/self/7/proof',
+      expect.objectContaining({ responseType: 'blob' })
+    )
+  }
+)
 
 it('shows the reason column for mixed rejected rows and hides it again on a page with no rejected records', async () => {
   const { user, dialog } = await openWithdrawalRecords([

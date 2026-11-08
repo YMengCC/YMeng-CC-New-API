@@ -87,7 +87,7 @@ export function CollectionQrCard() {
         setError(
           cause instanceof Error
             ? cause.message
-            : 'Please select a valid PNG image'
+            : 'Please choose a JPEG, PNG, or WebP image'
         )
       }
     } finally {
@@ -139,12 +139,12 @@ export function CollectionQrCard() {
         ) : null}
         <div className='space-y-2'>
           <Label htmlFor='collection-qr-file'>
-            {t('PNG collection QR code')}
+            {t('Collection QR code image')}
           </Label>
           <Input
             id='collection-qr-file'
             type='file'
-            accept='image/png,.png'
+            accept='image/jpeg,image/png,image/webp'
             disabled={save.isPending || validating}
             aria-invalid={!!error}
             aria-describedby='collection-qr-help collection-qr-error'
@@ -155,7 +155,7 @@ export function CollectionQrCard() {
           />
           <p id='collection-qr-help' className='text-muted-foreground text-xs'>
             {t(
-              'PNG only, up to 5 MiB and 4096 × 4096 pixels. Select a square area of the QR code before saving.'
+              'JPEG, PNG, or WebP, up to 5 MiB and 4096 × 4096 pixels. Select a square area of the QR code before saving.'
             )}
           </p>
           {error ? (

@@ -160,37 +160,40 @@ it('shows money, user and status metadata without loading QR images for list row
   expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled()
 })
 
-it('advances pending to processing and then uploads a PNG proof to complete', async () => {
-  const user = userEvent.setup()
-  const { post } = await renderPage()
-  await user.click(
-    await screen.findByRole('button', { name: 'Start processing' })
-  )
-  await waitFor(() =>
-    expect(post).toHaveBeenCalledWith('/api/withdrawal/admin/42/processing')
-  )
-  expect(await screen.findByText('Processing')).toBeVisible()
-
-  const input = document.querySelector('input[type="file"]')
-  expect(input).not.toBeNull()
-  const file = new File([new Uint8Array(10)], 'proof.png', {
-    type: 'image/png',
-  })
-  fireEvent.change(input as HTMLInputElement, { target: { files: [file] } })
-  await waitFor(() =>
-    expect(post).toHaveBeenCalledWith(
-      '/api/withdrawal/admin/42/proof',
-      expect.any(FormData),
-      expect.objectContaining({ headers: { 'Content-Type': null } })
+it.each(['image/jpeg', 'image/png', 'image/webp'])(
+  'advances pending to processing and uploads a %s proof to complete',
+  async (mimeType) => {
+    const user = userEvent.setup()
+    const { post } = await renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Start processing' })
     )
-  )
-  expect(await screen.findByText('Withdrawal completed')).toBeVisible()
-  expect(
-    await screen.findByRole('button', { name: 'View proof' })
-  ).toBeVisible()
-})
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/withdrawal/admin/42/processing')
+    )
+    expect(await screen.findByText('Processing')).toBeVisible()
 
-it('rejects a non-PNG proof without calling the upload endpoint', async () => {
+    const input = document.querySelector('input[type="file"]')
+    expect(input).not.toBeNull()
+    const file = new File([new Uint8Array(10)], 'proof', {
+      type: mimeType,
+    })
+    fireEvent.change(input as HTMLInputElement, { target: { files: [file] } })
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        '/api/withdrawal/admin/42/proof',
+        expect.any(FormData),
+        expect.objectContaining({ headers: { 'Content-Type': null } })
+      )
+    )
+    expect(await screen.findByText('Withdrawal completed')).toBeVisible()
+    expect(
+      await screen.findByRole('button', { name: 'View proof' })
+    ).toBeVisible()
+  }
+)
+
+it('rejects a non-image proof without calling the upload endpoint', async () => {
   const { post } = await renderPage('/admin-withdrawals', ROLE.ADMIN, {
     status: 'processing',
   })

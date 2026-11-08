@@ -111,6 +111,8 @@ export async function cropCollectionQr(
     canvas.height = rect.size
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Collection QR cropping is unavailable')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, rect.size, rect.size)
     context.drawImage(
       image,
       rect.x,

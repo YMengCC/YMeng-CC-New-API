@@ -58,39 +58,38 @@ export function withdrawalAmountSchema(
   })
 }
 
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+const MAX_IMAGE_DIMENSION = 4096
+
+export function isSupportedPayoutImage(file: File): boolean {
+  return IMAGE_MIME_TYPES.has(file.type)
+}
+
 export async function validateCollectionQr(file: File): Promise<void> {
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error('PNG image must not exceed 5 MiB')
+  if (!isSupportedPayoutImage(file)) {
+    throw new Error('Please choose a JPEG, PNG, or WebP image')
   }
-  const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(new Error('Please select a valid PNG image'))
-    reader.readAsArrayBuffer(file.slice(0, 24))
-  })
-  const bytes = new Uint8Array(buffer)
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10]
-  if (
-    bytes.length < 24 ||
-    !signature.every((byte, index) => bytes[index] === byte) ||
-    String.fromCharCode(...bytes.slice(12, 16)) !== 'IHDR'
-  ) {
-    throw new Error('Please select a valid PNG image')
-  }
-  const header = new DataView(bytes.buffer)
-  const width = header.getUint32(16)
-  const height = header.getUint32(20)
-  if (!width || !height || width > 4096 || height > 4096) {
-    throw new Error('PNG dimensions must not exceed 4096 × 4096 pixels')
+  if (file.size <= 0 || file.size > MAX_IMAGE_SIZE) {
+    throw new Error('Image must not exceed 5 MiB')
   }
   const url = URL.createObjectURL(file)
   try {
-    await new Promise<void>((resolve, reject) => {
-      const image = new Image()
-      image.onload = () => resolve()
-      image.onerror = () => reject(new Error('Please select a valid PNG image'))
-      image.src = url
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const candidate = new Image()
+      candidate.onload = () => resolve(candidate)
+      candidate.onerror = () =>
+        reject(new Error('Please choose a JPEG, PNG, or WebP image'))
+      candidate.src = url
     })
+    if (
+      image.naturalWidth <= 0 ||
+      image.naturalHeight <= 0 ||
+      image.naturalWidth > MAX_IMAGE_DIMENSION ||
+      image.naturalHeight > MAX_IMAGE_DIMENSION
+    ) {
+      throw new Error('Image dimensions must not exceed 4096 × 4096 pixels')
+    }
   } finally {
     URL.revokeObjectURL(url)
   }
