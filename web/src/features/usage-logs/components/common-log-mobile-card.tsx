@@ -22,6 +22,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusVariant } from '@/components/status-badge'
@@ -64,6 +65,7 @@ type FieldName =
 type LogField = {
   label: string
   value: string
+  content?: React.ReactNode
   visible: boolean
   sensitive?: boolean
 }
@@ -97,6 +99,13 @@ export function CommonLogMobileCard<TData>(props: {
     cost: {
       label: t('Cost'),
       value: formatLogQuota(log.quota),
+      content: (
+        <CurrencyAmount
+          amount={log.quota}
+          mode='quota'
+          options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+        />
+      ),
       visible: displayable && props.cells.has('quota'),
     },
     time: {
@@ -236,7 +245,9 @@ export function CommonLogMobileCard<TData>(props: {
           {visibleMetadata.map((id) => {
             const field = fields[id]
             let fieldContent = (
-              <span className='[overflow-wrap:anywhere]'>{field.value}</span>
+              <span className='[overflow-wrap:anywhere]'>
+                {field.content ?? field.value}
+              </span>
             )
             if (id === 'group') {
               fieldContent = (

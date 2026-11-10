@@ -21,6 +21,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import {
   StatusBadge,
   dotColorMap,
@@ -487,9 +488,20 @@ export function SubscriptionPlansCard({
                             <TooltipTrigger
                               render={<span className='cursor-help' />}
                             >
-                              {formatQuota(usedAmount)}/
-                              {formatQuota(totalAmount)} · {t('Remaining')}{' '}
-                              {formatQuota(remainAmount)}
+                              <CurrencyAmount
+                                amount={usedAmount}
+                                mode='quota'
+                              />
+                              /
+                              <CurrencyAmount
+                                amount={totalAmount}
+                                mode='quota'
+                              />{' '}
+                              · {t('Remaining')}{' '}
+                              <CurrencyAmount
+                                amount={remainAmount}
+                                mode='quota'
+                              />
                             </TooltipTrigger>
                             <TooltipContent>
                               {t('Raw Quota')}: {usedAmount}/{totalAmount} ·{' '}

@@ -22,6 +22,7 @@ import { ArrowRight, Flame, ShieldCheck, TrendingDown } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { StaggerContainer, StaggerItem } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { getUserQuotaDates } from '@/features/dashboard/api'
@@ -29,7 +30,7 @@ import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
-import { formatNumber, formatQuota } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -168,7 +169,7 @@ export function SummaryCards() {
 
   const summaryValues = useMemo(() => {
     return {
-      usedDisplay: formatQuota(usedQuota),
+      usedDisplay: <CurrencyAmount amount={usedQuota} mode='quota' />,
       requestCountDisplay: formatNumber(requestCount),
     }
   }, [requestCount, usedQuota])
@@ -213,7 +214,7 @@ export function SummaryCards() {
   const healthCfg = HEALTH_CONFIG[healthLevel]
   const runwayDays = getRunwayDays(remainQuota, recentUsage)
 
-  const todayUsageDisplay = formatQuota(recentUsage)
+  const todayUsageDisplay = <CurrencyAmount amount={recentUsage} mode='quota' />
   let runwayDisplay: string
   if (runwayDays !== null) {
     if (runwayDays < 1) {
@@ -306,7 +307,7 @@ export function SummaryCards() {
             </div>
 
             <div className='font-mono text-xl font-semibold tracking-tight sm:text-2xl'>
-              {formatQuota(remainQuota)}
+              <CurrencyAmount amount={remainQuota} mode='quota' />
             </div>
 
             <div className='grid grid-cols-2 gap-2'>
@@ -316,7 +317,7 @@ export function SummaryCards() {
                   <span className='truncate'>{t('Last 24h usage')}</span>
                 </div>
                 <div className='text-foreground mt-1.5 truncate text-xs font-semibold tabular-nums'>
-                  {formatQuota(recentUsage)}
+                  <CurrencyAmount amount={recentUsage} mode='quota' />
                 </div>
               </div>
               <div className='bg-background/60 rounded-lg px-2.5 py-2'>

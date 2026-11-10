@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -33,7 +34,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getAffiliateInvitees } from '@/features/affiliate/api'
-import { formatQuota } from '@/lib/format'
 
 const PAGE_SIZE = 20
 
@@ -103,7 +103,7 @@ export function AffiliateInviteesDialog({
                   {item.commission_count}
                 </TableCell>
                 <TableCell className='text-right text-xs font-medium tabular-nums'>
-                  {formatQuota(item.credited_quota)}
+                  <CurrencyAmount amount={item.credited_quota} mode='quota' />
                 </TableCell>
                 <TableCell className='text-xs whitespace-nowrap'>
                   {formatTimestamp(item.last_reward_at)}

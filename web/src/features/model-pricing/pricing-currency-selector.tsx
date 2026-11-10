@@ -20,6 +20,7 @@ import { HelpCircle } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -47,9 +48,13 @@ export function PricingCurrencySelector(props: {
   if (props.siteCurrency) {
     items.push({
       value: 'site',
-      label: t('Site currency ({{currency}})', {
-        currency: props.siteCurrency.label,
-      }),
+      label: props.siteCurrency.imageUrl
+        ? t('Site currency ({{currency}})', {
+            currency: '¤',
+          })
+        : t('Site currency ({{currency}})', {
+            currency: props.siteCurrency.label,
+          }),
     })
   }
 
@@ -97,6 +102,7 @@ export function PricingCurrencySelector(props: {
       >
         <SelectTrigger
           id={id}
+          aria-label={t('Pricing currency')}
           className='w-full sm:w-64'
           aria-describedby={
             props.siteCurrency && !available ? `${id}-error` : undefined
@@ -111,7 +117,20 @@ export function PricingCurrencySelector(props: {
               value={item.value}
               disabled={item.value === 'site' && !available}
             >
-              {item.label}
+              {item.value === 'site' &&
+              props.siteCurrency &&
+              props.siteCurrency.imageUrl ? (
+                <span className='inline-flex items-center gap-1'>
+                  {t('Site currency')} (
+                  <CurrencySymbol
+                    value={props.siteCurrency.symbol}
+                    imageUrlOverride={props.siteCurrency.imageUrl}
+                  />
+                  )
+                </span>
+              ) : (
+                item.label
+              )}
             </SelectItem>
           ))}
         </SelectContent>

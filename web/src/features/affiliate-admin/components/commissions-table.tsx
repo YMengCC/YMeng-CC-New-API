@@ -20,9 +20,9 @@ import type { ColumnDef, PaginationState } from '@tanstack/react-table'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { DataTablePage, useDataTable } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
-import { formatQuota } from '@/lib/format'
 
 import type { AffiliateAnalyticsCommission } from '../api'
 
@@ -78,12 +78,16 @@ export function CommissionsTable(props: CommissionsTableProps) {
       {
         accessorKey: 'consumed_quota',
         header: t('Consumed'),
-        cell: ({ row }) => formatQuota(row.original.consumed_quota),
+        cell: ({ row }) => (
+          <CurrencyAmount amount={row.original.consumed_quota} mode='quota' />
+        ),
       },
       {
         accessorKey: 'credited_quota',
         header: t('Credited quota'),
-        cell: ({ row }) => formatQuota(row.original.credited_quota),
+        cell: ({ row }) => (
+          <CurrencyAmount amount={row.original.credited_quota} mode='quota' />
+        ),
       },
       {
         accessorKey: 'status',

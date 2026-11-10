@@ -22,6 +22,7 @@ import { Coins, HandCoins, UserPlus, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { SectionPageLayout } from '@/components/layout'
 import { Input } from '@/components/ui/input'
 import {
@@ -34,7 +35,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatCard } from '@/features/dashboard/components/ui/stat-card'
 import { useDebounce } from '@/hooks'
-import { formatQuota } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { getRollingDateRange } from '@/lib/time'
 
@@ -172,7 +172,9 @@ export function AffiliateAdminAnalytics() {
     {
       key: 'credited-quota',
       title: t('Credited quota'),
-      value: formatQuota(overview?.credited_quota ?? 0),
+      value: (
+        <CurrencyAmount amount={overview?.credited_quota ?? 0} mode='quota' />
+      ),
       description: t('Commission quota credited to inviters in this period'),
       icon: Coins,
       tone: 'accent-1' as const,

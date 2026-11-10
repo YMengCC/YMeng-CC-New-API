@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { StatusBadge } from '@/components/status-badge'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 
 import {
@@ -129,16 +129,18 @@ export function UpstreamInvertedModelList(props: {
               {t(getUpstreamPriceBasisLabel(item.basis))}
               {': '}
               {t('Upstream')}{' '}
-              {formatBillingCurrencyFromUSD(
-                item.upstream_usd,
-                PRICE_FORMAT_OPTIONS
-              )}
+              <CurrencyAmount
+                amount={item.upstream_usd}
+                mode='billing'
+                options={PRICE_FORMAT_OPTIONS}
+              />
               {' > '}
               {t('Local')}{' '}
-              {formatBillingCurrencyFromUSD(
-                item.local_usd,
-                PRICE_FORMAT_OPTIONS
-              )}
+              <CurrencyAmount
+                amount={item.local_usd}
+                mode='billing'
+                options={PRICE_FORMAT_OPTIONS}
+              />
               {isTokenPriceBasis(item.basis) ? ` ${t('per 1K tokens')}` : null}
             </p>
           </li>

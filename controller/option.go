@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -249,6 +250,21 @@ func UpdateOption(c *gin.Context) {
 		if err != nil || value == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 			common.ApiErrorT(c, "Enter an absolute HTTP(S) URL")
 			return
+		}
+		option.Value = value
+	case "general_setting.custom_currency_symbol":
+		value := strings.TrimSpace(option.Value.(string))
+		characterCount := utf8.RuneCountInString(value)
+		if characterCount > 2048 {
+			common.ApiErrorT(c, "Custom currency symbol is too long")
+			return
+		}
+		if characterCount > 8 {
+			parsed, err := url.Parse(value)
+			if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+				common.ApiErrorT(c, "Custom currency symbol must be 8 characters or an HTTP(S) image URL")
+				return
+			}
 		}
 		option.Value = value
 	case "GitHubOAuthEnabled":

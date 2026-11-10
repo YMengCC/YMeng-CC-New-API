@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
 import { StatusBadge } from '@/components/status-badge'
 import { formatQuotaWithCurrency, getCurrencyDisplay } from '@/lib/currency'
@@ -45,7 +46,12 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
 
   return (
     <QuotaDetailsPopover
-      title={`${t('Quota')} (${quotaUnit})`}
+      title={
+        <span className='inline-flex items-center gap-1'>
+          {t('Quota')} (
+          {currency.kind === 'tokens' ? quotaUnit : <CurrencySymbol />})
+        </span>
+      }
       triggerLabel={
         hasQuota
           ? `${t('Available Balance')} ${formattedRemaining}; ${t('Used amount')} ${formattedUsed}`

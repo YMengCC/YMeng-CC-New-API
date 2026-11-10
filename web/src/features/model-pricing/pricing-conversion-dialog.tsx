@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CopyButton } from '@/components/copy-button'
+import { CurrencySymbol } from '@/components/currency-display'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   parseTiersFromExpr,
@@ -33,7 +34,11 @@ import {
   pricingAdjustmentRows,
 } from '@/features/system-settings/models/model-pricing-core'
 
-import { formatPricingAmount, type PricingCurrency } from './currency'
+import {
+  formatPricingAmount,
+  formatPricingAmountValue,
+  type PricingCurrency,
+} from './currency'
 import {
   pricingRow,
   type CacheWriteMode,
@@ -163,8 +168,20 @@ export function PricingConversionDialog(props: {
                     {t(row.label)}
                   </dt>
                   <dd className='font-mono text-sm tabular-nums'>
-                    {formatPricingAmount(row.value, props.currency)} /{' '}
-                    {unitLabel}
+                    {props.currency.imageUrl ? (
+                      <>
+                        <span className='inline-flex items-center gap-0.5'>
+                          <CurrencySymbol
+                            value={props.currency.symbol}
+                            imageUrlOverride={props.currency.imageUrl}
+                          />
+                          {formatPricingAmountValue(row.value, props.currency)}
+                        </span>{' '}
+                        / {unitLabel}
+                      </>
+                    ) : (
+                      `${formatPricingAmount(row.value, props.currency)} / ${unitLabel}`
+                    )}
                   </dd>
                 </div>
               )

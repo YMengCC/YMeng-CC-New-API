@@ -20,8 +20,10 @@ import { Tag as TagIcon } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { StaticDataTable } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
+import { getCurrencyImageUrl } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -198,28 +200,67 @@ function formatBreakdownPrice(
   value: number,
   field: BreakdownPriceField,
   symbol: string,
+  imageUrl: string | null,
   rate: number,
   t: (key: string) => string,
   taskPriceOptions: DynamicPricingBreakdownProps['taskPriceOptions'],
   language: string
-): string {
+): ReactNode {
   const amount =
     field.labelKind === 'schema' ||
     field.unit === 'request' ||
     field.unit === 'image'
       ? formatTaskUsageUnitPrice(value, { tokenUnit: 'M', ...taskPriceOptions })
-      : `${symbol}${(value * rate).toFixed(4)}`
-  if (field.unit === 'second') return `${amount}/${t('s')}`
+      : null
+  const priceContent = amount ?? (
+    <>
+      <CurrencySymbol value={symbol} imageUrlOverride={imageUrl} />
+      {(value * rate).toFixed(4)}
+    </>
+  )
+  if (field.unit === 'second') {
+    return (
+      <>
+        {priceContent}/{t('s')}
+      </>
+    )
+  }
   if (field.unit === 'count') {
-    return `${amount}/${taskUsageUnitLabel(field, language, t('unit'))}`
+    return (
+      <>
+        {priceContent}/{taskUsageUnitLabel(field, language, t('unit'))}
+      </>
+    )
   }
-  if (field.unit === 'credit') return `${amount}/${t('credit')}`
+  if (field.unit === 'credit') {
+    return (
+      <>
+        {priceContent}/{t('credit')}
+      </>
+    )
+  }
   if (field.unit === 'token' && field.labelKind === 'schema') {
-    return `${amount}/${t('1M token')}`
+    return (
+      <>
+        {priceContent}/{t('1M token')}
+      </>
+    )
   }
-  if (field.unit === 'request') return `${amount}/${t('request')}`
-  if (field.unit === 'image') return `${amount}/${t('image')}`
-  return amount
+  if (field.unit === 'request') {
+    return (
+      <>
+        {priceContent}/{t('request')}
+      </>
+    )
+  }
+  if (field.unit === 'image') {
+    return (
+      <>
+        {priceContent}/{t('image')}
+      </>
+    )
+  }
+  return priceContent
 }
 
 function describeCondition(
@@ -295,17 +336,23 @@ export function DynamicPricingBreakdown({
   const expr = billingExpr || ''
   const currency = useSystemConfigStore((s) => s.config.currency)
 
-  const { symbol, rate } = useMemo(() => {
+  const { symbol, imageUrl, rate } = useMemo(() => {
     if (currency.quotaDisplayType === 'CNY') {
-      return { symbol: '¥', rate: currency.usdExchangeRate || 7 }
+      return {
+        symbol: '¥',
+        imageUrl: null,
+        rate: currency.usdExchangeRate || 7,
+      }
     }
     if (currency.quotaDisplayType === 'CUSTOM') {
+      const customImageUrl = getCurrencyImageUrl(currency)
       return {
-        symbol: currency.customCurrencySymbol || '¤',
+        symbol: customImageUrl ? '¤' : currency.customCurrencySymbol || '¤',
+        imageUrl: customImageUrl,
         rate: currency.customCurrencyExchangeRate || 1,
       }
     }
-    return { symbol: '$', rate: 1 }
+    return { symbol: '$', imageUrl: null, rate: 1 }
   }, [currency])
 
   const { tiers, ruleGroups } = useMemo(() => {
@@ -565,6 +612,7 @@ export function DynamicPricingBreakdown({
                                   value,
                                   field,
                                   symbol,
+                                  imageUrl,
                                   rate,
                                   t,
                                   taskPriceOptions,
@@ -682,6 +730,7 @@ export function DynamicPricingBreakdown({
                         value,
                         field,
                         symbol,
+                        imageUrl,
                         rate,
                         t,
                         taskPriceOptions,

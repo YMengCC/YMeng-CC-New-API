@@ -8110,6 +8110,11 @@
     "Image must not exceed 10 MiB": "Изображение не должно превышать 10 МиБ",
     "You can attach up to 4 images": "Можно прикрепить не более 4 изображений",
     "Drop images here or paste": "Перетащите изображения сюда или вставьте",
-    "Reference image (model support varies)": "Опорное изображение (поддержка зависит от модели)"
+    "Reference image (model support varies)": "Опорное изображение (поддержка зависит от модели)",
+    "A short text symbol, or an absolute HTTP(S) image URL": "Короткий символ или абсолютный URL изображения HTTP(S)",
+    "Custom currency symbol is too long": "Пользовательский символ валюты слишком длинный",
+    "Custom currency symbol must be 8 characters or an HTTP(S) image URL": "Пользовательский символ валюты должен содержать не более 8 символов или быть URL изображения HTTP(S)",
+    "e.g. ¥, HK$ or an image URL": "например, ¥, HK$ или URL изображения",
+    "Site currency": "Валюта сайта"
   }
 }

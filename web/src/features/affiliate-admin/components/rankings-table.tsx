@@ -18,10 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { StaticDataTable } from '@/components/data-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
 
 import type { AffiliateAnalyticsRanking } from '../api'
 
@@ -87,7 +87,9 @@ export function RankingsTable(props: RankingsTableProps) {
                 header: t('Credited quota'),
                 className: 'text-right',
                 cellClassName: 'text-right tabular-nums',
-                cell: (row) => formatQuota(row.credited_quota),
+                cell: (row) => (
+                  <CurrencyAmount amount={row.credited_quota} mode='quota' />
+                ),
               },
             ]}
             data={props.data}

@@ -24,6 +24,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ import {
   parseWithdrawalQuota,
   withdrawalAmountSchema,
 } from '@/features/withdrawals/lib/validation'
-import { formatQuota, quotaUnitsToDollars } from '@/lib/format'
+import { quotaUnitsToDollars } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -159,9 +160,11 @@ export function WithdrawalDialog(props: WithdrawalDialogProps) {
         </p>
         <div>
           <Label>{t('Available Rewards')}</Label>
-          <p className='text-xl font-semibold'>
-            {formatQuota(props.availableQuota)}
-          </p>
+          <CurrencyAmount
+            amount={props.availableQuota}
+            mode='quota'
+            className='text-xl font-semibold'
+          />
         </div>
         <div className='space-y-2'>
           <Label htmlFor='withdrawal-amount'>{t('Withdrawal amount')}</Label>

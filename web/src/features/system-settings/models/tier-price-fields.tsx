@@ -20,6 +20,7 @@ import { ChevronDown } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -60,7 +61,7 @@ const MEDIA_PRICE_VARS = PRICE_VARS.filter(
 type PriceFieldProps = {
   currency: PricingCurrency
   label: string
-  hint?: string
+  hint?: React.ReactNode
   value: number | string
   onChange: (next: string) => void
   included?: boolean
@@ -207,7 +208,15 @@ export function TierPriceFields(props: TierPriceFieldsProps) {
           }
           value={props.fixedPrice ?? ''}
           onChange={(value) => props.onFixedPriceChange?.(value)}
-          hint={`${props.currency.symbol}/${props.imageCount ? t('image') : t('request')}`}
+          hint={
+            <>
+              <CurrencySymbol
+                value={props.currency.symbol}
+                imageUrlOverride={props.currency.imageUrl}
+              />
+              /{props.imageCount ? t('image') : t('request')}
+            </>
+          }
           invalid={props.invalidVariables?.includes('fixed')}
         />
       </>
@@ -219,8 +228,12 @@ export function TierPriceFields(props: TierPriceFieldsProps) {
       <div className='space-y-2'>
         <div className='flex items-center justify-between gap-3'>
           <Label className='text-sm font-semibold'>{t('Token prices')}</Label>
-          <span className='bg-muted text-muted-foreground rounded-md px-2 py-1 text-xs'>
-            {props.currency.symbol}/{t('1M token')}
+          <span className='bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs'>
+            <CurrencySymbol
+              value={props.currency.symbol}
+              imageUrlOverride={props.currency.imageUrl}
+            />
+            /{t('1M token')}
           </span>
         </div>
 

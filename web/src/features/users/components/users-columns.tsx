@@ -21,7 +21,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ActivityTimeCell } from '@/components/activity-time-cell'
-import { BadgeCell } from '@/components/data-table'
+import { CurrencyAmount, CurrencySymbol } from '@/components/currency-display'
+import { BadgeCell, DataTableColumnHeader } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { LongText } from '@/components/long-text'
 import { StatusBadge } from '@/components/status-badge'
@@ -32,8 +33,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getCurrencyDisplay } from '@/lib/currency'
-import { formatQuota } from '@/lib/format'
+import { getCurrencyDisplay, getCurrencyImageUrl } from '@/lib/currency'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
@@ -51,6 +51,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
   const currencyConfig = useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
+  const quotaHeaderLabel = `${t('Available Balance')} (${quotaUnit})`
   return useMemo<ColumnDef<User>[]>(
     () => [
       {
@@ -185,14 +186,29 @@ export function useUsersColumns(): ColumnDef<User>[] {
       {
         id: 'quota',
         accessorKey: 'quota',
-        header: `${t('Available Balance')} (${quotaUnit})`,
+        header: (headerContext) => {
+          if (currency.kind !== 'tokens' && !getCurrencyImageUrl()) {
+            return `${t('Available Balance')} (${quotaUnit})`
+          }
+          return (
+            <DataTableColumnHeader
+              column={headerContext.column}
+              title={
+                <span className='inline-flex items-center gap-1'>
+                  {t('Available Balance')} (
+                  {currency.kind === 'tokens' ? quotaUnit : <CurrencySymbol />})
+                </span>
+              }
+            />
+          )
+        },
         cell: ({ row }) => {
           const user = row.original
           return <UserQuotaCell remaining={user.quota} used={user.used_quota} />
         },
         size: 180,
         minSize: 160,
-        meta: { mobileOrder: 40 },
+        meta: { mobileOrder: 40, label: quotaHeaderLabel },
       },
       {
         accessorKey: 'group',
@@ -257,9 +273,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
                 <LongText>
                   {t('Invited {{count}} users', { count: affCount })} ·{' '}
                   {t('Earnings')}:{' '}
-                  <span className='tabular-nums'>
-                    {formatQuota(affHistoryQuota)}
-                  </span>
+                  <CurrencyAmount
+                    amount={affHistoryQuota}
+                    mode='quota'
+                    className='tabular-nums'
+                  />
                 </LongText>
               )}
               {inviterId > 0 && (
@@ -298,6 +316,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
     ],
     // formatQuota reads the currency configuration from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, quotaUnit, currencyConfig]
+    [t, quotaUnit, quotaHeaderLabel, currency.kind, currencyConfig]
   )
 }

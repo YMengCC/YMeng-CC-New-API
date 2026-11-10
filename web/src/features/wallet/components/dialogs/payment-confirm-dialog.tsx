@@ -20,14 +20,11 @@ import { ExternalLink, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CurrencyAmount } from '@/components/currency-display'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
-import {
-  formatBillingCurrencyFromUSD,
-  formatLocalCurrencyAmount,
-} from '@/lib/currency'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { isValidCatfkQQ, isValidCatfkQuote } from '../../catfk-api'
@@ -127,20 +124,17 @@ export function PaymentConfirmDialog({
           <span className='text-muted-foreground text-sm'>
             {t('Topup Amount')}
           </span>
-          <span className='text-lg font-semibold'>
-            {catfk
-              ? formatBillingCurrencyFromUSD(topupAmount, {
-                  digitsLarge: 2,
-                  digitsSmall: 2,
-                  abbreviate: false,
-                  locale,
-                })
-              : formatLocalCurrencyAmount(topupAmount * usdExchangeRate, {
-                  digitsLarge: 2,
-                  digitsSmall: 2,
-                  abbreviate: false,
-                })}
-          </span>
+          <CurrencyAmount
+            amount={catfk ? topupAmount : topupAmount * usdExchangeRate}
+            mode={catfk ? 'billing' : 'local'}
+            options={{
+              digitsLarge: 2,
+              digitsSmall: 2,
+              abbreviate: false,
+              locale,
+            }}
+            className='text-lg font-semibold'
+          />
         </div>
 
         <div className='flex items-center justify-between'>

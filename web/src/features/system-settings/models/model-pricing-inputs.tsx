@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { InputGroup, InputGroupAddon } from '@/components/ui/input-group'
 import {
   USD_PRICING_CURRENCY,
@@ -45,7 +46,10 @@ export function PriceInput(props: {
   return (
     <InputGroup className='has-[[data-pricing-error]]:h-auto has-[[data-pricing-error]]:flex-wrap'>
       <InputGroupAddon>
-        {(props.currency ?? USD_PRICING_CURRENCY).symbol}
+        <CurrencySymbol
+          value={(props.currency ?? USD_PRICING_CURRENCY).symbol}
+          imageUrlOverride={(props.currency ?? USD_PRICING_CURRENCY).imageUrl}
+        />
       </InputGroupAddon>
       <PricingAmountInput
         grouped
@@ -60,7 +64,11 @@ export function PriceInput(props: {
         onChange={props.onChange}
       />
       <InputGroupAddon align='inline-end'>
-        {(props.currency ?? USD_PRICING_CURRENCY).symbol}/1M
+        <CurrencySymbol
+          value={(props.currency ?? USD_PRICING_CURRENCY).symbol}
+          imageUrlOverride={(props.currency ?? USD_PRICING_CURRENCY).imageUrl}
+        />
+        /1M
       </InputGroupAddon>
     </InputGroup>
   )

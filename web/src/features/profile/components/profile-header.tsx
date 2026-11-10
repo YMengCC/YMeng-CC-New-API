@@ -17,15 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Activity, BarChart3, Pencil, WalletCards } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UserAvatar } from '@/components/user-avatar'
-import { formatCompactNumber, formatQuota } from '@/lib/format'
+import { formatCompactNumber } from '@/lib/format'
 import { getRoleLabel } from '@/lib/roles'
 
 import { getDisplayName } from '../lib'
@@ -89,21 +91,21 @@ export function ProfileHeader({
   const roleLabel = getRoleLabel(profile.role)
   const stats: {
     label: string
-    value: string
+    value: ReactNode
     description: string
     icon: typeof WalletCards
     tone: IconBadgeTone
   }[] = [
     {
       label: t('Current Balance'),
-      value: formatQuota(profile.quota),
+      value: <CurrencyAmount amount={profile.quota} mode='quota' />,
       description: t('Remaining quota'),
       icon: WalletCards,
       tone: 'success',
     },
     {
       label: t('Total Usage'),
-      value: formatQuota(profile.used_quota),
+      value: <CurrencyAmount amount={profile.used_quota} mode='quota' />,
       description: t('Total consumed quota'),
       icon: BarChart3,
       tone: 'info',

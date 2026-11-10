@@ -17,11 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Activity, BarChart3, WalletCards } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
 
 import type { UserWalletData } from '../types'
 
@@ -48,21 +49,23 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
 
   const stats: {
     label: string
-    value: string
+    value: ReactNode
     description: string
     icon: typeof WalletCards
     tone: IconBadgeTone
   }[] = [
     {
       label: t('Current Balance'),
-      value: formatQuota(props.user?.quota ?? 0),
+      value: <CurrencyAmount amount={props.user?.quota ?? 0} mode='quota' />,
       description: t('Remaining quota'),
       icon: WalletCards,
       tone: 'success',
     },
     {
       label: t('Total Usage'),
-      value: formatQuota(props.user?.used_quota ?? 0),
+      value: (
+        <CurrencyAmount amount={props.user?.used_quota ?? 0} mode='quota' />
+      ),
       description: t('Total consumed quota'),
       icon: BarChart3,
       tone: 'info',

@@ -8110,6 +8110,11 @@
     "Image must not exceed 10 MiB": "Ảnh không được vượt quá 10 MiB",
     "You can attach up to 4 images": "Bạn có thể đính kèm tối đa 4 ảnh",
     "Drop images here or paste": "Kéo ảnh vào đây hoặc dán",
-    "Reference image (model support varies)": "Ảnh tham chiếu (tùy mô hình hỗ trợ)"
+    "Reference image (model support varies)": "Ảnh tham chiếu (tùy mô hình hỗ trợ)",
+    "A short text symbol, or an absolute HTTP(S) image URL": "Ký hiệu ngắn hoặc URL hình ảnh HTTP(S) tuyệt đối",
+    "Custom currency symbol is too long": "Ký hiệu tiền tệ tùy chỉnh quá dài",
+    "Custom currency symbol must be 8 characters or an HTTP(S) image URL": "Ký hiệu tiền tệ tùy chỉnh phải có tối đa 8 ký tự hoặc là URL hình ảnh HTTP(S)",
+    "e.g. ¥, HK$ or an image URL": "ví dụ ¥, HK$ hoặc URL hình ảnh",
+    "Site currency": "Tiền tệ trang"
   }
 }

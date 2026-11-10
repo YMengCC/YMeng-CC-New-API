@@ -20,9 +20,10 @@ import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Label } from '@/components/ui/label'
-import { formatQuota, formatCompactNumber } from '@/lib/format'
+import { formatCompactNumber } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { getUserInfo } from '../../api'
@@ -34,7 +35,7 @@ interface UserInfoDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-function InfoItem({ label, value }: { label: string; value: string | number }) {
+function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className='space-y-1.5'>
       <Label className='text-muted-foreground text-xs'>{label}</Label>
@@ -111,11 +112,13 @@ export function UserInfoDialog({
           <div className='grid grid-cols-2 gap-4'>
             <InfoItem
               label={t('Balance')}
-              value={formatQuota(userInfo.quota)}
+              value={<CurrencyAmount amount={userInfo.quota} mode='quota' />}
             />
             <InfoItem
               label={t('Used Quota')}
-              value={formatQuota(userInfo.used_quota)}
+              value={
+                <CurrencyAmount amount={userInfo.used_quota} mode='quota' />
+              }
             />
           </div>
 
@@ -153,7 +156,9 @@ export function UserInfoDialog({
               {userInfo.aff_quota !== undefined && userInfo.aff_quota > 0 && (
                 <InfoItem
                   label={t('Invitation Quota')}
-                  value={formatQuota(userInfo.aff_quota)}
+                  value={
+                    <CurrencyAmount amount={userInfo.aff_quota} mode='quota' />
+                  }
                 />
               )}
             </>

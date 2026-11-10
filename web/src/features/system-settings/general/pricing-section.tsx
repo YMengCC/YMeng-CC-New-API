@@ -21,6 +21,7 @@ import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import {
   Form,
   FormControl,
@@ -40,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { isCurrencyImageUrl } from '@/lib/currency'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
@@ -67,7 +69,26 @@ const createPricingSchema = (t: (key: string) => string) =>
       DisplayModelPricingIssueBadgeEnabled: z.boolean(),
       general_setting: z.object({
         quota_display_type: z.enum(['USD', 'CNY', 'TOKENS', 'CUSTOM']),
-        custom_currency_symbol: z.string().max(8).optional(),
+        custom_currency_symbol: z
+          .string()
+          .trim()
+          .superRefine((value, ctx) => {
+            const characterCount = [...value].length
+            if (characterCount > 2048) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: t('Custom currency symbol is too long'),
+              })
+              return
+            }
+            if (characterCount <= 8 || isCurrencyImageUrl(value)) return
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: t(
+                'Custom currency symbol must be 8 characters or an HTTP(S) image URL'
+              ),
+            })
+          }),
         custom_currency_exchange_rate: z.coerce
           .number()
           .min(0.0001, t('Exchange rate must be greater than 0'))
@@ -275,12 +296,20 @@ export function PricingSection({ defaultValues }: PricingSectionProps) {
                           name={field.name}
                           onBlur={field.onBlur}
                           ref={field.ref}
-                          maxLength={8}
-                          placeholder={t('e.g. ¥ or HK$')}
+                          maxLength={2048}
+                          placeholder={t('e.g. ¥, HK$ or an image URL')}
                         />
                       </FormControl>
-                      <FormDescription>
-                        {t('Prefix used when displaying prices')}
+                      <FormDescription className='flex items-center gap-2'>
+                        <span>
+                          {t(
+                            'A short text symbol, or an absolute HTTP(S) image URL'
+                          )}
+                        </span>
+                        <CurrencySymbol
+                          value={field.value ?? ''}
+                          className='text-base'
+                        />
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

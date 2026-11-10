@@ -8110,6 +8110,11 @@
     "Image must not exceed 10 MiB": "Image must not exceed 10 MiB",
     "You can attach up to 4 images": "You can attach up to 4 images",
     "Drop images here or paste": "Drop images here or paste",
-    "Reference image (model support varies)": "Reference image (model support varies)"
+    "Reference image (model support varies)": "Reference image (model support varies)",
+    "A short text symbol, or an absolute HTTP(S) image URL": "A short text symbol, or an absolute HTTP(S) image URL",
+    "Custom currency symbol is too long": "Custom currency symbol is too long",
+    "Custom currency symbol must be 8 characters or an HTTP(S) image URL": "Custom currency symbol must be 8 characters or an HTTP(S) image URL",
+    "e.g. ¥, HK$ or an image URL": "e.g. ¥, HK$ or an image URL",
+    "Site currency": "Site currency"
   }
 }

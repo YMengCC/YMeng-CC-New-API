@@ -22,13 +22,14 @@ import { Percent, PieChart } from 'lucide-react'
 import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatLogQuota, formatPercent } from '@/lib/format'
+import { formatPercent } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { getUpstreamCostStats } from '../api'
@@ -64,7 +65,11 @@ export function UpstreamCostStats(props: UpstreamCostStatsProps) {
   const unsupportedFilter = Boolean(searchParams.tokenId || searchParams.ip)
 
   // The key must start with 'usage-logs-stats' so the filter bar refreshes it.
-  const { data: stats, isLoading, isError } = useQuery({
+  const {
+    data: stats,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: [
       'usage-logs-stats',
       'upstream-cost',
@@ -108,7 +113,9 @@ export function UpstreamCostStats(props: UpstreamCostStatsProps) {
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <Skeleton
             key={i}
-            className={props.compact ? 'h-7 w-full rounded-md' : 'h-7 w-28 rounded-md'}
+            className={
+              props.compact ? 'h-7 w-full rounded-md' : 'h-7 w-28 rounded-md'
+            }
           />
         ))}
       </Wrapper>
@@ -124,7 +131,15 @@ export function UpstreamCostStats(props: UpstreamCostStatsProps) {
   }
 
   const formatMoney = (quota: number) =>
-    sensitiveVisible ? formatLogQuota(quota) : SENSITIVE_MASK
+    sensitiveVisible ? (
+      <CurrencyAmount
+        amount={quota}
+        mode='quota'
+        options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+      />
+    ) : (
+      SENSITIVE_MASK
+    )
   const formatShare = (value: number | null) =>
     value === null ? '-' : formatPercent(value * 100)
 

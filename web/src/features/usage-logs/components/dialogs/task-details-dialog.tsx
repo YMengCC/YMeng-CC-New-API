@@ -20,10 +20,11 @@ import { Shield01Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Label } from '@/components/ui/label'
-import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { formatTimestampToDate } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -187,7 +188,17 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
             <DetailRow label={t('Group')} value={props.log.group || '-'} />
             <DetailRow
               label={t('Quota')}
-              value={formatLogQuota(props.log.quota)}
+              value={
+                <CurrencyAmount
+                  amount={props.log.quota}
+                  mode='quota'
+                  options={{
+                    digitsLarge: 4,
+                    digitsSmall: 6,
+                    abbreviate: false,
+                  }}
+                />
+              }
               mono
             />
             {props.log.admin_info?.request_id ? (

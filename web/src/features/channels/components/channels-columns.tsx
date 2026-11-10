@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CurrencyAmount } from '@/components/currency-display'
 import { BadgeListCell } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
@@ -387,16 +388,6 @@ export function BalanceCell({ channel }: { channel: Channel }) {
   const remainingFull = withSuffix(
     formatCurrencyFromUSD(balance, balanceFormatOptions)
   )
-  const usedDisplay =
-    usedFull.length > MAX_INLINE_BALANCE_CHARS
-      ? withSuffix(
-          formatQuotaWithCurrency(usedQuota, {
-            compact: true,
-            locale,
-            showSymbol: layout !== 'card',
-          })
-        )
-      : usedFull
   const remainingDisplay =
     remainingFull.length > MAX_INLINE_BALANCE_CHARS
       ? withSuffix(
@@ -407,6 +398,19 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           })
         )
       : remainingFull
+  const usedInlineOptions =
+    usedFull.length > MAX_INLINE_BALANCE_CHARS
+      ? { compact: true, locale, showSymbol: layout !== 'card' }
+      : {
+          digitsLarge: 2,
+          digitsSmall: 4,
+          abbreviate: true,
+          showSymbol: layout !== 'card',
+        }
+  const remainingInlineOptions =
+    remainingFull.length > MAX_INLINE_BALANCE_CHARS
+      ? { compact: true, locale, showSymbol: layout !== 'card' }
+      : balanceFormatOptions
   const usedLabel = `${t('Used:')} ${usedFull}`
   const remainingLabel = `${t('Remaining:')} ${remainingFull}`
   const maskedUsedLabel = `${t('Used:')} ${SENSITIVE_MASK}`
@@ -420,17 +424,25 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           <TooltipTrigger
             render={
               <StatusBadge
-                label={
-                  sensitiveVisible
-                    ? `${t('Used:')} ${usedDisplay}`
-                    : maskedUsedLabel
-                }
+                label={sensitiveVisible ? undefined : maskedUsedLabel}
                 variant='neutral'
                 size='sm'
                 copyable={false}
                 showDot={false}
                 className='-ml-1.5 cursor-help'
-              />
+              >
+                {sensitiveVisible ? (
+                  <span className='inline-flex items-center gap-1'>
+                    {t('Used:')}{' '}
+                    <CurrencyAmount
+                      amount={usedQuota}
+                      mode='quota'
+                      options={usedInlineOptions}
+                    />
+                    {tokenSuffix}
+                  </span>
+                ) : null}
+              </StatusBadge>
             }
           />
           <TooltipContent>
@@ -545,14 +557,29 @@ export function BalanceCell({ channel }: { channel: Channel }) {
   }
   const remainingBadge = (
     <StatusBadge
-      label={remainingBadgeLabel}
+      label={
+        remainingBadgeLabel === remainingDisplay
+          ? undefined
+          : remainingBadgeLabel
+      }
       variant={remainingBadgeVariant}
       size='sm'
       copyable={false}
       showDot={false}
       className='cursor-pointer'
       onClick={isInferenceChannel ? undefined : handleClickUpdate}
-    />
+    >
+      {remainingBadgeLabel === remainingDisplay ? (
+        <>
+          <CurrencyAmount
+            amount={balance}
+            mode='usd'
+            options={remainingInlineOptions}
+          />
+          {tokenSuffix}
+        </>
+      ) : null}
+    </StatusBadge>
   )
 
   return (
@@ -562,13 +589,24 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           <TooltipTrigger
             render={
               <StatusBadge
-                label={sensitiveVisible ? usedDisplay : SENSITIVE_MASK}
+                label={sensitiveVisible ? undefined : SENSITIVE_MASK}
                 variant='neutral'
                 size='sm'
                 copyable={false}
                 showDot={false}
                 className='cursor-help'
-              />
+              >
+                {sensitiveVisible ? (
+                  <>
+                    <CurrencyAmount
+                      amount={usedQuota}
+                      mode='quota'
+                      options={usedInlineOptions}
+                    />
+                    {tokenSuffix}
+                  </>
+                ) : null}
+              </StatusBadge>
             }
           />
           <TooltipContent>

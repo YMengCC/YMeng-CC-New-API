@@ -143,6 +143,29 @@ const DEFAULT_FORMAT_OPTIONS: ResolvedCurrencyFormatOptions = {
 const DISPLAY_TYPE_VALUES = ['USD', 'CNY', 'TOKENS', 'CUSTOM'] as const
 type DisplayTypeLiteral = (typeof DISPLAY_TYPE_VALUES)[number]
 
+/** Whether a custom currency value is an absolute HTTP(S) image URL. */
+export function isCurrencyImageUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() === '') return false
+  try {
+    const parsed = new URL(value.trim())
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.host !== ''
+    )
+  } catch {
+    return false
+  }
+}
+
+/** Return the configured custom currency image URL, if the symbol is an image. */
+export function getCurrencyImageUrl(snapshot?: CurrencyConfig): string | null {
+  const config = getConfig(snapshot)
+  if (config.quotaDisplayType !== 'CUSTOM') return null
+  return isCurrencyImageUrl(config.customCurrencySymbol)
+    ? config.customCurrencySymbol.trim()
+    : null
+}
+
 export function isCurrencyDisplayType(
   value: unknown
 ): value is CurrencyDisplayType {
@@ -196,7 +219,9 @@ function getDisplayMeta(config: CurrencyConfig): DisplayMeta {
     case 'CUSTOM':
       return {
         kind: 'custom',
-        symbol: config.customCurrencySymbol,
+        symbol: isCurrencyImageUrl(config.customCurrencySymbol)
+          ? '¤'
+          : config.customCurrencySymbol,
         exchangeRate: config.customCurrencyExchangeRate,
       }
     case 'TOKENS':
@@ -471,11 +496,12 @@ export function formatCurrencyFromUSD(
  */
 export function formatBillingCurrencyFromUSD(
   amountUSD: number | null | undefined,
-  options?: CurrencyFormatOptions
+  options?: CurrencyFormatOptions,
+  snapshot?: CurrencyConfig
 ): string {
   if (amountUSD == null || Number.isNaN(amountUSD)) return '-'
 
-  const { config } = getCurrencyDisplay()
+  const { config } = getCurrencyDisplay(snapshot)
   const meta = getBillingDisplayMeta(config)
   const merged = mergeOptions(options)
   const value =
@@ -627,11 +653,12 @@ export function isCurrencyDisplayEnabled(): boolean {
  */
 export function formatLocalCurrencyAmount(
   amount: number | null | undefined,
-  options?: CurrencyFormatOptions
+  options?: CurrencyFormatOptions,
+  snapshot?: CurrencyConfig
 ): string {
   if (amount == null || Number.isNaN(amount)) return '-'
 
-  const { config } = getCurrencyDisplay()
+  const { config } = getCurrencyDisplay(snapshot)
   const meta = getBillingDisplayMeta(config)
   const merged = mergeOptions(options)
 

@@ -8110,6 +8110,11 @@
     "Image must not exceed 10 MiB": "画像は 10 MiB を超えられません",
     "You can attach up to 4 images": "画像は最大 4 枚まで添付できます",
     "Drop images here or paste": "ここに画像をドロップ、または貼り付け",
-    "Reference image (model support varies)": "参照画像（対応はモデルによります）"
+    "Reference image (model support varies)": "参照画像（対応はモデルによります）",
+    "A short text symbol, or an absolute HTTP(S) image URL": "短い記号、または絶対HTTP(S)画像URL",
+    "Custom currency symbol is too long": "カスタム通貨記号が長すぎます",
+    "Custom currency symbol must be 8 characters or an HTTP(S) image URL": "カスタム通貨記号は8文字以内、またはHTTP(S)画像URLにしてください",
+    "e.g. ¥, HK$ or an image URL": "例：¥、HK$、または画像URL",
+    "Site currency": "サイト通貨"
   }
 }

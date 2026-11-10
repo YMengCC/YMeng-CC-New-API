@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 /** Compact label/value chip used by the usage log statistics bar. */
 export function StatBadge(props: {
   label: string
-  value?: string | number
+  value?: ReactNode
   accent: string
   /** Optional leading icon rendered before the label (decorative). */
   icon?: ReactNode

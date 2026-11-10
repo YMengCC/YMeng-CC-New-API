@@ -3,11 +3,11 @@ import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { safeCatfkQrCode } from '../../catfk-api'
@@ -28,12 +28,6 @@ export function CatfkPaymentStatusDialog(props: {
   useSystemConfigStore((state) => state.config.currency)
   if (!props.order) return null
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const amount = formatBillingCurrencyFromUSD(props.order.amount, {
-    digitsLarge: 2,
-    digitsSmall: 2,
-    abbreviate: false,
-    locale,
-  })
   const completed = props.order.status === 'completed'
   const waiting =
     props.order.status === 'pending' || props.order.status === 'new'
@@ -104,8 +98,18 @@ export function CatfkPaymentStatusDialog(props: {
           <span className='text-muted-foreground text-xs'>
             {t('Topup Amount')}
           </span>
-          <span className='text-success text-2xl font-semibold break-all'>
-            +{amount}
+          <span className='text-success inline-flex items-baseline gap-0.5 text-2xl font-semibold break-all'>
+            +
+            <CurrencyAmount
+              amount={props.order.amount}
+              mode='billing'
+              options={{
+                digitsLarge: 2,
+                digitsSmall: 2,
+                abbreviate: false,
+                locale,
+              }}
+            />
           </span>
         </div>
       </Dialog>
@@ -133,7 +137,17 @@ export function CatfkPaymentStatusDialog(props: {
         <span className='text-muted-foreground text-sm'>
           {t('Topup Amount')}
         </span>
-        <span className='text-lg font-semibold break-all'>{amount}</span>
+        <CurrencyAmount
+          amount={props.order.amount}
+          mode='billing'
+          options={{
+            digitsLarge: 2,
+            digitsSmall: 2,
+            abbreviate: false,
+            locale,
+          }}
+          className='text-lg font-semibold break-all'
+        />
       </div>
       {waiting && (
         <div className='flex items-start justify-between gap-3'>

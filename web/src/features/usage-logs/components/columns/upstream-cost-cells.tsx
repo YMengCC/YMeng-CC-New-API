@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import {
@@ -27,7 +28,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatUpstreamRatio } from '@/features/channels/lib/upstream-cost'
-import { formatLogQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { UsageLog } from '../../data/schema'
@@ -98,9 +98,12 @@ export function UpstreamAmountLogCell(props: { log: UsageLog }) {
             <span className='inline-flex cursor-help items-center gap-1' />
           }
         >
-          <span className='font-mono text-xs font-medium tabular-nums'>
-            {formatLogQuota(cost.cost_quota)}
-          </span>
+          <CurrencyAmount
+            amount={cost.cost_quota}
+            mode='quota'
+            options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+            className='font-mono text-xs font-medium tabular-nums'
+          />
           {cost.status === UPSTREAM_COST_STATUS.ESTIMATED && (
             <StatusBadge
               label={t('Estimated')}
@@ -131,9 +134,15 @@ export function AffiliateCostLogCell(props: { log: UsageLog }) {
 
   return (
     <span className='font-mono text-xs font-medium tabular-nums'>
-      {sensitiveVisible
-        ? formatLogQuota(props.log.affiliate_cost)
-        : SENSITIVE_MASK}
+      {sensitiveVisible ? (
+        <CurrencyAmount
+          amount={props.log.affiliate_cost}
+          mode='quota'
+          options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+        />
+      ) : (
+        SENSITIVE_MASK
+      )}
     </span>
   )
 }
@@ -159,7 +168,11 @@ export function ProfitLogCell(props: { log: UsageLog }) {
         getProfitClassName(profit)
       )}
     >
-      {formatLogQuota(profit)}
+      <CurrencyAmount
+        amount={profit}
+        mode='quota'
+        options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+      />
     </span>
   )
 }

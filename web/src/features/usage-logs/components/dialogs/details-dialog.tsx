@@ -52,6 +52,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -63,7 +64,7 @@ import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
 import { PolicyDecisionRecord } from '@/features/system-settings/request-policies/decision-record'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
+import { formatTokens, formatUseTime } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -383,7 +384,13 @@ function BillingBreakdown(props: {
       )}
       <DetailRow
         label={t('Total Cost')}
-        value={formatLogQuota(log.quota)}
+        value={
+          <CurrencyAmount
+            amount={log.quota}
+            mode='quota'
+            options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+          />
+        }
         mono
       />
     </DetailSection>
@@ -924,7 +931,17 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
             <DetailRow
               label={t('Fee Amount')}
-              value={formatLogQuota(other.fee_quota ?? props.log.quota)}
+              value={
+                <CurrencyAmount
+                  amount={other.fee_quota ?? props.log.quota}
+                  mode='quota'
+                  options={{
+                    digitsLarge: 4,
+                    digitsSmall: 6,
+                    abbreviate: false,
+                  }}
+                />
+              }
               mono
             />
           </DetailSection>
@@ -1332,7 +1349,17 @@ export function DetailsDialog(props: DetailsDialogProps) {
             {other.subscription_pre_consumed != null && (
               <DetailRow
                 label={t('Pre-consumed')}
-                value={formatLogQuota(other.subscription_pre_consumed)}
+                value={
+                  <CurrencyAmount
+                    amount={other.subscription_pre_consumed}
+                    mode='quota'
+                    options={{
+                      digitsLarge: 4,
+                      digitsSmall: 6,
+                      abbreviate: false,
+                    }}
+                  />
+                }
                 mono
               />
             )}
@@ -1340,21 +1367,67 @@ export function DetailsDialog(props: DetailsDialogProps) {
               other.subscription_post_delta !== 0 && (
                 <DetailRow
                   label={t('Post Delta')}
-                  value={formatLogQuota(other.subscription_post_delta)}
+                  value={
+                    <CurrencyAmount
+                      amount={other.subscription_post_delta}
+                      mode='quota'
+                      options={{
+                        digitsLarge: 4,
+                        digitsSmall: 6,
+                        abbreviate: false,
+                      }}
+                    />
+                  }
                   mono
                 />
               )}
             {other.subscription_consumed != null && (
               <DetailRow
                 label={t('Final Consumed')}
-                value={formatLogQuota(other.subscription_consumed)}
+                value={
+                  <CurrencyAmount
+                    amount={other.subscription_consumed}
+                    mode='quota'
+                    options={{
+                      digitsLarge: 4,
+                      digitsSmall: 6,
+                      abbreviate: false,
+                    }}
+                  />
+                }
                 mono
               />
             )}
             {other.subscription_remain != null && (
               <DetailRow
                 label={t('Remaining')}
-                value={`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}
+                value={
+                  <span className='inline-flex flex-wrap items-baseline gap-x-1'>
+                    <CurrencyAmount
+                      amount={other.subscription_remain}
+                      mode='quota'
+                      options={{
+                        digitsLarge: 4,
+                        digitsSmall: 6,
+                        abbreviate: false,
+                      }}
+                    />
+                    {other.subscription_total != null && (
+                      <>
+                        <span>/</span>
+                        <CurrencyAmount
+                          amount={other.subscription_total}
+                          mode='quota'
+                          options={{
+                            digitsLarge: 4,
+                            digitsSmall: 6,
+                            abbreviate: false,
+                          }}
+                        />
+                      </>
+                    )}
+                  </span>
+                }
                 mono
               />
             )}

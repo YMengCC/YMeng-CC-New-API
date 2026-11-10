@@ -20,6 +20,7 @@ import { AlertTriangle, ChevronDown, PaintBucket } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -216,8 +217,22 @@ function TaskMatrixTable(props: TaskMatrixTableProps) {
                       i18n.language
                     )}
                   </span>
-                  <span className='text-muted-foreground text-[11px] font-normal'>
-                    {(props.currency ?? USD_PRICING_CURRENCY).symbol}/
+                  <span className='text-muted-foreground inline-flex items-center gap-0.5 text-[11px] font-normal'>
+                    {(props.currency ?? USD_PRICING_CURRENCY).imageUrl ? (
+                      <>
+                        <CurrencySymbol
+                          value={
+                            (props.currency ?? USD_PRICING_CURRENCY).symbol
+                          }
+                          imageUrlOverride={
+                            (props.currency ?? USD_PRICING_CURRENCY).imageUrl
+                          }
+                        />
+                        /
+                      </>
+                    ) : (
+                      `${(props.currency ?? USD_PRICING_CURRENCY).symbol}/`
+                    )}
                     {taskUsageUnitLabel(
                       definition,
                       i18n.language,
@@ -243,8 +258,20 @@ function TaskMatrixTable(props: TaskMatrixTableProps) {
                     'Added to the usage cost. Set to 0 for no additional charge.'
                   )}
                 </span>
-                <span className='text-muted-foreground text-[11px] font-normal'>
-                  {(props.currency ?? USD_PRICING_CURRENCY).symbol}/
+                <span className='text-muted-foreground inline-flex items-center gap-0.5 text-[11px] font-normal'>
+                  {(props.currency ?? USD_PRICING_CURRENCY).imageUrl ? (
+                    <>
+                      <CurrencySymbol
+                        value={(props.currency ?? USD_PRICING_CURRENCY).symbol}
+                        imageUrlOverride={
+                          (props.currency ?? USD_PRICING_CURRENCY).imageUrl
+                        }
+                      />
+                      /
+                    </>
+                  ) : (
+                    `${(props.currency ?? USD_PRICING_CURRENCY).symbol}/`
+                  )}
                   {t('request')}
                 </span>
               </div>

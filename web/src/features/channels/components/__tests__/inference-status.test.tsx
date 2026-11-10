@@ -37,8 +37,13 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { formatCurrencyFromUSD } from '@/lib/currency'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 import { CHANNEL_TYPE_VLLM, CHANNEL_TYPE_SGLANG } from '../../constants'
 import type { InferenceStatus } from '../../lib/inference-status'
@@ -111,6 +116,43 @@ afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   useAuthStore.setState({ auth: originalAuth })
+})
+
+it('keeps long channel balances compact when rendering a currency amount', () => {
+  const previousCurrency = useSystemConfigStore.getState().config.currency
+  useSystemConfigStore
+    .getState()
+    .setConfig({ currency: DEFAULT_CURRENCY_CONFIG })
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { success: true, data: [] } })
+  const channel = channelSchema.parse({
+    id: 42,
+    type: 1,
+    key: '',
+    name: 'Long balance',
+    status: 1,
+    created_time: 1,
+    test_time: 0,
+    response_time: 0,
+    balance_updated_time: 0,
+    balance: 1234567,
+  })
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <ChannelsProvider>
+          <BalanceCell channel={channel} />
+        </ChannelsProvider>
+      </QueryClientProvider>
+    )
+    const expected = formatCurrencyFromUSD(1234567, {
+      compact: true,
+      locale: 'en-US',
+      showSymbol: true,
+    })
+    expect(screen.getByText(expected)).toBeVisible()
+  } finally {
+    useSystemConfigStore.getState().setConfig({ currency: previousCurrency })
+  }
 })
 
 it.each([

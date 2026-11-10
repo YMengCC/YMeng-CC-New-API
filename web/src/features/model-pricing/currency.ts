@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { formatPricingNumber } from '@/features/system-settings/models/pricing-format'
+import { getCurrencyImageUrl, isCurrencyImageUrl } from '@/lib/currency'
 import type { CurrencyConfig } from '@/stores/system-config-store'
 
 export type PricingCurrency = {
   label: string
   symbol: string
+  imageUrl?: string | null
   exchangeRate: number
 }
 
@@ -38,10 +40,12 @@ export function getSitePricingCurrency(
     return { label: 'CNY', symbol: '¥', exchangeRate: config.usdExchangeRate }
   }
   if (config.quotaDisplayType === 'CUSTOM') {
-    const symbol = config.customCurrencySymbol?.trim() || '¤'
+    const configuredSymbol = config.customCurrencySymbol?.trim() || '¤'
+    const symbol = isCurrencyImageUrl(configuredSymbol) ? '¤' : configuredSymbol
     return {
       label: symbol,
       symbol,
+      imageUrl: getCurrencyImageUrl(config),
       exchangeRate: config.customCurrencyExchangeRate,
     }
   }
@@ -66,4 +70,14 @@ export function formatPricingAmount(
   const amount = Number(value) * currency.exchangeRate
   if (!Number.isFinite(amount)) return '—'
   return `${currency.symbol}${formatPricingNumber(amount)}`
+}
+
+/** Format a pricing amount without the currency symbol for component renders. */
+export function formatPricingAmountValue(
+  value: string | number,
+  currency = USD_PRICING_CURRENCY
+): string {
+  if (value === '') return ''
+  const amount = Number(value) * currency.exchangeRate
+  return Number.isFinite(amount) ? formatPricingNumber(amount) : '—'
 }

@@ -20,15 +20,12 @@ import { Loader2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  formatQuota,
-  parseQuotaFromDollars,
-  quotaUnitsToDollars,
-} from '@/lib/format'
+import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import {
   DEFAULT_CURRENCY_CONFIG,
   useSystemConfigStore,
@@ -116,9 +113,11 @@ export function TransferDialog({
           <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
             {t('Available Rewards')}
           </Label>
-          <div className='text-2xl font-semibold'>
-            {formatQuota(availableQuota)}
-          </div>
+          <CurrencyAmount
+            amount={availableQuota}
+            mode='quota'
+            className='text-2xl font-semibold'
+          />
         </div>
 
         <div className='space-y-3'>
@@ -139,7 +138,8 @@ export function TransferDialog({
             className='font-mono text-lg'
           />
           <p className='text-muted-foreground text-xs'>
-            {t('Minimum:')} {formatQuota(minimumQuota)}
+            {t('Minimum:')}{' '}
+            <CurrencyAmount amount={minimumQuota} mode='quota' />
           </p>
         </div>
       </div>

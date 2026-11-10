@@ -21,6 +21,7 @@ import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { CurrencySymbol } from '@/components/currency-display'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
@@ -598,9 +599,17 @@ export const TaskUsagePricingEditor = memo(function TaskUsagePricingEditor(
                             }}
                             className='font-mono'
                           />
-                          <span className='text-muted-foreground shrink-0 text-xs'>
-                            {(props.currency ?? USD_PRICING_CURRENCY).symbol}/
-                            {t('request')}
+                          <span className='text-muted-foreground inline-flex shrink-0 items-center gap-0.5 text-xs'>
+                            <CurrencySymbol
+                              value={
+                                (props.currency ?? USD_PRICING_CURRENCY).symbol
+                              }
+                              imageUrlOverride={
+                                (props.currency ?? USD_PRICING_CURRENCY)
+                                  .imageUrl
+                              }
+                            />
+                            /{t('request')}
                           </span>
                         </div>
                       </Field>

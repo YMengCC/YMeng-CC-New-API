@@ -29,6 +29,7 @@ import {
   Activity,
   type LucideIcon,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { IconBadgeTone } from '@/components/ui/icon-badge'
@@ -109,8 +110,8 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
 }
 
 export function useSummaryCardsConfig(totals: {
-  todayUsageDisplay: string
-  usedDisplay: string
+  todayUsageDisplay: ReactNode
+  usedDisplay: ReactNode
   requestCountDisplay: string
   currencyLabel: string
   currencyEnabled: boolean

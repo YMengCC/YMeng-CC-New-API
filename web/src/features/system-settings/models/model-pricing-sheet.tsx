@@ -33,6 +33,7 @@ import {
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -1142,7 +1143,10 @@ export const ModelPricingEditorPanel = forwardRef<
                                 <FormLabel>{t('Fixed price')}</FormLabel>
                                 <InputGroup className='has-[[data-pricing-error]]:h-auto has-[[data-pricing-error]]:flex-wrap'>
                                   <InputGroupAddon>
-                                    {currency.symbol}
+                                    <CurrencySymbol
+                                      value={currency.symbol}
+                                      imageUrlOverride={currency.imageUrl}
+                                    />
                                   </InputGroupAddon>
                                   <FormControl>
                                     <PricingAmountInput

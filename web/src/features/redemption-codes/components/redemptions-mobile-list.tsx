@@ -20,6 +20,7 @@ import type { Table as TanstackTable } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { DISABLED_ROW_MOBILE } from '@/components/data-table'
 import { MaskedValueDisplay } from '@/components/masked-value-display'
 import { StatusBadge } from '@/components/status-badge'
@@ -31,7 +32,6 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { REDEMPTION_STATUS, REDEMPTION_STATUSES } from '../constants'
@@ -163,9 +163,11 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
 
             <div className='flex items-center justify-between gap-2 text-xs'>
               <span className='text-muted-foreground'>{t('Quota')}</span>
-              <span className='font-medium tabular-nums'>
-                {formatQuota(redemption.quota)}
-              </span>
+              <CurrencyAmount
+                amount={redemption.quota}
+                mode='quota'
+                className='font-medium tabular-nums'
+              />
             </div>
           </div>
         )

@@ -8110,6 +8110,11 @@
     "Image must not exceed 10 MiB": "图片不能超过 10 MiB",
     "You can attach up to 4 images": "最多可附加 4 张图片",
     "Drop images here or paste": "拖入图片到此处或粘贴",
-    "Reference image (model support varies)": "参考图（是否生效取决于模型支持）"
+    "Reference image (model support varies)": "参考图（是否生效取决于模型支持）",
+    "A short text symbol, or an absolute HTTP(S) image URL": "简短文字符号，或 HTTP(S) 图片 URL",
+    "Custom currency symbol is too long": "自定义货币符号过长",
+    "Custom currency symbol must be 8 characters or an HTTP(S) image URL": "自定义货币符号最多 8 个字符，或填写 HTTP(S) 图片 URL",
+    "e.g. ¥, HK$ or an image URL": "例如，¥、HK$ 或图片 URL",
+    "Site currency": "站点货币"
   }
 }

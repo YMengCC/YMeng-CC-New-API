@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CurrencySymbol } from '@/components/currency-display'
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
 import { Progress } from '@/components/ui/progress'
 import { toIntlLocale } from '@/i18n/languages'
@@ -89,10 +90,15 @@ export function ApiKeyQuotaCell(props: ApiKeyQuotaCellProps) {
 
   return (
     <QuotaDetailsPopover
-      title={`${t('Quota')} (${quotaUnit})`}
+      title={
+        <span className='inline-flex items-center gap-1'>
+          {t('Quota')} (
+          {currency.kind === 'tokens' ? quotaUnit : <CurrencySymbol />})
+        </span>
+      }
       triggerLabel={
         props.variant === 'card'
-          ? `${t('Quota')} (${quotaUnit}); ${triggerLabel}`
+          ? `${t('Quota')}; ${triggerLabel}`
           : triggerLabel
       }
       details={details}

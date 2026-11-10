@@ -21,9 +21,9 @@ import { getRouteApi } from '@tanstack/react-router'
 import { Activity, Gauge } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMediaQuery } from '@/hooks'
-import { formatLogQuota } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { getLogStats, getUserLogStats } from '../api'
@@ -76,11 +76,17 @@ export function CommonLogsStats() {
     </>
   ) : (
     <>
-      <StatBadge
-        label={t('Usage')}
-        value={sensitiveVisible ? formatLogQuota(stats?.quota || 0) : '••••'}
-        accent='bg-sky-500/70'
-      />
+      <StatBadge label={t('Usage')} accent='bg-sky-500/70'>
+        {sensitiveVisible ? (
+          <CurrencyAmount
+            amount={stats?.quota || 0}
+            mode='quota'
+            options={{ digitsLarge: 4, digitsSmall: 6, abbreviate: false }}
+          />
+        ) : (
+          '••••'
+        )}
+      </StatBadge>
       <StatBadge
         label={t('RPM')}
         value={stats?.rpm || 0}
