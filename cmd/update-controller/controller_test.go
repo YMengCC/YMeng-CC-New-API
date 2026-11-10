@@ -100,19 +100,63 @@ func TestCompatibilityRequiresAllSignedDeploymentDimensions(t *testing.T) {
 		Platforms:             []string{"linux/amd64"},
 		Databases:             []string{"postgres"},
 	}
-	for _, source := range []string{"v1.0.0", "v0.9.0", "v0.8.0"} {
+	for _, source := range []string{"v1.0.0", "v0.9.0", "v0.8.0", "v1.0.5", "v1.1.0"} {
 		compatible, reason := controller.compatibility(manifest, source)
-		require.True(t, compatible, "direct upgrade from %s", source)
+		require.True(t, compatible, "update from %s", source)
 		assert.Empty(t, reason)
 	}
-	compatible, reason := controller.compatibility(manifest, "v0.7.0")
+	// Only a strictly older target release is refused.
+	compatible, reason := controller.compatibility(manifest, "v1.1.1")
 	assert.False(t, compatible)
-	assert.Equal(t, "Release is not approved from the current version.", reason)
+	assert.Equal(t, "Release is older than the current version.", reason)
+	// Releases missing from the signed source list are no longer blocked.
+	compatible, reason = controller.compatibility(manifest, "v0.7.0")
+	assert.True(t, compatible)
+	assert.Empty(t, reason)
+	compatible, reason = controller.compatibility(manifest, "dev")
+	assert.True(t, compatible)
+	assert.Empty(t, reason)
 
 	manifest.Databases = []string{"mysql"}
 	compatible, reason = controller.compatibility(manifest, "v1.0.0")
 	assert.False(t, compatible)
 	assert.NotEmpty(t, reason)
+
+	manifest.Databases = []string{"postgres"}
+	manifest.Platforms = []string{"linux/arm64"}
+	compatible, reason = controller.compatibility(manifest, "v1.0.0")
+	assert.False(t, compatible)
+	assert.NotEmpty(t, reason)
+
+	manifest.Platforms = []string{"linux/amd64"}
+	manifest.SchemaUnchanged = false
+	compatible, reason = controller.compatibility(manifest, "v1.0.0")
+	assert.False(t, compatible)
+	assert.NotEmpty(t, reason)
+}
+
+func TestCompareReleaseVersions(t *testing.T) {
+	for _, testCase := range []struct {
+		left, right string
+		want        int
+		ok          bool
+	}{
+		{"v1.2.15", "v1.2.17", -1, true},
+		{"v1.2.17", "v1.2.15", 1, true},
+		{"v1.2.17", "v1.2.17", 0, true},
+		{"1.2.17", "v1.2.17", 0, true},
+		{"v1.2.17+build.2", "v1.2.17", 0, true},
+		{"v1.2", "v1.2.0", 0, false},
+		{"dev", "v1.2.17", 0, false},
+		{"v1.2.17", "", 0, false},
+		{"v1.2.17-rc.1", "v1.2.17", 0, false},
+	} {
+		got, ok := compareReleaseVersions(testCase.left, testCase.right)
+		assert.Equal(t, testCase.ok, ok, "%s vs %s", testCase.left, testCase.right)
+		if testCase.ok {
+			assert.Equal(t, testCase.want, got, "%s vs %s", testCase.left, testCase.right)
+		}
+	}
 }
 
 func TestHAProxyMapEntryReplacementPreservesOtherBackends(t *testing.T) {

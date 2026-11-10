@@ -99,6 +99,28 @@ const model: PricingModel = {
   },
 }
 const clients: QueryClient[] = []
+const CURRENCY_IMAGE_URL = 'https://cdn.example.com/currency.svg?theme=dark'
+
+function setImageCurrency() {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: CURRENCY_IMAGE_URL,
+    },
+  })
+}
+
+const ratioModel: PricingModel = {
+  ...model,
+  billing_mode: undefined,
+  billing_expr: undefined,
+  billing_usage_schema: undefined,
+  quota_type: 0,
+  model_ratio: 1,
+  completion_ratio: 2,
+  enable_groups: ['default'],
+}
 
 it('shows nested task conditions and prices in detail and group tables without ambiguous log matches', () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
@@ -257,11 +279,144 @@ it('updates count unit labels across cards, table cells and breakdowns with loca
 })
 
 afterEach(async () => {
+  act(() =>
+    useSystemConfigStore
+      .getState()
+      .setConfig({ currency: DEFAULT_CURRENCY_CONFIG })
+  )
   cleanup()
   clients.forEach((client) => client.clear())
   clients.length = 0
   vi.restoreAllMocks()
   await i18next.changeLanguage('en')
+})
+
+it('keeps the generic mark in pricing table titles while showing the configured image in visible prices', () => {
+  setImageCurrency()
+
+  render(<ModelPriceCell model={ratioModel} />)
+
+  expect(screen.getByRole('img', { name: '¤' })).toHaveAttribute(
+    'src',
+    CURRENCY_IMAGE_URL
+  )
+  expect(screen.getByTitle('¤ / 1M tokens')).toBeInTheDocument()
+  expect(screen.queryAllByText(/¤/)).toHaveLength(0)
+})
+
+it('shows the configured currency image in base and group pricing tables', () => {
+  setImageCurrency()
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  clients.push(client)
+
+  render(
+    <QueryClientProvider client={client}>
+      <ModelDetailsContent
+        model={ratioModel}
+        groupRatio={{ default: 2 }}
+        usableGroup={{ default: { desc: '', ratio: 2 } }}
+        endpointMap={{}}
+        autoGroups={[]}
+        priceRate={1}
+        usdExchangeRate={1}
+        tokenUnit='M'
+      />
+    </QueryClientProvider>
+  )
+
+  const groupSection = screen
+    .getByRole('heading', { name: 'Pricing by Group' })
+    .closest('section')
+  if (!groupSection) {
+    throw new Error('Expected a pricing by group section')
+  }
+  expect(
+    within(groupSection).getAllByRole('img', { name: '¤' }).length
+  ).toBeGreaterThan(0)
+  expect(screen.queryAllByText(/¤/)).toHaveLength(0)
+})
+
+it('shows the configured currency image in dynamic group prices and breakdowns', () => {
+  setImageCurrency()
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  clients.push(client)
+
+  render(
+    <QueryClientProvider client={client}>
+      <ModelDetailsContent
+        model={model}
+        groupRatio={{ default: 2 }}
+        usableGroup={{ default: { desc: '', ratio: 2 } }}
+        endpointMap={{}}
+        autoGroups={[]}
+        priceRate={1}
+        usdExchangeRate={1}
+        tokenUnit='M'
+      />
+      <DynamicPricingBreakdown
+        billingExpr={model.billing_expr}
+        usageSchema={model.billing_usage_schema}
+      />
+    </QueryClientProvider>
+  )
+
+  expect(screen.getAllByRole('img', { name: '¤' }).length).toBeGreaterThan(0)
+  expect(screen.queryAllByText(/¤/)).toHaveLength(0)
+})
+
+it('shows the configured currency image in provider variant group prices', async () => {
+  setImageCurrency()
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  clients.push(client)
+  const providerModel: PricingModel = {
+    ...model,
+    billing_plugin_variants: [
+      {
+        plugin_key: 'alpha',
+        plugin_name: 'Alpha',
+        billing_expr: 'tier("alpha", u("clips") * 0.2)',
+        billing_usage_schema: model.billing_usage_schema ?? {},
+      },
+      {
+        plugin_key: 'beta',
+        plugin_name: 'Beta',
+        billing_expr: 'tier("beta", u("clips") * 0.4)',
+        billing_usage_schema: model.billing_usage_schema ?? {},
+      },
+    ],
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <ModelDetailsContent
+        model={providerModel}
+        groupRatio={{ default: 2 }}
+        usableGroup={{ default: { desc: '', ratio: 2 } }}
+        endpointMap={{}}
+        autoGroups={[]}
+        priceRate={1}
+        usdExchangeRate={1}
+        tokenUnit='M'
+      />
+    </QueryClientProvider>
+  )
+
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('tab', { name: 'Beta' }))
+  const panel = screen.getByRole('tabpanel', { name: 'Beta' })
+  expect(
+    within(panel).getAllByRole('img', { name: '¤' }).length
+  ).toBeGreaterThan(0)
+  expect(screen.queryAllByText(/¤/)).toHaveLength(0)
 })
 
 it('refreshes memoized provider prices when the group or display currency changes', () => {

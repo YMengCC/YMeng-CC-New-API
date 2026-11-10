@@ -20,7 +20,7 @@ import { Tag as TagIcon } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { CurrencySymbol } from '@/components/currency-display'
+import { CurrencyFormattedText } from '@/components/currency-display'
 import { StaticDataTable } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
 import { getCurrencyImageUrl } from '@/lib/currency'
@@ -212,12 +212,12 @@ function formatBreakdownPrice(
     field.unit === 'image'
       ? formatTaskUsageUnitPrice(value, { tokenUnit: 'M', ...taskPriceOptions })
       : null
-  const priceContent = amount ?? (
-    <>
-      <CurrencySymbol value={symbol} imageUrlOverride={imageUrl} />
-      {(value * rate).toFixed(4)}
-    </>
-  )
+  const priceText =
+    amount ??
+    (imageUrl
+      ? `¤ ${(value * rate).toFixed(4)}`
+      : `${symbol}${(value * rate).toFixed(4)}`)
+  const priceContent = <CurrencyFormattedText value={priceText} />
   if (field.unit === 'second') {
     return (
       <>

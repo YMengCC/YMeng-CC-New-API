@@ -21,6 +21,7 @@ import { memo, useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { CurrencyFormattedText } from '@/components/currency-display'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { getLobeIcon } from '@/lib/lobe-icon'
@@ -167,7 +168,11 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                     </span>
                   )}
                   <span className='flex flex-wrap items-baseline gap-x-1 font-mono text-sm font-semibold tabular-nums'>
-                    <span>{entry.formattedRange ?? entry.formatted}</span>
+                    <span>
+                      <CurrencyFormattedText
+                        value={entry.formattedRange ?? entry.formatted}
+                      />
+                    </span>
                     <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
                       {' '}
                       / {unitLabel}
@@ -188,7 +193,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           )}
           {cardExamplePrice && (
             <span className='text-muted-foreground col-span-full text-xs break-words'>
-              {cardExamplePrice.label} ≈ {cardExamplePrice.formatted}
+              {cardExamplePrice.label} ≈{' '}
+              <CurrencyFormattedText value={cardExamplePrice.formatted} />
             </span>
           )}
           {dynamicSummary.isTaskUsage &&
@@ -230,15 +236,17 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       <div key={price.type} className='flex min-w-0 flex-col gap-1'>
         <span className='text-muted-foreground text-xs'>{price.label}</span>
         <span className='font-mono text-sm font-semibold tabular-nums'>
-          {formatPrice(
-            props.model,
-            price.type,
-            tokenUnit,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
-            props.selectedGroup
-          )}
+          <CurrencyFormattedText
+            value={formatPrice(
+              props.model,
+              price.type,
+              tokenUnit,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate,
+              props.selectedGroup
+            )}
+          />
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}
             / {tokenUnitLabel}
@@ -250,13 +258,15 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     priceSummary = (
       <div className='col-span-full flex min-w-0 flex-col gap-1'>
         <span className='font-mono text-sm font-semibold tabular-nums'>
-          {formatRequestPrice(
-            props.model,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
-            props.selectedGroup
-          )}
+          <CurrencyFormattedText
+            value={formatRequestPrice(
+              props.model,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate,
+              props.selectedGroup
+            )}
+          />
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}
             / {t('request')}

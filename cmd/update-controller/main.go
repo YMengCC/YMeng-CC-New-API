@@ -377,8 +377,10 @@ func (u *controller) compatibility(manifest siteupdate.Compatibility, current st
 	if !manifest.SchemaUnchanged || !manifest.SharedStateCompatible {
 		return false, "Release compatibility has not approved schema or shared-state migration."
 	}
-	if !slices.Contains(manifest.FromVersions, current) {
-		return false, "Release is not approved from the current version."
+	// Sources are signed and retained for audit, but any older release may
+	// update straight to this version; only downgrades are refused.
+	if comparison, ok := compareReleaseVersions(manifest.Version, current); ok && comparison < 0 {
+		return false, "Release is older than the current version."
 	}
 	if !slices.Contains(manifest.Platforms, u.config.platform) {
 		return false, "Release is not approved for this platform."
@@ -387,6 +389,59 @@ func (u *controller) compatibility(manifest siteupdate.Compatibility, current st
 		return false, "Release is not approved for this database."
 	}
 	return true, ""
+}
+
+// compareReleaseVersions compares numeric release tags such as v1.2.17. Build
+// metadata is ignored and the leading v is optional; unparsable values report
+// ok=false so the caller can skip the ordering check.
+func compareReleaseVersions(left, right string) (int, bool) {
+	a, ok := parseReleaseVersion(left)
+	if !ok {
+		return 0, false
+	}
+	b, ok := parseReleaseVersion(right)
+	if !ok {
+		return 0, false
+	}
+	for i := range max(len(a), len(b)) {
+		leftPart, rightPart := int64(0), int64(0)
+		if i < len(a) {
+			leftPart = a[i]
+		}
+		if i < len(b) {
+			rightPart = b[i]
+		}
+		if leftPart != rightPart {
+			if leftPart < rightPart {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
+}
+
+func parseReleaseVersion(value string) ([]int64, bool) {
+	value = strings.TrimPrefix(strings.TrimSpace(value), "v")
+	if base, _, found := strings.Cut(value, "+"); found {
+		value = base
+	}
+	parts := strings.Split(value, ".")
+	if len(parts) < 3 {
+		return nil, false
+	}
+	numbers := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			return nil, false
+		}
+		number, err := strconv.ParseInt(part, 10, 64)
+		if err != nil || number < 0 {
+			return nil, false
+		}
+		numbers = append(numbers, number)
+	}
+	return numbers, true
 }
 
 func validImageDigest(image string) bool {

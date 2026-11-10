@@ -55,7 +55,9 @@ type UpdateRequest struct {
 }
 
 // Compatibility is a maintainer-approved declaration, signed independently of
-// the image. It must only be published after testing the listed version pairs.
+// the image. FromVersions records the version pairs that were explicitly
+// tested; it is audit metadata and does not restrict which older release an
+// installation may update from.
 type Compatibility struct {
 	Version               string   `json:"version"`
 	Image                 string   `json:"image"`

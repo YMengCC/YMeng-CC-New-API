@@ -53,6 +53,8 @@ function pricingModel(overrides: Partial<PricingModel> = {}): PricingModel {
   }
 }
 
+const CURRENCY_IMAGE_URL = 'https://cdn.example.com/currency.svg?theme=dark'
+
 let queryClient: QueryClient
 const originalStorage = useSystemConfigStore.persist.getOptions().storage
 beforeEach(() => {
@@ -88,6 +90,46 @@ afterEach(() => {
 })
 
 describe('model cards', () => {
+  it('shows the configured currency image instead of the generic mark on model cards', () => {
+    useSystemConfigStore.getState().setConfig({
+      currency: {
+        ...DEFAULT_CURRENCY_CONFIG,
+        quotaDisplayType: 'CUSTOM',
+        customCurrencySymbol: CURRENCY_IMAGE_URL,
+      },
+    })
+
+    render(
+      <ModelCard model={pricingModel({ cache_ratio: 0.5 })} onClick={vi.fn()} />
+    )
+
+    expect(screen.getAllByRole('img', { name: '¤' })).toHaveLength(3)
+    expect(screen.queryAllByText(/¤/)).toHaveLength(0)
+  })
+
+  it('shows the configured currency image instead of the generic mark on cached prices', () => {
+    useSystemConfigStore.getState().setConfig({
+      currency: {
+        ...DEFAULT_CURRENCY_CONFIG,
+        quotaDisplayType: 'CUSTOM',
+        customCurrencySymbol: CURRENCY_IMAGE_URL,
+      },
+    })
+
+    render(
+      <CachedPriceCell
+        model={pricingModel({ cache_ratio: 0.5 })}
+        options={{ tokenUnit: 'M' }}
+      />
+    )
+
+    expect(screen.getByRole('img', { name: '¤' })).toHaveAttribute(
+      'src',
+      CURRENCY_IMAGE_URL
+    )
+    expect(screen.queryAllByText(/¤/)).toHaveLength(0)
+  })
+
   it('shows separate generic and image cache prices including a free image cache', () => {
     render(
       <CachedPriceCell

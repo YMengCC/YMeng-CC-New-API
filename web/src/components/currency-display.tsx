@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 
 import {
   formatBillingCurrencyFromUSD,
@@ -56,11 +56,11 @@ export function CurrencySymbol(props: CurrencySymbolProps) {
   }
   const configuredValue = props.value ?? defaultSymbol
   const value = configuredValue.trim()
-  const imageUrl =
-    (isCurrencyImageUrl(value) ? value : '') ||
-    (isCurrencyImageUrl(props.imageUrlOverride)
-      ? props.imageUrlOverride.trim()
-      : '')
+  const directImageUrl = isCurrencyImageUrl(value) ? value : ''
+  const overrideImageUrl = isCurrencyImageUrl(props.imageUrlOverride)
+    ? props.imageUrlOverride.trim()
+    : ''
+  const imageUrl = directImageUrl || overrideImageUrl
   const [imageFailed, setImageFailed] = useState(false)
 
   useEffect(() => {
@@ -85,10 +85,13 @@ export function CurrencySymbol(props: CurrencySymbolProps) {
     )
   }
 
-  const configuredAsImage = isCurrencyImageUrl(value)
+  const configuredAsImage = Boolean(imageUrl)
   let fallback = display.meta.kind === 'tokens' ? '' : display.meta.symbol
   if (props.value !== undefined) {
-    fallback = configuredAsImage ? '¤' : value || '¤'
+    fallback = isCurrencyImageUrl(value) ? '¤' : value || '¤'
+  }
+  if (configuredAsImage && !directImageUrl) {
+    fallback = '¤'
   }
 
   if (configuredAsImage && fallback) {
@@ -107,6 +110,51 @@ export function CurrencySymbol(props: CurrencySymbolProps) {
   return fallback ? (
     <span className={cn('shrink-0', props.className)}>{fallback}</span>
   ) : null
+}
+
+export type CurrencyFormattedTextProps = {
+  /** Preformatted amount, range, label, or caption containing `¤` placeholders. */
+  value: string
+  snapshot?: CurrencyConfig
+  className?: string
+  symbolClassName?: string
+}
+
+export function CurrencyFormattedText(
+  props: CurrencyFormattedTextProps
+): ReactNode {
+  const currentCurrency = useSystemConfigStore((state) => state.config.currency)
+  const snapshot = props.snapshot ?? currentCurrency
+  const imageUrl = getCurrencyImageUrl(snapshot)
+  if (!imageUrl || !props.value.includes('¤')) return props.value
+
+  const parts = props.value.split('¤')
+  const partOccurrences = new Map<string, number>()
+  return (
+    <span
+      className={cn(
+        'inline-flex min-w-0 max-w-full flex-wrap items-baseline',
+        props.className
+      )}
+    >
+      {parts.map((part, index) => {
+        const occurrence = partOccurrences.get(part) ?? 0
+        partOccurrences.set(part, occurrence + 1)
+        return (
+          <Fragment key={`${part}:${occurrence}`}>
+            {index > 0 && (
+              <CurrencySymbol
+                value={imageUrl}
+                snapshot={snapshot}
+                className={props.symbolClassName}
+              />
+            )}
+            {part && <span className='whitespace-pre-wrap'>{part}</span>}
+          </Fragment>
+        )
+      })}
+    </span>
+  )
 }
 
 type CurrencyAmountMode = 'quota' | 'usd' | 'billing' | 'local'

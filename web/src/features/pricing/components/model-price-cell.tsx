@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyFormattedText } from '@/components/currency-display'
 import { getCurrencyLabel } from '@/lib/currency'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -253,7 +254,7 @@ export function ModelPriceCell(props: {
               className='min-w-0 font-mono text-sm break-words whitespace-normal tabular-nums'
               title={metric.value}
             >
-              {metric.value}
+              <CurrencyFormattedText value={metric.value} />
             </span>
           </span>
         ))}
@@ -262,7 +263,7 @@ export function ModelPriceCell(props: {
         className='text-muted-foreground block text-xs font-normal break-words whitespace-normal sm:truncate'
         title={caption}
       >
-        {caption}
+        <CurrencyFormattedText value={caption} />
       </span>
     </span>
   )

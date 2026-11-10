@@ -86,6 +86,7 @@ export const STATIC_I18N_KEYS = [
   'Update completed, but the HAProxy map file was not persisted. Repair the map and retain the previous container before another update.',
   'This release has no verified online-update compatibility manifest.',
   'Release is not approved from the current version.',
+  'Release is older than the current version.',
   'Connect the managed update controller before installing releases.',
   'update controller rejected the operation (HTTP 409)',
   'Traffic switched; the previous container is still draining and was retained.',

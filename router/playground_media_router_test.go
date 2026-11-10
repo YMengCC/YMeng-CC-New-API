@@ -9,7 +9,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/setting"
@@ -108,7 +107,6 @@ func TestRewrittenPathsMatchDistributorBranches(t *testing.T) {
 }
 
 func TestPlaygroundMediaPreparationAppliesAllowedGroupBeforeRouting(t *testing.T) {
-	require.NoError(t, i18n.Init())
 	setupRelayRouterTestDB(t)
 	previousGroups := setting.UserUsableGroups2JSONString()
 	t.Cleanup(func() { require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(previousGroups)) })
