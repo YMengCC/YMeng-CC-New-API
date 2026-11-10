@@ -19,10 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  CodeBlock,
-  CodeBlockCopyButton,
-} from '@/components/ai-elements/code-block'
 import { Loader } from '@/components/ai-elements/loader'
 import { MessageContent } from '@/components/ai-elements/message'
 import {
@@ -47,10 +43,13 @@ import {
   isErrorMessage,
   type MessageAlignment,
 } from '../../lib'
+import { splitMessageSegments } from '../../lib/message/message-segments'
 import { getMessageContentStyles } from '../../lib/message/message-styles'
 import type { Message } from '../../types'
 import { MessageError } from './message-error'
 import { MessageMetadata } from './message-metadata'
+import { PlaygroundMediaCard } from './playground-media-card'
+import { PlaygroundSegmentCard } from './playground-segment-card'
 
 type PlaygroundMessageContentProps = {
   actions: ReactNode
@@ -74,6 +73,7 @@ export function PlaygroundMessageContent({
     displayContent,
     hasReasoning,
     hasSources,
+    isAssistant,
     reasoningContent,
     showLoader,
     showMessageContent,
@@ -83,6 +83,42 @@ export function PlaygroundMessageContent({
   const isMessageFinal =
     message.status !== MESSAGE_STATUS.LOADING &&
     message.status !== MESSAGE_STATUS.STREAMING
+  const segments = splitMessageSegments(displayContent)
+  const hasCodeSegments =
+    isAssistant && segments.some((segment) => segment.kind === 'code')
+
+  let contentBody
+  if (hasCodeSegments) {
+    contentBody = (
+      <div className='w-full min-w-0'>
+        {segments.map((segment) => (
+          <PlaygroundSegmentCard
+            isFinal={isMessageFinal}
+            isSourceVisible={isSourceVisible}
+            key={segment.key}
+            segment={segment}
+          />
+        ))}
+      </div>
+    )
+  } else if (isSourceVisible) {
+    contentBody = (
+      <MessageContent
+        variant='flat'
+        className={cn(getMessageContentStyles(), 'font-mono text-sm')}
+      >
+        <pre className='overflow-auto whitespace-pre-wrap'>
+          {displayContent}
+        </pre>
+      </MessageContent>
+    )
+  } else {
+    contentBody = (
+      <MessageContent variant='flat' className={cn(getMessageContentStyles())}>
+        <Response final={isMessageFinal}>{displayContent}</Response>
+      </MessageContent>
+    )
+  }
 
   return (
     <div
@@ -134,30 +170,33 @@ export function PlaygroundMessageContent({
         </>
       )}
 
+      {message.images && message.images.length > 0 && (
+        <div className='flex flex-wrap gap-2'>
+          {message.images.map((url) => (
+            <img
+              alt={t('Attached image')}
+              className='border-border size-20 rounded-md border object-cover'
+              key={url}
+              src={url}
+            />
+          ))}
+        </div>
+      )}
+
+      {message.media && message.media.length > 0 && (
+        <div className='w-full min-w-0'>
+          {message.media.map((item) => (
+            <PlaygroundMediaCard
+              key={item.taskId ?? item.url ?? `${item.type}-${item.prompt}`}
+              media={item}
+            />
+          ))}
+        </div>
+      )}
+
       {!isError && showMessageContent && (
         <>
-          {isSourceVisible ? (
-            <CodeBlock
-              code={versionContent}
-              className='my-0 group-[.is-assistant]:w-full group-[.is-assistant]:max-w-[78ch]'
-              collapsedLines={24}
-              defaultCollapsed={false}
-              language='markdown'
-              maxExpandedLines={48}
-              showLineNumbers
-              showToolbar
-              title={t('Raw response')}
-            >
-              <CodeBlockCopyButton />
-            </CodeBlock>
-          ) : (
-            <MessageContent
-              variant='flat'
-              className={cn(getMessageContentStyles())}
-            >
-              <Response final={isMessageFinal}>{displayContent}</Response>
-            </MessageContent>
-          )}
+          {contentBody}
           <MessageMetadata alignment={alignment} message={message} />
           {actions}
         </>

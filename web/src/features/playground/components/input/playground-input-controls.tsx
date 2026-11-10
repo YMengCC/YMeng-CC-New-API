@@ -20,7 +20,10 @@ import { SendIcon, SquareIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PromptInputButton } from '@/components/ai-elements/prompt-input'
+import {
+  PromptInputButton,
+  usePromptInputAttachments,
+} from '@/components/ai-elements/prompt-input'
 import { ModelGroupSelector } from '@/components/model-group-selector'
 
 import { getInputControlState } from '../../lib'
@@ -56,10 +59,12 @@ export function PlaygroundInputControls({
   tools,
 }: PlaygroundInputControlsProps) {
   const { t } = useTranslation()
+  const { files } = usePromptInputAttachments()
   const { canSubmit, isSelectorDisabled, shouldShowStop } =
     getInputControlState({
       disabled,
       groups,
+      hasAttachments: files.length > 0,
       hasStopHandler: Boolean(onStop),
       isGenerating,
       isModelLoading,
@@ -82,44 +87,44 @@ export function PlaygroundInputControls({
   const renderSubmitButton = () =>
     shouldShowStop ? (
       <PromptInputButton
-        className='border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15 font-medium'
+        aria-label={t('Stop')}
+        className='size-10 justify-center p-0 font-medium sm:size-auto sm:min-w-20 sm:px-3'
         onClick={onStop}
-        variant='secondary'
+        variant='destructive'
       >
-        <SquareIcon className='fill-current' size={16} />
+        <SquareIcon
+          aria-hidden='true'
+          className='fill-current'
+          data-icon='inline-start'
+        />
         <span className='hidden sm:inline'>{t('Stop')}</span>
-        <span className='sr-only sm:hidden'>{t('Stop')}</span>
       </PromptInputButton>
     ) : (
       <PromptInputButton
-        className='bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground h-8 px-3 font-medium shadow-sm'
+        aria-label={t('Send')}
+        className='size-10 justify-center p-0 font-medium disabled:opacity-50 sm:size-auto sm:min-w-20 sm:px-3'
         disabled={!canSubmit}
         type='submit'
         variant='default'
       >
-        <SendIcon size={16} />
+        <SendIcon aria-hidden='true' data-icon='inline-start' />
         <span className='hidden sm:inline'>{t('Send')}</span>
-        <span className='sr-only sm:hidden'>{t('Send')}</span>
       </PromptInputButton>
     )
 
   return (
-    <div className='flex w-full flex-col gap-2.5 md:flex-row md:items-center md:justify-between'>
-      <div className='flex min-w-0 items-center justify-end md:hidden'>
-        {renderSelector()}
-      </div>
-
-      <div className='flex items-center justify-between gap-2 md:justify-start'>
-        {tools}
-        <div className='flex items-center gap-1.5 md:hidden'>
-          {renderSubmitButton()}
+    <div className='flex w-full flex-nowrap items-center gap-1.5 md:gap-2'>
+      <div className='flex min-w-0 flex-1 items-center'>
+        <div className='max-w-full min-w-0 overflow-x-auto md:overflow-visible'>
+          {tools}
         </div>
       </div>
 
-      <div className='hidden min-w-0 items-center gap-2 md:flex'>
+      <div className='shrink-0 [&_button]:max-w-[6.5rem] [&_button]:px-2 md:[&_button]:max-w-[15rem] md:[&_button]:px-2.5'>
         {renderSelector()}
-        {renderSubmitButton()}
       </div>
+
+      <div className='flex shrink-0 items-center'>{renderSubmitButton()}</div>
     </div>
   )
 }

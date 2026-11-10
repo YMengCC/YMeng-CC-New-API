@@ -18,11 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
+import { MAX_CONVERSATION_TITLE_CHARS } from '../../constants'
+
 export const STORAGE_VERSION = 1
 export const MAX_STORED_MESSAGES = 100
 export const MAX_STORED_MESSAGES_BYTES = 1024 * 1024
 export const MAX_LOADED_MESSAGES_CHARS = 120_000
 export const MAX_LOADED_MESSAGE_CHARS = 40_000
+export const MAX_STORED_CONVERSATIONS = 30
+export const MAX_STORED_HISTORY_BYTES = 4 * 1024 * 1024
 
 export const playgroundConfigSchema = z.object({
   model: z.string().optional(),
@@ -71,6 +75,19 @@ const reasoningSchema = z.object({
   durationMs: z.number().optional(),
 })
 
+// Only URLs are stored. Base64 payloads must never reach localStorage.
+const generatedMediaSchema = z.object({
+  type: z.enum(['image', 'video']),
+  url: z.string().max(2048).optional(),
+  prompt: z.string().max(2000),
+  status: z.enum(['pending', 'succeeded', 'failed']),
+  taskId: z.string().max(256).optional(),
+  error: z.string().max(1000).optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  duration: z.number().optional(),
+})
+
 const messageSchema = z.object({
   key: z.string(),
   from: messageRoleSchema,
@@ -79,6 +96,7 @@ const messageSchema = z.object({
   startedAt: z.number().optional(),
   completedAt: z.number().optional(),
   durationMs: z.number().optional(),
+  media: z.array(generatedMediaSchema).max(16).optional(),
   sources: z.array(sourceSchema).optional(),
   reasoning: reasoningSchema.optional(),
   isReasoningStreaming: z.boolean().optional(),
@@ -89,3 +107,16 @@ const messageSchema = z.object({
 })
 
 export const messagesSchema = z.array(messageSchema)
+
+const conversationSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().max(MAX_CONVERSATION_TITLE_CHARS),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  messages: messagesSchema,
+})
+
+export const playgroundHistorySchema = z.object({
+  activeId: z.string().min(1),
+  conversations: z.array(conversationSchema),
+})

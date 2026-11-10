@@ -21,6 +21,7 @@ import type { GroupOption, ModelOption } from '../../types'
 type InputControlStateOptions = {
   disabled?: boolean
   groups: GroupOption[]
+  hasAttachments?: boolean
   hasStopHandler: boolean
   isGenerating?: boolean
   isModelLoading?: boolean
@@ -36,22 +37,40 @@ type InputControlState = {
 
 type SubmittableInputMessage = {
   text?: string | null
+  files?: { url?: string; mediaType?: string; type?: string }[]
 }
 
 export function getSubmittableInputText(
   message: SubmittableInputMessage,
   disabled?: boolean
 ): string | null {
-  if (disabled || !message.text?.trim()) {
-    return null
-  }
+  if (disabled) return null
+  return message.text?.trim() || null
+}
 
-  return message.text
+export function getSubmittableImageUrls(
+  message: SubmittableInputMessage
+): string[] {
+  return (message.files ?? [])
+    .filter(
+      (file) =>
+        file.url?.startsWith('data:image/') ||
+        (file.mediaType?.startsWith('image/') && Boolean(file.url))
+    )
+    .map((file) => file.url as string)
+}
+
+export function canSubmitInput(
+  message: SubmittableInputMessage,
+  hasAttachments: boolean
+): boolean {
+  return Boolean(message.text?.trim()) || hasAttachments
 }
 
 export function getInputControlState({
   disabled,
   groups,
+  hasAttachments = false,
   hasStopHandler,
   isGenerating,
   isModelLoading,
@@ -61,7 +80,8 @@ export function getInputControlState({
   const hasModels = models.length > 0
 
   return {
-    canSubmit: !disabled && hasModels && text.trim().length > 0,
+    canSubmit:
+      !disabled && hasModels && (text.trim().length > 0 || hasAttachments),
     isSelectorDisabled: disabled || isModelLoading || groups.length === 0,
     shouldShowStop: Boolean(isGenerating && hasStopHandler),
   }

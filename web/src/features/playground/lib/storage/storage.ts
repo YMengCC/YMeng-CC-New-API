@@ -48,7 +48,7 @@ const MIN_PREFIX_COLLAPSE_LENGTH = 2000
 const MIN_REPEATED_SECTION_COUNT = 3
 const SECTION_HEADING_LINE_PATTERN = /^#{2,6}\s+\d+\.\s+.+$/gm
 
-function getUserStorageKey(key: string): string | null {
+export function getUserStorageKey(key: string): string | null {
   // Legacy data has no owner; never assign it to the next signed-in account.
   for (const legacyKey of Object.values(STORAGE_KEYS)) {
     localStorage.removeItem(legacyKey)
@@ -57,7 +57,7 @@ function getUserStorageKey(key: string): string | null {
   return userId == null ? null : `${key}:${userId}`
 }
 
-function readStoredValue(baseKey: string): unknown | null {
+export function readStoredValue(baseKey: string): unknown | null {
   const key = getUserStorageKey(baseKey)
   if (!key) return null
   const saved = localStorage.getItem(key)
@@ -80,7 +80,7 @@ function readStoredMessagesValue(): unknown | null {
   return JSON.parse(saved) as unknown
 }
 
-function unwrapStoredValue(value: unknown): unknown {
+export function unwrapStoredValue(value: unknown): unknown {
   if (!value || typeof value !== 'object') {
     return value
   }
@@ -92,7 +92,7 @@ function unwrapStoredValue(value: unknown): unknown {
   return value
 }
 
-function writeStoredValue<T>(baseKey: string, data: T): void {
+export function writeStoredValue<T>(baseKey: string, data: T): void {
   const key = getUserStorageKey(baseKey)
   if (!key) return
   const payload: StoredEnvelope<T> = {
@@ -103,7 +103,7 @@ function writeStoredValue<T>(baseKey: string, data: T): void {
   localStorage.setItem(key, JSON.stringify(payload))
 }
 
-function trimMessages(messages: Message[]): Message[] {
+export function trimMessages(messages: Message[]): Message[] {
   if (messages.length <= MAX_STORED_MESSAGES) {
     return messages
   }
@@ -209,7 +209,7 @@ function collapseRepeatedSectionSnapshots(text: string): string {
   return text.slice(lastRepeatedRunStart)
 }
 
-function normalizeStoredMessageForLoad(message: Message): Message {
+export function normalizeStoredMessageForLoad(message: Message): Message {
   let changed = false
   const versions = message.versions.map((version) => {
     const collapsedContent = collapseRepeatedSectionSnapshots(version.content)
@@ -240,7 +240,19 @@ function normalizeStoredMessageForLoad(message: Message): Message {
     changed = true
   }
 
-  const normalized = changed ? { ...message, versions, reasoning } : message
+  // Base64 data URLs are session-only; never keep them in persisted history.
+  const media = message.media?.filter((item) => !item.url?.startsWith('data:'))
+  const images = message.images?.filter((url) => !url.startsWith('data:'))
+  if (media && media.length !== message.media?.length) {
+    changed = true
+  }
+  if (images && images.length !== message.images?.length) {
+    changed = true
+  }
+
+  const normalized = changed
+    ? { ...message, versions, reasoning, media, images }
+    : message
 
   if (!isAssistantMessagePending(normalized)) {
     return normalized
@@ -270,7 +282,7 @@ function normalizeStoredMessageForLoad(message: Message): Message {
   )
 }
 
-function trimMessagesByContentSize(messages: Message[]): Message[] {
+export function trimMessagesByContentSize(messages: Message[]): Message[] {
   let totalSize = 0
   const result: Message[] = []
 
@@ -409,6 +421,8 @@ export function clearPlaygroundData(): void {
       const key = getUserStorageKey(baseKey)
       if (key) localStorage.removeItem(key)
     }
+    localStorage.removeItem(STORAGE_KEYS.HISTORY)
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_ID)
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to clear playground data:', error)

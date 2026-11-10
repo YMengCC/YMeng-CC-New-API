@@ -28,6 +28,23 @@ export interface MessageVersion {
   content: string
 }
 
+export type PlaygroundModelMode = 'chat' | 'image' | 'video'
+export type MediaType = 'image' | 'video'
+export type MediaStatus = 'pending' | 'succeeded' | 'failed'
+
+// Only URLs are persisted. Never store base64 payloads in conversation history.
+export interface GeneratedMedia {
+  type: MediaType
+  url?: string
+  prompt: string
+  status: MediaStatus
+  taskId?: string
+  error?: string
+  width?: number
+  height?: number
+  duration?: number
+}
+
 export interface Message {
   key: string
   from: MessageRole
@@ -36,6 +53,9 @@ export interface Message {
   startedAt?: number
   completedAt?: number
   durationMs?: number
+  media?: GeneratedMedia[]
+  // Dropped/pasted images as data URLs. Session-only: never persisted.
+  images?: string[]
   sources?: { href: string; title: string }[]
   reasoning?: {
     content: string
@@ -49,6 +69,20 @@ export interface Message {
   isContentComplete?: boolean
   status?: MessageStatus
   errorCode?: string | null
+}
+
+// Conversation history types
+export interface PlaygroundConversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: Message[]
+}
+
+export interface PlaygroundHistory {
+  activeId: string
+  conversations: PlaygroundConversation[]
 }
 
 // API payload types
@@ -117,6 +151,60 @@ export interface ChatCompletionResponse {
   }
 }
 
+// Media generation payloads (aligned with the /pg image & video endpoints)
+export interface ImageGenerationRequest {
+  model: string
+  prompt: string
+  group?: string
+  n?: number
+  size?: string
+  // Optional reference image (data URL). Upstream support varies by model.
+  image?: string
+  response_format?: 'url'
+}
+
+export interface GeneratedImagePayload {
+  url?: string
+  b64_json?: string
+  revised_prompt?: string
+}
+
+export interface ImageGenerationResponse {
+  created?: number
+  data?: GeneratedImagePayload | GeneratedImagePayload[]
+}
+
+export interface VideoGenerationRequest {
+  model: string
+  prompt: string
+  group?: string
+  duration?: number
+  width?: number
+  height?: number
+  image?: string
+  response_format?: 'url'
+}
+
+export interface VideoTaskResponse {
+  task_id: string
+  status: string
+  url?: string
+  format?: string
+  error?: { code?: string | number; message?: string }
+}
+
+// Generation options collected by the composer
+export interface ImageGenerationOptions {
+  size: string
+  n: number
+}
+
+export interface VideoGenerationOptions {
+  duration: number
+  resolution: string
+  image?: string
+}
+
 // Configuration types
 export interface PlaygroundConfig {
   model: string
@@ -143,6 +231,7 @@ export interface ParameterEnabled {
 export interface ModelOption {
   label: string
   value: string
+  mode?: PlaygroundModelMode
 }
 
 export interface GroupOption {

@@ -52,6 +52,7 @@ import {
   type PlaygroundParameterKey,
 } from '../../lib/parameters/playground-parameters'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
+import { PLAYGROUND_TOOL_BUTTON_CLASS } from './input-tool-styles'
 
 type PlaygroundParameterPanelProps = {
   config: PlaygroundConfig
@@ -205,14 +206,17 @@ export function PlaygroundParameterPanel(props: PlaygroundParameterPanelProps) {
   const trigger = (
     <PromptInputButton
       aria-label={t('Parameters')}
-      className='text-muted-foreground hover:text-foreground hover:bg-muted/70 relative font-medium'
+      className={cn(PLAYGROUND_TOOL_BUTTON_CLASS, 'relative')}
       disabled={props.disabled}
       variant='ghost'
     >
-      <SlidersHorizontalIcon size={16} />
-      <span className='bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] leading-none font-semibold'>
+      <SlidersHorizontalIcon aria-hidden='true' />
+      <Badge
+        className='absolute -top-1.5 -right-1.5 size-4 justify-center rounded-full p-0 text-[9px] leading-none'
+        variant='default'
+      >
         {activeCount}
-      </span>
+      </Badge>
     </PromptInputButton>
   )
 

@@ -35,9 +35,25 @@ export const MESSAGE_STATUS = {
 // API endpoints
 export const API_ENDPOINTS = {
   CHAT_COMPLETIONS: '/pg/chat/completions',
+  IMAGE_GENERATIONS: '/pg/images/generations',
+  VIDEO_GENERATIONS: '/pg/videos',
+  VIDEO_TASK: '/pg/videos',
+  PRICING: '/api/pricing',
   USER_MODELS: '/api/user/models',
   USER_GROUPS: '/api/user/self/groups',
 } as const
+
+// Client-side bounds mirror the backend billing-multiplier limits
+// (relaykit dto.MaxImageN and relay/common MaxTaskDurationSeconds).
+export const MAX_IMAGE_N = 128
+export const MAX_VIDEO_DURATION_SECONDS = 3600
+export const VIDEO_POLL_INTERVAL_MS = 3000
+export const VIDEO_POLL_MAX_ATTEMPTS = 60
+
+// Dropped / pasted images are session-only data URLs, never persisted.
+export const MAX_ATTACHED_IMAGES = 4
+export const MAX_ATTACHED_IMAGE_BYTES = 10 * 1024 * 1024
+export const IMAGE_ACCEPT = 'image/*'
 
 // Default group — uses 'default' as the safe fallback; auto-group is
 // only selected when the backend confirms it is available for the user.
@@ -68,9 +84,16 @@ export const DEFAULT_PARAMETER_ENABLED: ParameterEnabled = {
 // Storage keys
 export const STORAGE_KEYS = {
   CONFIG: 'playground_config',
+  // Legacy single-conversation key; migrated into HISTORY on first load.
   MESSAGES: 'playground_messages',
   PARAMETER_ENABLED: 'playground_parameter_enabled',
+  HISTORY: 'playground_history',
+  ACTIVE_ID: 'playground_active_conversation',
+  HISTORY_COLLAPSED: 'playground_history_collapsed',
 } as const
+
+export const DEFAULT_CONVERSATION_TITLE = 'New chat'
+export const MAX_CONVERSATION_TITLE_CHARS = 60
 
 // Error messages
 export const ERROR_MESSAGES = {

@@ -18,15 +18,30 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   PromptInput,
+  PromptInputAttachment,
+  PromptInputAttachments,
+  PromptInputBody,
   PromptInputFooter,
   PromptInputTextarea,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
+import { Kbd } from '@/components/ui/kbd'
+import { cn } from '@/lib/utils'
 
-import { getSubmittableInputText } from '../../lib'
+import {
+  IMAGE_ACCEPT,
+  MAX_ATTACHED_IMAGE_BYTES,
+  MAX_ATTACHED_IMAGES,
+} from '../../constants'
+import {
+  canSubmitInput,
+  getSubmittableImageUrls,
+  getSubmittableInputText,
+} from '../../lib'
 import type {
   ModelOption,
   GroupOption,
@@ -38,7 +53,7 @@ import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
   config: PlaygroundConfig
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, imageUrls?: string[]) => void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -83,35 +98,71 @@ export function PlaygroundInput({
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
+  const [isDragActive, setIsDragActive] = useState(false)
 
   const handleSubmit = (message: PromptInputMessage) => {
-    const submittableText = getSubmittableInputText(message, disabled)
+    if (disabled || isGenerating) return
+    const imageUrls = getSubmittableImageUrls(message)
+    if (!canSubmitInput(message, imageUrls.length > 0)) return
 
-    if (!submittableText) return
-    onSubmit(submittableText)
+    const submittableText = getSubmittableInputText(message, disabled) ?? ''
+    onSubmit(submittableText, imageUrls.length > 0 ? imageUrls : undefined)
     setText('')
   }
 
+  const handleError = (error: { code: string; message: string }) => {
+    if (error.code === 'accept') {
+      toast.error(t('Only image files are supported'))
+    } else if (error.code === 'max_file_size') {
+      toast.error(t('Image must not exceed 10 MiB'))
+    } else {
+      toast.error(t('You can attach up to 4 images'))
+    }
+  }
+
   return (
-    <div className='grid shrink-0 gap-4 px-1 md:pb-4'>
+    <div
+      className='flex shrink-0 flex-col gap-1.5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:gap-2 md:px-4 md:pb-4'
+      onDragEnter={(event) => {
+        if (event.dataTransfer.types.includes('Files')) setIsDragActive(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+          setIsDragActive(false)
+        }
+      }}
+      onDrop={() => setIsDragActive(false)}
+    >
       <PromptInput
+        accept={IMAGE_ACCEPT}
         className='relative'
-        groupClassName='bg-background/95 dark:bg-background/80 border-border/70 shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] ring-1 ring-foreground/5 rounded-xl overflow-hidden transition-all duration-200 focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]'
+        groupClassName={cn(
+          'bg-background border-border shadow-sm ring-1 ring-border/40 rounded-2xl overflow-hidden transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-md',
+          isDragActive && 'border-primary bg-primary/5 ring-primary/30'
+        )}
+        maxFiles={MAX_ATTACHED_IMAGES}
+        maxFileSize={MAX_ATTACHED_IMAGE_BYTES}
+        onError={handleError}
         onSubmit={handleSubmit}
       >
+        <PromptInputBody>
+          <PromptInputAttachments>
+            {(file) => <PromptInputAttachment data={file} />}
+          </PromptInputAttachments>
+        </PromptInputBody>
         <PromptInputTextarea
           autoComplete='off'
           autoCorrect='off'
           autoCapitalize='off'
           spellCheck={false}
-          className='min-h-20 px-5 pt-4 pb-3 leading-7 md:min-h-24 md:text-base'
+          className='placeholder:text-muted-foreground/70 max-h-[30vh] min-h-16 overflow-y-auto px-3 pt-3 pb-2 text-sm leading-6 md:max-h-[40vh] md:min-h-24 md:px-5 md:pt-4 md:pb-3 md:text-base md:leading-7'
           disabled={disabled}
           onChange={(event) => setText(event.target.value)}
           placeholder={t('Ask anything')}
           value={text}
         />
 
-        <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5 backdrop-blur'>
+        <PromptInputFooter className='border-border/60 bg-muted/30 border-t px-2 py-1.5 md:px-3 md:py-2.5'>
           <PlaygroundInputControls
             disabled={disabled}
             groups={groups}
@@ -138,6 +189,16 @@ export function PlaygroundInput({
           />
         </PromptInputFooter>
       </PromptInput>
+
+      <p className='text-muted-foreground hidden items-center gap-1.5 px-1 text-xs md:flex'>
+        <Kbd>Enter</Kbd>
+        <span>{t('to send')}</span>
+        <span aria-hidden='true'>·</span>
+        <Kbd>Shift + Enter</Kbd>
+        <span>{t('for a new line')}</span>
+        <span aria-hidden='true'>·</span>
+        <span>{t('Drop images here or paste')}</span>
+      </p>
     </div>
   )
 }

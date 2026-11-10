@@ -655,10 +655,14 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		info.RelayMode = c.GetInt("relay_mode")
 	}
 
+	// /pg/chat/completions keeps its own path, while the /pg media routes are
+	// rewritten to their /v1 equivalents by controller.RewritePlaygroundPath.
 	if strings.HasPrefix(c.Request.URL.Path, "/pg") {
 		info.IsPlayground = true
 		info.RequestURLPath = strings.TrimPrefix(info.RequestURLPath, "/pg")
 		info.RequestURLPath = "/v1" + info.RequestURLPath
+	} else if c.GetBool("playground_request") {
+		info.IsPlayground = true
 	}
 
 	userSetting, ok := common.GetContextKeyType[dto.UserSetting](c, constant.ContextKeyUserSetting)

@@ -29,14 +29,17 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
 import {
   ATTACHMENT_ACTIONS,
@@ -44,6 +47,7 @@ import {
   getSearchActionNotice,
 } from '../../lib'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
+import { PLAYGROUND_TOOL_BUTTON_CLASS } from './input-tool-styles'
 import { PlaygroundParameterPanel } from './playground-parameter-panel'
 
 type PlaygroundInputToolsProps = {
@@ -94,7 +98,7 @@ export function PlaygroundInputTools({
 
   return (
     <>
-      <PromptInputTools className='bg-background/70 border-border/60 rounded-lg border p-1 shadow-xs'>
+      <PromptInputTools className='border-border/60 bg-background rounded-xl border p-0.5 shadow-xs md:p-1'>
         <Tooltip>
           <DropdownMenu>
             <TooltipTrigger
@@ -103,13 +107,13 @@ export function PlaygroundInputTools({
                   render={
                     <PromptInputButton
                       aria-label={t('Attach')}
-                      className='text-muted-foreground hover:text-foreground hover:bg-muted/70 font-medium'
+                      className={PLAYGROUND_TOOL_BUTTON_CLASS}
                       disabled={disabled}
                       variant='ghost'
                     />
                   }
                 >
-                  <PaperclipIcon size={16} />
+                  <PaperclipIcon aria-hidden='true' />
                 </DropdownMenuTrigger>
               }
             />
@@ -117,15 +121,17 @@ export function PlaygroundInputTools({
               <p>{t('Attach')}</p>
             </TooltipContent>
             <DropdownMenuContent align='start'>
-              {ATTACHMENT_ACTIONS.map(({ action, icon: Icon, label }) => (
-                <DropdownMenuItem
-                  key={action}
-                  onClick={() => handleFileAction(action)}
-                >
-                  <Icon className='mr-2' size={16} />
-                  {t(label)}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                {ATTACHMENT_ACTIONS.map(({ action, icon: Icon, label }) => (
+                  <DropdownMenuItem
+                    key={action}
+                    onClick={() => handleFileAction(action)}
+                  >
+                    <Icon aria-hidden='true' />
+                    {t(label)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </Tooltip>
@@ -135,12 +141,12 @@ export function PlaygroundInputTools({
             render={
               <PromptInputButton
                 aria-label={t('Search')}
-                className='text-muted-foreground hover:text-foreground hover:bg-muted/70 font-medium'
+                className={PLAYGROUND_TOOL_BUTTON_CLASS}
                 disabled={disabled}
                 onClick={handleSearchAction}
                 variant='ghost'
               >
-                <GlobeIcon size={16} />
+                <GlobeIcon aria-hidden='true' />
               </PromptInputButton>
             }
           />
@@ -157,17 +163,22 @@ export function PlaygroundInputTools({
           parameterEnabled={parameterEnabled}
         />
 
+        <Separator className='mx-0.5 h-6' orientation='vertical' />
+
         <Tooltip>
           <TooltipTrigger
             render={
               <PromptInputButton
                 aria-label={t('Clear chat history')}
-                className='text-muted-foreground hover:text-destructive hover:bg-destructive/10 font-medium'
+                className={cn(
+                  PLAYGROUND_TOOL_BUTTON_CLASS,
+                  'hover:text-destructive hover:bg-destructive/10'
+                )}
                 disabled={disabled || !hasMessages || !onClearMessages}
                 onClick={() => setClearConfirmOpen(true)}
                 variant='ghost'
               >
-                <Trash2Icon size={16} />
+                <Trash2Icon aria-hidden='true' />
               </PromptInputButton>
             }
           />
@@ -180,13 +191,13 @@ export function PlaygroundInputTools({
       <ConfirmDialog
         destructive
         desc={t(
-          'All playground messages saved in this browser will be removed. This cannot be undone.'
+          'All messages in this conversation will be removed. This cannot be undone.'
         )}
         confirmText={t('Clear')}
         handleConfirm={handleClearMessages}
         open={clearConfirmOpen}
         onOpenChange={setClearConfirmOpen}
-        title={t('Clear chat history?')}
+        title={t('Clear current conversation?')}
       />
     </>
   )

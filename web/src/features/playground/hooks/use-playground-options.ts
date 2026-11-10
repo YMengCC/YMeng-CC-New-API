@@ -41,8 +41,10 @@ import { useTranslation } from 'react-i18next'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
-import { getUserGroups, getUserModels } from '../api'
+import { getPricingModels, getUserGroups, getUserModels } from '../api'
 import {
+  applyModelCapabilities,
+  buildCapabilityMap,
   getGroupFallback,
   getModelFallback,
   getOptionLoadErrorMessage,
@@ -91,6 +93,14 @@ export function usePlaygroundOptions({
     queryFn: async () => requireServerSuccess(await getUserGroups()),
   })
 
+  const { data: pricingModels } = useQuery({
+    queryKey: ['playground', 'model-capabilities'],
+    queryFn: getPricingModels,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    meta: { errorToast: false },
+  })
+
   useEffect(() => {
     if (!isModelsError) return
 
@@ -118,18 +128,22 @@ export function usePlaygroundOptions({
   useEffect(() => {
     if (!modelsData) return
 
-    setModels(modelsData)
-    const fallback = getModelFallback(modelsData, currentModel)
+    const capabilities = pricingModels
+      ? buildCapabilityMap(pricingModels)
+      : null
+    const modelsWithMode = applyModelCapabilities(modelsData, capabilities)
+    setModels(modelsWithMode)
+    const fallback = getModelFallback(modelsWithMode, currentModel)
 
     if (fallback) {
       updateConfig('model', fallback)
       return
     }
 
-    if (shouldClearModelForGroup(modelsData, currentModel)) {
+    if (shouldClearModelForGroup(modelsWithMode, currentModel)) {
       updateConfig('model', '')
     }
-  }, [modelsData, currentModel, setModels, updateConfig])
+  }, [modelsData, pricingModels, currentModel, setModels, updateConfig])
 
   useEffect(() => {
     if (!groupsData) return

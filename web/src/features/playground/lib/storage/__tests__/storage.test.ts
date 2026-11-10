@@ -23,7 +23,17 @@ import { useAuthStore } from '@/stores/auth-store'
 import { STORAGE_KEYS } from '../../../constants'
 import type { Message } from '../../../types'
 import {
+  createConversation,
+  getConversationTitle,
+  loadHistory,
+  pruneHistory,
+  saveActiveConversationId,
+  saveHistory,
+  sanitizeConversationTitle,
+} from '../conversation-storage'
+import {
   clearPlaygroundData,
+  getUserStorageKey,
   loadConfig,
   loadMessages,
   loadParameterEnabled,
@@ -31,6 +41,7 @@ import {
   saveMessages,
   saveParameterEnabled,
 } from '../storage'
+import { MAX_STORED_CONVERSATIONS } from '../storage-schema'
 
 const messages: Message[] = [
   {
@@ -106,4 +117,145 @@ test('storage calls without a signed-in user do not persist shared data', () => 
   expect(loadMessages()).toBeNull()
   expect(loadParameterEnabled()).toEqual({})
   expect(localStorage.length).toBe(0)
+})
+
+test('legacy messages are migrated into the first history conversation', () => {
+  useAuthStore.getState().auth.setUser({ id: 7, username: 'A', role: 1 })
+  saveMessages(messages)
+
+  const history = loadHistory()
+  expect(history.conversations).toHaveLength(1)
+  expect(history.conversations[0].messages).toEqual(messages)
+  expect(history.activeId).toBe(history.conversations[0].id)
+  expect(
+    localStorage.getItem(getUserStorageKey(STORAGE_KEYS.MESSAGES) ?? '')
+  ).toBeNull()
+  expect(loadHistory().conversations[0].messages).toEqual(messages)
+})
+
+test('conversation titles come from the first user message and are bounded', () => {
+  expect(getConversationTitle(messages)).toBe('Account A private chat')
+  expect(getConversationTitle([])).toBe('New chat')
+  expect(
+    getConversationTitle([createUserMessage('  # Hello   **world** ')])
+  ).toBe('Hello world')
+  expect(
+    getConversationTitle([createUserMessage('x'.repeat(120))])
+  ).toHaveLength(60)
+  expect(sanitizeConversationTitle('   ')).toBe('New chat')
+})
+
+test('active conversation id is restored on reload and history is per-user', () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
+  const first = createConversation(messages)
+  const second = createConversation([])
+  saveHistory({ activeId: second.id, conversations: [first, second] })
+  saveActiveConversationId(second.id)
+  expect(loadHistory().activeId).toBe(second.id)
+
+  useAuthStore.getState().auth.reset()
+  useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
+  const other = loadHistory()
+  expect(other.conversations).toHaveLength(1)
+  expect(other.conversations[0].messages).toEqual([])
+  expect(other.activeId).not.toBe(second.id)
+
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
+  expect(loadHistory().activeId).toBe(second.id)
+})
+
+test('history is pruned to the conversation cap, keeping the active entry', () => {
+  const conversations = Array.from(
+    { length: MAX_STORED_CONVERSATIONS + 5 },
+    (_, i) => createConversation([], 1000 + i)
+  )
+  const active = conversations[MAX_STORED_CONVERSATIONS + 4]
+  const pruned = pruneHistory({ activeId: active.id, conversations })
+
+  expect(pruned.conversations).toHaveLength(MAX_STORED_CONVERSATIONS)
+  expect(pruned.activeId).toBe(active.id)
+  expect(pruned.conversations.some((item) => item.id === active.id)).toBe(true)
+})
+
+test('corrupt history falls back to a fresh empty conversation', () => {
+  useAuthStore.getState().auth.setUser({ id: 3, username: 'A', role: 1 })
+  const key = getUserStorageKey(STORAGE_KEYS.HISTORY)
+  if (key) localStorage.setItem(key, '{not-json')
+
+  const history = loadHistory()
+  expect(history.conversations).toHaveLength(1)
+  expect(history.conversations[0].messages).toEqual([])
+  expect(history.activeId).toBe(history.conversations[0].id)
+})
+
+test('clearing playground data removes the history keys too', () => {
+  useAuthStore.getState().auth.setUser({ id: 4, username: 'A', role: 1 })
+  saveHistory({ activeId: 'x', conversations: [createConversation()] })
+  saveActiveConversationId('x')
+  clearPlaygroundData()
+
+  for (const baseKey of Object.values(STORAGE_KEYS)) {
+    const key = getUserStorageKey(baseKey)
+    if (key) expect(localStorage.getItem(key)).toBeNull()
+  }
+})
+
+function createUserMessage(content: string): Message {
+  return {
+    key: `user-${content.length}`,
+    from: 'user',
+    versions: [{ id: 'v1', content }],
+  }
+}
+
+test('dropped data-URL images are never persisted in conversation history', () => {
+  useAuthStore.getState().auth.setUser({ id: 5, username: 'A', role: 1 })
+  const conversation = createConversation([
+    {
+      key: 'with-image',
+      from: 'user',
+      versions: [{ id: 'v1', content: 'what is this?' }],
+      images: ['data:image/png;base64,AAAA'],
+    },
+  ])
+  saveHistory({ activeId: conversation.id, conversations: [conversation] })
+
+  const raw = localStorage.getItem(
+    getUserStorageKey(STORAGE_KEYS.HISTORY) ?? ''
+  )
+  expect(raw).not.toContain('data:image/png;base64,AAAA')
+
+  const loaded = loadHistory()
+  expect(loaded.conversations[0].messages[0].images).toBeUndefined()
+  expect(loaded.conversations[0].messages[0].versions[0].content).toBe(
+    'what is this?'
+  )
+})
+
+test('pruneHistory strips session-only images but keeps remote media URLs', () => {
+  const conversation = createConversation([
+    {
+      key: 'mixed',
+      from: 'assistant',
+      versions: [{ id: 'v1', content: '' }],
+      images: ['data:image/png;base64,AAAA', 'https://example.com/remote.png'],
+      media: [
+        {
+          type: 'image',
+          prompt: 'a cat',
+          status: 'succeeded',
+          url: 'https://example.com/cat.png',
+        },
+      ],
+    },
+  ])
+
+  const pruned = pruneHistory({
+    activeId: conversation.id,
+    conversations: [conversation],
+  })
+  const message = pruned.conversations[0].messages[0]
+
+  expect(message.images).toEqual(['https://example.com/remote.png'])
+  expect(message.media?.[0].url).toBe('https://example.com/cat.png')
 })

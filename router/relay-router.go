@@ -64,9 +64,39 @@ func SetRelayRouter(router *gin.Engine) {
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
-	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	// Media routes are rewritten to their /v1 equivalents before Distribute so
+	// relay-mode resolution, channel selection and task fetch builders work
+	// unchanged. /pg/chat/completions keeps its original path.
+	playgroundRouter.Use(middleware.UserAuth())
+	playgroundRouter.Use(controller.PreparePlaygroundMedia, controller.RewritePlaygroundPath)
 	{
-		playgroundRouter.POST("/chat/completions", controller.Playground)
+		playgroundRouter.POST("/chat/completions", middleware.Distribute(), controller.Playground)
+
+		// Image generation mirrors the openai_image host-protocol chain, with
+		// UserAuth replacing TokenAuth. Unclaimed models fall back to the
+		// OpenAI image relay.
+		playgroundRouter.POST("/images/generations",
+			middleware.ModelRequestRateLimit(),
+			middleware.RouteTaskPluginEndpoint(),
+			middleware.PrepareTaskPluginEndpoint(),
+			middleware.Distribute(),
+			func(c *gin.Context) {
+				controller.RelayTaskPluginEndpoint(c, controller.PlaygroundImage)
+			})
+
+		// Video submission and polling mirror the openai_video host-protocol
+		// chain. Distribute sets RelayModeVideoSubmit / VideoFetchByID from the
+		// rewritten /v1 path.
+		playgroundRouter.POST("/videos",
+			middleware.RouteTaskPluginEndpoint(),
+			middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
+			middleware.PrepareTaskPluginEndpoint(),
+			middleware.Distribute(),
+			controller.PlaygroundVideo)
+		playgroundRouter.GET("/videos/:task_id",
+			middleware.Distribute(),
+			controller.PlaygroundVideoFetch)
+		playgroundRouter.GET("/videos/:task_id/content", controller.PlaygroundVideoContent)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))

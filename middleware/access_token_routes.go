@@ -369,7 +369,11 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"DELETE /api/deployments/:id":                       accessTokenScopeRule("deployment:write"),
 
 	// router/relay-router.go
-	"POST /pg/chat/completions": accessTokenSessionRule,
+	"POST /pg/chat/completions":       accessTokenSessionRule,
+	"POST /pg/images/generations":     accessTokenSessionRule,
+	"POST /pg/videos":                 accessTokenSessionRule,
+	"GET /pg/videos/:task_id":         accessTokenSessionRule,
+	"GET /pg/videos/:task_id/content": accessTokenSessionRule,
 }
 
 var (
