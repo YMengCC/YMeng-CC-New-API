@@ -66,6 +66,7 @@ const createHeaderNavSchema = (t: TFunction) =>
       pricing: z.object({ enabled: z.boolean(), requireAuth: z.boolean() }),
       rankings: z.object({ enabled: z.boolean(), requireAuth: z.boolean() }),
       docs: z.boolean(),
+      apiGuide: z.boolean(),
       about: z.boolean(),
       customLinks: z
         .array(
@@ -234,8 +235,15 @@ export function HeaderNavigationSection(props: HeaderNavigationSectionProps) {
     },
     {
       key: 'docs',
-      title: t('API Guide'),
+      title: t('Docs'),
       description: t('Documentation or external knowledge base.'),
+    },
+    {
+      key: 'apiGuide',
+      title: t('API Guide'),
+      description: t(
+        'Built-in API guide with quick start, API reference and client setup.'
+      ),
     },
     {
       key: 'about',

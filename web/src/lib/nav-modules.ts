@@ -28,6 +28,7 @@ export const HEADER_NAV_BUILTIN_KEYS = [
   'pricing',
   'rankings',
   'docs',
+  'apiGuide',
   'about',
 ] as const
 
@@ -63,6 +64,7 @@ export type HeaderNavModules = {
   pricing: ModuleAccess
   rankings: ModuleAccess
   docs: boolean
+  apiGuide: boolean
   about: boolean
   customLinks: HeaderNavCustomLink[]
   order: string[]
@@ -74,6 +76,7 @@ export const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   pricing: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   docs: true,
+  apiGuide: true,
   about: true,
   customLinks: [],
   order: [...HEADER_NAV_BUILTIN_KEYS],
@@ -249,6 +252,7 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
   result.pricing = parseAccess(parsed.pricing, result.pricing)
   result.rankings = parseAccess(parsed.rankings, result.rankings)
   result.docs = parseHeaderNavBoolean(parsed.docs, result.docs)
+  result.apiGuide = parseHeaderNavBoolean(parsed.apiGuide, result.apiGuide)
   result.about = parseHeaderNavBoolean(parsed.about, result.about)
   result.customLinks = parseCustomLinks(parsed)
   result.order = parseHeaderNavOrder(parsed.order, result.customLinks)

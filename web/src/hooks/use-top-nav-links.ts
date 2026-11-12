@@ -71,10 +71,13 @@ export function useTopNavLinks(): TopNavLink[] {
       : null,
     docs: modules.docs
       ? {
-          title: t('API Guide'),
+          title: t('Docs'),
           href: docsLink || '/docs',
           external: Boolean(docsLink),
         }
+      : null,
+    apiGuide: modules.apiGuide
+      ? { title: t('API Guide'), href: '/docs' }
       : null,
     about: modules.about ? { title: t('About'), href: '/about' } : null,
   }
