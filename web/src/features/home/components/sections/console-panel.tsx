@@ -46,29 +46,17 @@ export function ConsolePanel(props: ConsolePanelProps) {
     typeof configuredLink === 'string' && isHttpUrl(configuredLink.trim())
       ? configuredLink.trim()
       : DEFAULT_BAOCODE_URL
-  const docsUrl =
-    (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
-
   const docsIcon = (
     <BookOpen className='text-muted-foreground/80 group-hover:text-foreground size-4 transition-colors duration-200' />
   )
-  const docsButton = docsUrl.startsWith('http') ? (
+  const docsButton = (
     <Button
       variant='outline'
       className={OUTLINE_BUTTON_CLASSES}
-      render={<a href={docsUrl} target='_blank' rel='noopener noreferrer' />}
+      render={<Link to='/docs' />}
     >
       {docsIcon}
-      <span>{t('Docs')}</span>
-    </Button>
-  ) : (
-    <Button
-      variant='outline'
-      className={OUTLINE_BUTTON_CLASSES}
-      render={<Link to={docsUrl} />}
-    >
-      {docsIcon}
-      <span>{t('Docs')}</span>
+      <span>{t('API Guide')}</span>
     </Button>
   )
 

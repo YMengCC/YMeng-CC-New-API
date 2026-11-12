@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "Quick Start",
+      "description": "Sign up, top up, create an API key, configure a client and make your first call in 5 steps.",
+      "headings": [
+        {
+          "id": "step-1-create-an-account",
+          "level": 2,
+          "text": "Step 1: Create an account"
+        },
+        {
+          "id": "step-2-top-up",
+          "level": 2,
+          "text": "Step 2: Top up"
+        },
+        {
+          "id": "step-3-create-an-api-key",
+          "level": 2,
+          "text": "Step 3: Create an API key"
+        },
+        {
+          "id": "step-4-configure-a-client",
+          "level": 2,
+          "text": "Step 4: Configure a client"
+        },
+        {
+          "id": "step-5-make-your-first-call",
+          "level": 2,
+          "text": "Step 5: Make your first call"
+        },
+        {
+          "id": "next-steps",
+          "level": 2,
+          "text": "Next steps"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "API Overview",
+      "description": "Base URL, authentication, supported API protocols, and the error response format.",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "authentication",
+          "level": 2,
+          "text": "Authentication"
+        },
+        {
+          "id": "endpoint-list",
+          "level": 2,
+          "text": "Endpoint list"
+        },
+        {
+          "id": "error-responses",
+          "level": 2,
+          "text": "Error responses"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "OpenAI-Compatible API",
+      "description": "Examples for the Chat Completions, Responses, Embeddings, audio and rerank endpoints.",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "using-the-official-sdks",
+          "level": 2,
+          "text": "Using the official SDKs"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "audio",
+          "level": 2,
+          "text": "Audio"
+        },
+        {
+          "id": "other-endpoints",
+          "level": 2,
+          "text": "Other endpoints"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "Claude API",
+      "description": "Call Claude models using the native Anthropic Messages format.",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "using-the-anthropic-sdk",
+          "level": 2,
+          "text": "Using the Anthropic SDK"
+        },
+        {
+          "id": "notes",
+          "level": 2,
+          "text": "Notes"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "Gemini API",
+      "description": "Call Gemini models using the native Google Gemini format.",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "authentication",
+          "level": 2,
+          "text": "Authentication"
+        },
+        {
+          "id": "video-input",
+          "level": 2,
+          "text": "Video input"
+        },
+        {
+          "id": "up-to-15-mb-use-an-https-video-url",
+          "level": 3,
+          "text": "Up to 15 MB: use an HTTPS video URL"
+        },
+        {
+          "id": "over-15-mb-use-inline-base64",
+          "level": 3,
+          "text": "Over 15 MB: use inline Base64"
+        },
+        {
+          "id": "larger-videos-and-the-files-api",
+          "level": 3,
+          "text": "Larger videos and the Files API"
+        },
+        {
+          "id": "notes",
+          "level": 2,
+          "text": "Notes"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "Image Generation",
+      "description": "Generate and edit images through the OpenAI-compatible Images API.",
+      "headings": [
+        {
+          "id": "generate-images",
+          "level": 2,
+          "text": "Generate images"
+        },
+        {
+          "id": "edit-images",
+          "level": 2,
+          "text": "Edit images"
+        },
+        {
+          "id": "billing",
+          "level": 2,
+          "text": "Billing"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "Models & Pricing",
+      "description": "Get the list of available models and public prices through the API.",
+      "headings": [
+        {
+          "id": "model-list",
+          "level": 2,
+          "text": "Model list"
+        },
+        {
+          "id": "pricing",
+          "level": 2,
+          "text": "Pricing"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "Usage & Request Limits",
+      "description": "How to view the tokens and cost of a single request, and the rate limits that apply to the console and API.",
+      "headings": [
+        {
+          "id": "checking-the-usage-of-a-single-request",
+          "level": 2,
+          "text": "Checking the usage of a single request"
+        },
+        {
+          "id": "in-the-console",
+          "level": 3,
+          "text": "In the console"
+        },
+        {
+          "id": "by-request-id",
+          "level": 3,
+          "text": "By request ID"
+        },
+        {
+          "id": "with-an-api-key-only",
+          "level": 3,
+          "text": "With an API key only"
+        },
+        {
+          "id": "converting-quota-to-an-amount",
+          "level": 3,
+          "text": "Converting quota to an amount"
+        },
+        {
+          "id": "request-rate-limits",
+          "level": 2,
+          "text": "Request rate limits"
+        },
+        {
+          "id": "limits-on-the-console-and-api",
+          "level": 3,
+          "text": "Limits on the console and API"
+        },
+        {
+          "id": "when-a-limit-is-hit",
+          "level": 3,
+          "text": "When a limit is hit"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "Add an OpenAI-compatible provider in Cherry Studio to connect to {{SYSTEM_NAME}}.",
+      "headings": [
+        {
+          "id": "before-you-start",
+          "level": 2,
+          "text": "Before you start"
+        },
+        {
+          "id": "setup",
+          "level": 2,
+          "text": "Setup"
+        },
+        {
+          "id": "recommended-models",
+          "level": 2,
+          "text": "Recommended models"
+        },
+        {
+          "id": "troubleshooting",
+          "level": 2,
+          "text": "Troubleshooting"
+        },
+        {
+          "id": "try-it-now",
+          "level": 2,
+          "text": "Try it now"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "Connect ChatBox to {{SYSTEM_NAME}} using a custom OpenAI-compatible provider.",
+      "headings": [
+        {
+          "id": "before-you-start",
+          "level": 2,
+          "text": "Before you start"
+        },
+        {
+          "id": "setup",
+          "level": 2,
+          "text": "Setup"
+        },
+        {
+          "id": "recommended-models",
+          "level": 2,
+          "text": "Recommended models"
+        },
+        {
+          "id": "troubleshooting",
+          "level": 2,
+          "text": "Troubleshooting"
+        },
+        {
+          "id": "try-it-now",
+          "level": 2,
+          "text": "Try it now"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "Use {{SYSTEM_NAME}} models in Cursor with cursor-byokcx.",
+      "headings": [
+        {
+          "id": "before-you-start",
+          "level": 2,
+          "text": "Before you start"
+        },
+        {
+          "id": "setup",
+          "level": 2,
+          "text": "Setup"
+        },
+        {
+          "id": "recommended-models",
+          "level": 2,
+          "text": "Recommended models"
+        },
+        {
+          "id": "troubleshooting",
+          "level": 2,
+          "text": "Troubleshooting"
+        },
+        {
+          "id": "try-it-now",
+          "level": 2,
+          "text": "Try it now"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "Route OpenAI's official Codex CLI through {{SYSTEM_NAME}} with environment variables.",
+      "headings": [
+        {
+          "id": "before-you-start",
+          "level": 2,
+          "text": "Before you start"
+        },
+        {
+          "id": "setup",
+          "level": 2,
+          "text": "Setup"
+        },
+        {
+          "id": "recommended-models",
+          "level": 2,
+          "text": "Recommended models"
+        },
+        {
+          "id": "troubleshooting",
+          "level": 2,
+          "text": "Troubleshooting"
+        },
+        {
+          "id": "try-it-now",
+          "level": 2,
+          "text": "Try it now"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "Set the Base URL and token for Anthropic's official Claude Code, or import them in one click with CC Switch.",
+      "headings": [
+        {
+          "id": "option-1-import-in-one-click-with-cc-switch-recommended",
+          "level": 2,
+          "text": "Option 1: Import in one click with CC Switch (recommended)"
+        },
+        {
+          "id": "option-2-set-environment-variables-manually",
+          "level": 2,
+          "text": "Option 2: Set environment variables manually"
+        },
+        {
+          "id": "recommended-models",
+          "level": 2,
+          "text": "Recommended models"
+        },
+        {
+          "id": "troubleshooting",
+          "level": 2,
+          "text": "Troubleshooting"
+        },
+        {
+          "id": "try-it-now",
+          "level": 2,
+          "text": "Try it now"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "Common Errors",
+      "description": "Common errors organized by status code, with causes and solutions.",
+      "headings": [
+        {
+          "id": "401-key-problems",
+          "level": 2,
+          "text": "401: Key problems"
+        },
+        {
+          "id": "403-insufficient-permission-or-balance",
+          "level": 2,
+          "text": "403: Insufficient permission or balance"
+        },
+        {
+          "id": "400-invalid-request-parameters",
+          "level": 2,
+          "text": "400: Invalid request parameters"
+        },
+        {
+          "id": "429-too-many-requests",
+          "level": 2,
+          "text": "429: Too many requests"
+        },
+        {
+          "id": "503-no-route-available",
+          "level": 2,
+          "text": "503: No route available"
+        },
+        {
+          "id": "still-stuck",
+          "level": 2,
+          "text": "Still stuck?"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "FAQ",
+      "description": "Common questions about accounts, balance, keys and models.",
+      "headings": [
+        {
+          "id": "does-my-balance-expire",
+          "level": 2,
+          "text": "Does my balance expire?"
+        },
+        {
+          "id": "why-did-my-balance-drop-by-less-than-the-amount-in-the-usage-logs",
+          "level": 2,
+          "text": "Why did my balance drop by less than the amount in the Usage Logs?"
+        },
+        {
+          "id": "how-should-i-choose-a-group",
+          "level": 2,
+          "text": "How should I choose a group?"
+        },
+        {
+          "id": "which-models-are-supported",
+          "level": 2,
+          "text": "Which models are supported?"
+        },
+        {
+          "id": "can-one-account-create-multiple-keys",
+          "level": 2,
+          "text": "Can one account create multiple keys?"
+        },
+        {
+          "id": "what-if-my-key-leaks",
+          "level": 2,
+          "text": "What if my key leaks?"
+        },
+        {
+          "id": "how-can-i-see-how-much-each-call-cost",
+          "level": 2,
+          "text": "How can I see how much each call cost?"
+        },
+        {
+          "id": "what-if-requests-are-slow-or-time-out",
+          "level": 2,
+          "text": "What if requests are slow or time out?"
+        },
+        {
+          "id": "where-can-i-get-help",
+          "level": 2,
+          "text": "Where can I get help?"
+        }
+      ]
+    }
+  ]
+}

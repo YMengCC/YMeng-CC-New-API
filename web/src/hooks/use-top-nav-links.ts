@@ -71,7 +71,7 @@ export function useTopNavLinks(): TopNavLink[] {
       : null,
     docs: modules.docs
       ? {
-          title: t('Docs'),
+          title: t('API Guide'),
           href: docsLink || '/docs',
           external: Boolean(docsLink),
         }

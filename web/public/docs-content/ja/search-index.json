@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "クイックスタート",
+      "description": "5 つのステップで、登録、チャージ、APIキーの作成、クライアントの設定、最初の呼び出しまでを完了します。",
+      "headings": [
+        {
+          "id": "ステップ-1アカウントを登録する",
+          "level": 2,
+          "text": "ステップ 1：アカウントを登録する"
+        },
+        {
+          "id": "ステップ-2チャージする",
+          "level": 2,
+          "text": "ステップ 2：チャージする"
+        },
+        {
+          "id": "ステップ-3apiキーを作成する",
+          "level": 2,
+          "text": "ステップ 3：APIキーを作成する"
+        },
+        {
+          "id": "ステップ-4クライアントを設定する",
+          "level": 2,
+          "text": "ステップ 4：クライアントを設定する"
+        },
+        {
+          "id": "ステップ-5最初の呼び出しを行う",
+          "level": 2,
+          "text": "ステップ 5：最初の呼び出しを行う"
+        },
+        {
+          "id": "次のステップ",
+          "level": 2,
+          "text": "次のステップ"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "API 概要",
+      "description": "Base URL、認証方式、サポートするインターフェースのプロトコル、エラーレスポンスの形式。",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "認証",
+          "level": 2,
+          "text": "認証"
+        },
+        {
+          "id": "インターフェース一覧",
+          "level": 2,
+          "text": "インターフェース一覧"
+        },
+        {
+          "id": "エラーレスポンス",
+          "level": 2,
+          "text": "エラーレスポンス"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "OpenAI 互換インターフェース",
+      "description": "Chat Completions、Responses、Embeddings、音声、リランクの各インターフェースの呼び出し例。",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "公式-sdk-を使う",
+          "level": 2,
+          "text": "公式 SDK を使う"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "音声",
+          "level": 2,
+          "text": "音声"
+        },
+        {
+          "id": "その他のインターフェース",
+          "level": 2,
+          "text": "その他のインターフェース"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "Claude インターフェース",
+      "description": "Anthropic Messages のネイティブ形式で Claude モデルを呼び出します。",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "anthropic-sdk-を使う",
+          "level": 2,
+          "text": "Anthropic SDK を使う"
+        },
+        {
+          "id": "注意事項",
+          "level": 2,
+          "text": "注意事項"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "Gemini インターフェース",
+      "description": "Google Gemini のネイティブ形式で Gemini モデルを呼び出します。",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "認証方式",
+          "level": 2,
+          "text": "認証方式"
+        },
+        {
+          "id": "動画入力",
+          "level": 2,
+          "text": "動画入力"
+        },
+        {
+          "id": "15-mb-以下https-動画-url-を使用",
+          "level": 3,
+          "text": "15 MB 以下：HTTPS 動画 URL を使用"
+        },
+        {
+          "id": "15-mb-超インライン-base64-を使用",
+          "level": 3,
+          "text": "15 MB 超：インライン Base64 を使用"
+        },
+        {
+          "id": "より大きな動画と-files-api",
+          "level": 3,
+          "text": "より大きな動画と Files API"
+        },
+        {
+          "id": "注意事項",
+          "level": 2,
+          "text": "注意事項"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "画像生成",
+      "description": "OpenAI 互換の Images インターフェースで画像を生成・編集します。",
+      "headings": [
+        {
+          "id": "画像を生成する",
+          "level": 2,
+          "text": "画像を生成する"
+        },
+        {
+          "id": "画像を編集する",
+          "level": 2,
+          "text": "画像を編集する"
+        },
+        {
+          "id": "料金",
+          "level": 2,
+          "text": "料金"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "モデルと価格",
+      "description": "インターフェースから利用可能なモデル一覧と公開価格を取得します。",
+      "headings": [
+        {
+          "id": "モデル一覧",
+          "level": 2,
+          "text": "モデル一覧"
+        },
+        {
+          "id": "価格",
+          "level": 2,
+          "text": "価格"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "使用量の確認とリクエスト制限",
+      "description": "1 回のリクエストの token と料金を確認する方法、およびコンソールと API のリクエスト頻度制限。",
+      "headings": [
+        {
+          "id": "1-回のリクエストの使用量を確認する",
+          "level": 2,
+          "text": "1 回のリクエストの使用量を確認する"
+        },
+        {
+          "id": "コンソールで確認する",
+          "level": 3,
+          "text": "コンソールで確認する"
+        },
+        {
+          "id": "リクエスト-id-で照会する",
+          "level": 3,
+          "text": "リクエスト ID で照会する"
+        },
+        {
+          "id": "api-キーしかない場合",
+          "level": 3,
+          "text": "API キーしかない場合"
+        },
+        {
+          "id": "クォータを金額に換算する",
+          "level": 3,
+          "text": "クォータを金額に換算する"
+        },
+        {
+          "id": "リクエスト頻度制限",
+          "level": 2,
+          "text": "リクエスト頻度制限"
+        },
+        {
+          "id": "コンソールと-api-の制限",
+          "level": 3,
+          "text": "コンソールと API の制限"
+        },
+        {
+          "id": "制限に達したとき",
+          "level": 3,
+          "text": "制限に達したとき"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "Cherry Studio に OpenAI 互換のプロバイダーを追加して {{SYSTEM_NAME}} に接続します。",
+      "headings": [
+        {
+          "id": "事前準備",
+          "level": 2,
+          "text": "事前準備"
+        },
+        {
+          "id": "設定手順",
+          "level": 2,
+          "text": "設定手順"
+        },
+        {
+          "id": "おすすめモデル",
+          "level": 2,
+          "text": "おすすめモデル"
+        },
+        {
+          "id": "よくある問題",
+          "level": 2,
+          "text": "よくある問題"
+        },
+        {
+          "id": "今すぐ試す",
+          "level": 2,
+          "text": "今すぐ試す"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "ChatBox でカスタムの OpenAI 互換プロバイダーを使って {{SYSTEM_NAME}} に接続します。",
+      "headings": [
+        {
+          "id": "事前準備",
+          "level": 2,
+          "text": "事前準備"
+        },
+        {
+          "id": "設定手順",
+          "level": 2,
+          "text": "設定手順"
+        },
+        {
+          "id": "おすすめモデル",
+          "level": 2,
+          "text": "おすすめモデル"
+        },
+        {
+          "id": "よくある問題",
+          "level": 2,
+          "text": "よくある問題"
+        },
+        {
+          "id": "今すぐ試す",
+          "level": 2,
+          "text": "今すぐ試す"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "cursor-byokcx を利用して Cursor で {{SYSTEM_NAME}} のモデルを使います。",
+      "headings": [
+        {
+          "id": "事前準備",
+          "level": 2,
+          "text": "事前準備"
+        },
+        {
+          "id": "設定手順",
+          "level": 2,
+          "text": "設定手順"
+        },
+        {
+          "id": "おすすめモデル",
+          "level": 2,
+          "text": "おすすめモデル"
+        },
+        {
+          "id": "よくある問題",
+          "level": 2,
+          "text": "よくある問題"
+        },
+        {
+          "id": "今すぐ試す",
+          "level": 2,
+          "text": "今すぐ試す"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "環境変数を設定して、OpenAI 公式の Codex CLI から {{SYSTEM_NAME}} を利用します。",
+      "headings": [
+        {
+          "id": "事前準備",
+          "level": 2,
+          "text": "事前準備"
+        },
+        {
+          "id": "設定手順",
+          "level": 2,
+          "text": "設定手順"
+        },
+        {
+          "id": "おすすめモデル",
+          "level": 2,
+          "text": "おすすめモデル"
+        },
+        {
+          "id": "よくある問題",
+          "level": 2,
+          "text": "よくある問題"
+        },
+        {
+          "id": "今すぐ試す",
+          "level": 2,
+          "text": "今すぐ試す"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "Anthropic 公式の Claude Code に Base URL とトークンを設定するか、CC Switch でワンクリック取り込みします。",
+      "headings": [
+        {
+          "id": "方法-1cc-switch-でワンクリック取り込みおすすめ",
+          "level": 2,
+          "text": "方法 1：CC Switch でワンクリック取り込み（おすすめ）"
+        },
+        {
+          "id": "方法-2環境変数を手動で設定する",
+          "level": 2,
+          "text": "方法 2：環境変数を手動で設定する"
+        },
+        {
+          "id": "おすすめモデル",
+          "level": 2,
+          "text": "おすすめモデル"
+        },
+        {
+          "id": "よくある問題",
+          "level": 2,
+          "text": "よくある問題"
+        },
+        {
+          "id": "今すぐ試す",
+          "level": 2,
+          "text": "今すぐ試す"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "よくあるエラー",
+      "description": "ステータスコード別に整理した、よくあるエラーとその原因・解決方法。",
+      "headings": [
+        {
+          "id": "401キーの問題",
+          "level": 2,
+          "text": "401：キーの問題"
+        },
+        {
+          "id": "403権限または残高の不足",
+          "level": 2,
+          "text": "403：権限または残高の不足"
+        },
+        {
+          "id": "400リクエストパラメーターの誤り",
+          "level": 2,
+          "text": "400：リクエストパラメーターの誤り"
+        },
+        {
+          "id": "429リクエストが多すぎる",
+          "level": 2,
+          "text": "429：リクエストが多すぎる"
+        },
+        {
+          "id": "503利用可能な回線がない",
+          "level": 2,
+          "text": "503：利用可能な回線がない"
+        },
+        {
+          "id": "それでも解決しない場合",
+          "level": 2,
+          "text": "それでも解決しない場合"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "よくある質問",
+      "description": "アカウント、残高、キー、モデルに関するよくある疑問。",
+      "headings": [
+        {
+          "id": "残高に有効期限はありますか",
+          "level": 2,
+          "text": "残高に有効期限はありますか？"
+        },
+        {
+          "id": "残高の減少額が利用履歴の金額より少ないのはなぜですか",
+          "level": 2,
+          "text": "残高の減少額が利用履歴の金額より少ないのはなぜですか？"
+        },
+        {
+          "id": "グループはどう選べばよいですか",
+          "level": 2,
+          "text": "グループはどう選べばよいですか？"
+        },
+        {
+          "id": "どのモデルに対応していますか",
+          "level": 2,
+          "text": "どのモデルに対応していますか？"
+        },
+        {
+          "id": "1-つのアカウントで複数のキーを作成できますか",
+          "level": 2,
+          "text": "1 つのアカウントで複数のキーを作成できますか？"
+        },
+        {
+          "id": "キーが漏えいした場合はどうすればよいですか",
+          "level": 2,
+          "text": "キーが漏えいした場合はどうすればよいですか？"
+        },
+        {
+          "id": "各呼び出しにいくらかかったかを確認するには",
+          "level": 2,
+          "text": "各呼び出しにいくらかかったかを確認するには？"
+        },
+        {
+          "id": "リクエストが遅いまたはタイムアウトする場合は",
+          "level": 2,
+          "text": "リクエストが遅い、またはタイムアウトする場合は？"
+        },
+        {
+          "id": "どこでサポートを受けられますか",
+          "level": 2,
+          "text": "どこでサポートを受けられますか？"
+        }
+      ]
+    }
+  ]
+}

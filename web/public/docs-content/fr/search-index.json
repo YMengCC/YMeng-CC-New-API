@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "Démarrage rapide",
+      "description": "Inscription, recharge, création d'une clé API, configuration du client et premier appel, en 5 étapes.",
+      "headings": [
+        {
+          "id": "étape-1-créer-un-compte",
+          "level": 2,
+          "text": "Étape 1 : créer un compte"
+        },
+        {
+          "id": "étape-2-recharger-votre-compte",
+          "level": 2,
+          "text": "Étape 2 : recharger votre compte"
+        },
+        {
+          "id": "étape-3-créer-une-clé-api",
+          "level": 2,
+          "text": "Étape 3 : créer une clé API"
+        },
+        {
+          "id": "étape-4-configurer-le-client",
+          "level": 2,
+          "text": "Étape 4 : configurer le client"
+        },
+        {
+          "id": "étape-5-effectuer-votre-premier-appel",
+          "level": 2,
+          "text": "Étape 5 : effectuer votre premier appel"
+        },
+        {
+          "id": "étapes-suivantes",
+          "level": 2,
+          "text": "Étapes suivantes"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "Présentation de l'API",
+      "description": "Base URL, méthodes d'authentification, protocoles pris en charge et format des réponses d'erreur.",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "authentification",
+          "level": 2,
+          "text": "Authentification"
+        },
+        {
+          "id": "liste-des-api",
+          "level": 2,
+          "text": "Liste des API"
+        },
+        {
+          "id": "réponses-derreur",
+          "level": 2,
+          "text": "Réponses d'erreur"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "API compatible OpenAI",
+      "description": "Exemples d'appels pour Chat Completions, Responses, Embeddings, l'audio et le reranking.",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "utiliser-le-sdk-officiel",
+          "level": 2,
+          "text": "Utiliser le SDK officiel"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "audio",
+          "level": 2,
+          "text": "Audio"
+        },
+        {
+          "id": "autres-api",
+          "level": 2,
+          "text": "Autres API"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "API Claude",
+      "description": "Appeler les modèles Claude au format natif Anthropic Messages.",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "utiliser-le-sdk-anthropic",
+          "level": 2,
+          "text": "Utiliser le SDK Anthropic"
+        },
+        {
+          "id": "remarques",
+          "level": 2,
+          "text": "Remarques"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "API Gemini",
+      "description": "Appeler les modèles Gemini au format natif Google Gemini.",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "authentification",
+          "level": 2,
+          "text": "Authentification"
+        },
+        {
+          "id": "entrée-vidéo",
+          "level": 2,
+          "text": "Entrée vidéo"
+        },
+        {
+          "id": "jusquà-15-mb-utiliser-une-url-vidéo-https",
+          "level": 3,
+          "text": "Jusqu'à 15 MB : utiliser une URL vidéo HTTPS"
+        },
+        {
+          "id": "au-delà-de-15-mb-utiliser-base64-en-ligne",
+          "level": 3,
+          "text": "Au-delà de 15 MB : utiliser Base64 en ligne"
+        },
+        {
+          "id": "vidéos-plus-volumineuses-et-files-api",
+          "level": 3,
+          "text": "Vidéos plus volumineuses et Files API"
+        },
+        {
+          "id": "remarques",
+          "level": 2,
+          "text": "Remarques"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "Génération d'images",
+      "description": "Générer et modifier des images via l'API Images compatible OpenAI.",
+      "headings": [
+        {
+          "id": "générer-une-image",
+          "level": 2,
+          "text": "Générer une image"
+        },
+        {
+          "id": "modifier-une-image",
+          "level": 2,
+          "text": "Modifier une image"
+        },
+        {
+          "id": "facturation",
+          "level": 2,
+          "text": "Facturation"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "Modèles et tarifs",
+      "description": "Obtenir la liste des modèles disponibles et les tarifs publics via l'API.",
+      "headings": [
+        {
+          "id": "liste-des-modèles",
+          "level": 2,
+          "text": "Liste des modèles"
+        },
+        {
+          "id": "tarifs",
+          "level": 2,
+          "text": "Tarifs"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "Consommation et limites de requêtes",
+      "description": "Comment consulter les tokens et le coût d'une requête, et les limites de fréquence de la console et de l'API.",
+      "headings": [
+        {
+          "id": "consulter-la-consommation-dune-requête",
+          "level": 2,
+          "text": "Consulter la consommation d'une requête"
+        },
+        {
+          "id": "depuis-la-console",
+          "level": 3,
+          "text": "Depuis la console"
+        },
+        {
+          "id": "par-identifiant-de-requête",
+          "level": 3,
+          "text": "Par identifiant de requête"
+        },
+        {
+          "id": "avec-une-clé-dapi-uniquement",
+          "level": 3,
+          "text": "Avec une clé d'API uniquement"
+        },
+        {
+          "id": "convertir-le-quota-en-montant",
+          "level": 3,
+          "text": "Convertir le quota en montant"
+        },
+        {
+          "id": "limites-de-fréquence",
+          "level": 2,
+          "text": "Limites de fréquence"
+        },
+        {
+          "id": "console-et-api",
+          "level": 3,
+          "text": "Console et API"
+        },
+        {
+          "id": "en-cas-de-dépassement",
+          "level": 3,
+          "text": "En cas de dépassement"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "Ajouter un fournisseur compatible OpenAI dans Cherry Studio pour se connecter à {{SYSTEM_NAME}}.",
+      "headings": [
+        {
+          "id": "prérequis",
+          "level": 2,
+          "text": "Prérequis"
+        },
+        {
+          "id": "étapes-de-configuration",
+          "level": 2,
+          "text": "Étapes de configuration"
+        },
+        {
+          "id": "modèles-recommandés",
+          "level": 2,
+          "text": "Modèles recommandés"
+        },
+        {
+          "id": "problèmes-fréquents",
+          "level": 2,
+          "text": "Problèmes fréquents"
+        },
+        {
+          "id": "essayer-maintenant",
+          "level": 2,
+          "text": "Essayer maintenant"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "Connecter ChatBox à {{SYSTEM_NAME}} via un fournisseur personnalisé compatible OpenAI.",
+      "headings": [
+        {
+          "id": "prérequis",
+          "level": 2,
+          "text": "Prérequis"
+        },
+        {
+          "id": "étapes-de-configuration",
+          "level": 2,
+          "text": "Étapes de configuration"
+        },
+        {
+          "id": "modèles-recommandés",
+          "level": 2,
+          "text": "Modèles recommandés"
+        },
+        {
+          "id": "problèmes-fréquents",
+          "level": 2,
+          "text": "Problèmes fréquents"
+        },
+        {
+          "id": "essayer-maintenant",
+          "level": 2,
+          "text": "Essayer maintenant"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "Utiliser les modèles de {{SYSTEM_NAME}} dans Cursor grâce à cursor-byokcx.",
+      "headings": [
+        {
+          "id": "prérequis",
+          "level": 2,
+          "text": "Prérequis"
+        },
+        {
+          "id": "étapes-de-configuration",
+          "level": 2,
+          "text": "Étapes de configuration"
+        },
+        {
+          "id": "modèles-recommandés",
+          "level": 2,
+          "text": "Modèles recommandés"
+        },
+        {
+          "id": "problèmes-fréquents",
+          "level": 2,
+          "text": "Problèmes fréquents"
+        },
+        {
+          "id": "essayer-maintenant",
+          "level": 2,
+          "text": "Essayer maintenant"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "Faire passer Codex CLI, l'outil officiel d'OpenAI, par {{SYSTEM_NAME}} grâce aux variables d'environnement.",
+      "headings": [
+        {
+          "id": "prérequis",
+          "level": 2,
+          "text": "Prérequis"
+        },
+        {
+          "id": "étapes-de-configuration",
+          "level": 2,
+          "text": "Étapes de configuration"
+        },
+        {
+          "id": "modèles-recommandés",
+          "level": 2,
+          "text": "Modèles recommandés"
+        },
+        {
+          "id": "problèmes-fréquents",
+          "level": 2,
+          "text": "Problèmes fréquents"
+        },
+        {
+          "id": "essayer-maintenant",
+          "level": 2,
+          "text": "Essayer maintenant"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "Définir la Base URL et le jeton de Claude Code, l'outil officiel d'Anthropic, ou l'importer en un clic avec CC Switch.",
+      "headings": [
+        {
+          "id": "méthode-1-import-en-un-clic-avec-cc-switch-recommandé",
+          "level": 2,
+          "text": "Méthode 1 : import en un clic avec CC Switch (recommandé)"
+        },
+        {
+          "id": "méthode-2-définir-manuellement-les-variables-denvironnement",
+          "level": 2,
+          "text": "Méthode 2 : définir manuellement les variables d'environnement"
+        },
+        {
+          "id": "modèles-recommandés",
+          "level": 2,
+          "text": "Modèles recommandés"
+        },
+        {
+          "id": "problèmes-fréquents",
+          "level": 2,
+          "text": "Problèmes fréquents"
+        },
+        {
+          "id": "essayer-maintenant",
+          "level": 2,
+          "text": "Essayer maintenant"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "Erreurs courantes",
+      "description": "Erreurs fréquentes classées par code d'état, avec leurs causes et leurs solutions.",
+      "headings": [
+        {
+          "id": "401-problème-de-clé",
+          "level": 2,
+          "text": "401 : problème de clé"
+        },
+        {
+          "id": "403-autorisation-ou-solde-insuffisant",
+          "level": 2,
+          "text": "403 : autorisation ou solde insuffisant"
+        },
+        {
+          "id": "400-paramètres-de-requête-incorrects",
+          "level": 2,
+          "text": "400 : paramètres de requête incorrects"
+        },
+        {
+          "id": "429-trop-de-requêtes",
+          "level": 2,
+          "text": "429 : trop de requêtes"
+        },
+        {
+          "id": "503-aucune-ligne-disponible",
+          "level": 2,
+          "text": "503 : aucune ligne disponible"
+        },
+        {
+          "id": "le-problème-persiste",
+          "level": 2,
+          "text": "Le problème persiste ?"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "Questions fréquentes",
+      "description": "Questions courantes sur le compte, le solde, les clés et les modèles.",
+      "headings": [
+        {
+          "id": "le-solde-expire-t-il",
+          "level": 2,
+          "text": "Le solde expire-t-il ?"
+        },
+        {
+          "id": "pourquoi-mon-solde-a-t-il-diminué-dun-montant-inférieur-à-celui-des-journaux-dutilisation",
+          "level": 2,
+          "text": "Pourquoi mon solde a-t-il diminué d'un montant inférieur à celui des Journaux d'utilisation ?"
+        },
+        {
+          "id": "comment-choisir-un-groupe",
+          "level": 2,
+          "text": "Comment choisir un groupe ?"
+        },
+        {
+          "id": "quels-modèles-sont-pris-en-charge",
+          "level": 2,
+          "text": "Quels modèles sont pris en charge ?"
+        },
+        {
+          "id": "un-compte-peut-il-créer-plusieurs-clés",
+          "level": 2,
+          "text": "Un compte peut-il créer plusieurs clés ?"
+        },
+        {
+          "id": "que-faire-si-ma-clé-a-fuité",
+          "level": 2,
+          "text": "Que faire si ma clé a fuité ?"
+        },
+        {
+          "id": "comment-voir-le-coût-de-chaque-appel",
+          "level": 2,
+          "text": "Comment voir le coût de chaque appel ?"
+        },
+        {
+          "id": "que-faire-si-les-requêtes-sont-lentes-ou-expirent",
+          "level": 2,
+          "text": "Que faire si les requêtes sont lentes ou expirent ?"
+        },
+        {
+          "id": "où-obtenir-de-laide",
+          "level": 2,
+          "text": "Où obtenir de l'aide ?"
+        }
+      ]
+    }
+  ]
+}

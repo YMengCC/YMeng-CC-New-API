@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "快速開始",
+      "description": "5 個步驟完成註冊、儲值、建立 API 金鑰、設定用戶端和第一次呼叫。",
+      "headings": [
+        {
+          "id": "第-1-步註冊帳號",
+          "level": 2,
+          "text": "第 1 步：註冊帳號"
+        },
+        {
+          "id": "第-2-步儲值",
+          "level": 2,
+          "text": "第 2 步：儲值"
+        },
+        {
+          "id": "第-3-步建立-api-金鑰",
+          "level": 2,
+          "text": "第 3 步：建立 API 金鑰"
+        },
+        {
+          "id": "第-4-步設定用戶端",
+          "level": 2,
+          "text": "第 4 步：設定用戶端"
+        },
+        {
+          "id": "第-5-步發起第一次呼叫",
+          "level": 2,
+          "text": "第 5 步：發起第一次呼叫"
+        },
+        {
+          "id": "下一步",
+          "level": 2,
+          "text": "下一步"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "API 概覽",
+      "description": "Base URL、驗證方式、支援的介面協定，以及錯誤回應的格式。",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "驗證",
+          "level": 2,
+          "text": "驗證"
+        },
+        {
+          "id": "介面一覽",
+          "level": 2,
+          "text": "介面一覽"
+        },
+        {
+          "id": "錯誤回應",
+          "level": 2,
+          "text": "錯誤回應"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "OpenAI 相容介面",
+      "description": "Chat Completions、Responses、Embeddings、語音與重新排序介面的呼叫範例。",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "使用官方-sdk",
+          "level": 2,
+          "text": "使用官方 SDK"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "語音",
+          "level": 2,
+          "text": "語音"
+        },
+        {
+          "id": "其他介面",
+          "level": 2,
+          "text": "其他介面"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "Claude 介面",
+      "description": "以 Anthropic Messages 原生格式呼叫 Claude 模型。",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "使用-anthropic-sdk",
+          "level": 2,
+          "text": "使用 Anthropic SDK"
+        },
+        {
+          "id": "注意事項",
+          "level": 2,
+          "text": "注意事項"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "Gemini 介面",
+      "description": "以 Google Gemini 原生格式呼叫 Gemini 模型。",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "驗證方式",
+          "level": 2,
+          "text": "驗證方式"
+        },
+        {
+          "id": "影片輸入",
+          "level": 2,
+          "text": "影片輸入"
+        },
+        {
+          "id": "不超過-15-mb使用-https-影片-url",
+          "level": 3,
+          "text": "不超過 15 MB：使用 HTTPS 影片 URL"
+        },
+        {
+          "id": "超過-15-mb使用內嵌-base64",
+          "level": 3,
+          "text": "超過 15 MB：使用內嵌 Base64"
+        },
+        {
+          "id": "更大影片與-files-api",
+          "level": 3,
+          "text": "更大影片與 Files API"
+        },
+        {
+          "id": "注意事項",
+          "level": 2,
+          "text": "注意事項"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "圖像生成",
+      "description": "透過 OpenAI 相容的 Images 介面生成和編輯圖片。",
+      "headings": [
+        {
+          "id": "生成圖片",
+          "level": 2,
+          "text": "生成圖片"
+        },
+        {
+          "id": "編輯圖片",
+          "level": 2,
+          "text": "編輯圖片"
+        },
+        {
+          "id": "計費",
+          "level": 2,
+          "text": "計費"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "模型與價格",
+      "description": "透過介面取得可用模型列表和公開價格。",
+      "headings": [
+        {
+          "id": "模型列表",
+          "level": 2,
+          "text": "模型列表"
+        },
+        {
+          "id": "價格",
+          "level": 2,
+          "text": "價格"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "用量查詢與請求限制",
+      "description": "如何查看單次請求的 token 與費用，以及控制台和介面的請求頻率限制。",
+      "headings": [
+        {
+          "id": "查看單次請求的用量",
+          "level": 2,
+          "text": "查看單次請求的用量"
+        },
+        {
+          "id": "在主控台查看",
+          "level": 3,
+          "text": "在主控台查看"
+        },
+        {
+          "id": "依請求-id-查詢",
+          "level": 3,
+          "text": "依請求 ID 查詢"
+        },
+        {
+          "id": "只有-api-金鑰時",
+          "level": 3,
+          "text": "只有 API 金鑰時"
+        },
+        {
+          "id": "把額度換算成金額",
+          "level": 3,
+          "text": "把額度換算成金額"
+        },
+        {
+          "id": "請求頻率限制",
+          "level": 2,
+          "text": "請求頻率限制"
+        },
+        {
+          "id": "主控台與介面的限制",
+          "level": 3,
+          "text": "主控台與介面的限制"
+        },
+        {
+          "id": "觸發限制時",
+          "level": 3,
+          "text": "觸發限制時"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "在 Cherry Studio 中新增 OpenAI 相容服務商，接入 {{SYSTEM_NAME}}。",
+      "headings": [
+        {
+          "id": "準備工作",
+          "level": 2,
+          "text": "準備工作"
+        },
+        {
+          "id": "設定步驟",
+          "level": 2,
+          "text": "設定步驟"
+        },
+        {
+          "id": "推薦模型",
+          "level": 2,
+          "text": "推薦模型"
+        },
+        {
+          "id": "常見問題",
+          "level": 2,
+          "text": "常見問題"
+        },
+        {
+          "id": "立即試用",
+          "level": 2,
+          "text": "立即試用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "在 ChatBox 中使用自訂 OpenAI 相容服務商接入 {{SYSTEM_NAME}}。",
+      "headings": [
+        {
+          "id": "準備工作",
+          "level": 2,
+          "text": "準備工作"
+        },
+        {
+          "id": "設定步驟",
+          "level": 2,
+          "text": "設定步驟"
+        },
+        {
+          "id": "推薦模型",
+          "level": 2,
+          "text": "推薦模型"
+        },
+        {
+          "id": "常見問題",
+          "level": 2,
+          "text": "常見問題"
+        },
+        {
+          "id": "立即試用",
+          "level": 2,
+          "text": "立即試用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "藉助 cursor-byokcx 在 Cursor 中使用 {{SYSTEM_NAME}} 的模型。",
+      "headings": [
+        {
+          "id": "準備工作",
+          "level": 2,
+          "text": "準備工作"
+        },
+        {
+          "id": "設定步驟",
+          "level": 2,
+          "text": "設定步驟"
+        },
+        {
+          "id": "推薦模型",
+          "level": 2,
+          "text": "推薦模型"
+        },
+        {
+          "id": "常見問題",
+          "level": 2,
+          "text": "常見問題"
+        },
+        {
+          "id": "立即試用",
+          "level": 2,
+          "text": "立即試用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "透過環境變數讓 OpenAI 官方的 Codex CLI 經由 {{SYSTEM_NAME}} 呼叫。",
+      "headings": [
+        {
+          "id": "準備工作",
+          "level": 2,
+          "text": "準備工作"
+        },
+        {
+          "id": "設定步驟",
+          "level": 2,
+          "text": "設定步驟"
+        },
+        {
+          "id": "推薦模型",
+          "level": 2,
+          "text": "推薦模型"
+        },
+        {
+          "id": "常見問題",
+          "level": 2,
+          "text": "常見問題"
+        },
+        {
+          "id": "立即試用",
+          "level": 2,
+          "text": "立即試用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "為 Anthropic 官方的 Claude Code 設定 Base URL 與令牌，或用 CC Switch 一鍵匯入。",
+      "headings": [
+        {
+          "id": "方式一用-cc-switch-一鍵匯入推薦",
+          "level": 2,
+          "text": "方式一：用 CC Switch 一鍵匯入（推薦）"
+        },
+        {
+          "id": "方式二手動設定環境變數",
+          "level": 2,
+          "text": "方式二：手動設定環境變數"
+        },
+        {
+          "id": "推薦模型",
+          "level": 2,
+          "text": "推薦模型"
+        },
+        {
+          "id": "常見問題",
+          "level": 2,
+          "text": "常見問題"
+        },
+        {
+          "id": "立即試用",
+          "level": 2,
+          "text": "立即試用"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "常見錯誤",
+      "description": "按狀態碼整理的常見錯誤、原因和解決方法。",
+      "headings": [
+        {
+          "id": "401金鑰問題",
+          "level": 2,
+          "text": "401：金鑰問題"
+        },
+        {
+          "id": "403權限或餘額不足",
+          "level": 2,
+          "text": "403：權限或餘額不足"
+        },
+        {
+          "id": "400請求參數有誤",
+          "level": 2,
+          "text": "400：請求參數有誤"
+        },
+        {
+          "id": "429請求過於頻繁",
+          "level": 2,
+          "text": "429：請求過於頻繁"
+        },
+        {
+          "id": "503暫無可用線路",
+          "level": 2,
+          "text": "503：暫無可用線路"
+        },
+        {
+          "id": "仍然無法解決",
+          "level": 2,
+          "text": "仍然無法解決？"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "常見問題",
+      "description": "關於帳戶、餘額、金鑰和模型的常見疑問。",
+      "headings": [
+        {
+          "id": "餘額會過期嗎",
+          "level": 2,
+          "text": "餘額會過期嗎？"
+        },
+        {
+          "id": "為什麼餘額減少的金額比使用日誌裡的少",
+          "level": 2,
+          "text": "為什麼餘額減少的金額比使用日誌裡的少？"
+        },
+        {
+          "id": "分組應該怎麼選",
+          "level": 2,
+          "text": "分組應該怎麼選？"
+        },
+        {
+          "id": "支援哪些模型",
+          "level": 2,
+          "text": "支援哪些模型？"
+        },
+        {
+          "id": "一個帳戶可以建立多個金鑰嗎",
+          "level": 2,
+          "text": "一個帳戶可以建立多個金鑰嗎？"
+        },
+        {
+          "id": "金鑰外洩了怎麼辦",
+          "level": 2,
+          "text": "金鑰外洩了怎麼辦？"
+        },
+        {
+          "id": "如何查看每次呼叫花了多少錢",
+          "level": 2,
+          "text": "如何查看每次呼叫花了多少錢？"
+        },
+        {
+          "id": "請求很慢或者逾時怎麼辦",
+          "level": 2,
+          "text": "請求很慢或者逾時怎麼辦？"
+        },
+        {
+          "id": "在哪裡取得協助",
+          "level": 2,
+          "text": "在哪裡取得協助？"
+        }
+      ]
+    }
+  ]
+}

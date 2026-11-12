@@ -234,7 +234,7 @@ export function HeaderNavigationSection(props: HeaderNavigationSectionProps) {
     },
     {
       key: 'docs',
-      title: t('Docs'),
+      title: t('API Guide'),
       description: t('Documentation or external knowledge base.'),
     },
     {

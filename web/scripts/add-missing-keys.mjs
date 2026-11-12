@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -9,67 +27,258 @@ function stableStringify(obj) {
 
 const newKeys = {
   en: {
-    'Internal account profit/loss': 'Internal account profit/loss',
-    'JiaSu Seedance': 'JiaSu Seedance',
-    'Request Parameters': 'Request Parameters',
-    'Request parameters were truncated. This is not the complete request.':
-      'Request parameters were truncated. This is not the complete request.',
-    'Some request parameters were omitted from this log.':
-      'Some request parameters were omitted from this log.',
+    'API Guide': 'API Guide',
+    '{{name}} API Guide': '{{name}} API Guide',
+    'Quick Start': 'Quick Start',
+    'API Reference': 'API Reference',
+    'Client Integrations': 'Client Integrations',
+    'API Overview': 'API Overview',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': 'Models and Pricing',
+    'Usage and Limits': 'Usage and Limits',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': 'Common Errors',
+    'General FAQ': 'General FAQ',
+    'Search docs': 'Search docs',
+    'Search docs...': 'Search docs...',
+    'Search the API guide': 'Search the API guide',
+    'On this page': 'On this page',
+    'Documentation menu': 'Documentation menu',
+    'Failed to load the documentation.': 'Failed to load the documentation.',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.',
+    'Register, top up, and make your first call in five steps.':
+      'Register, top up, and make your first call in five steps.',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      'Endpoints, parameters, and examples for every supported protocol.',
+    'Step-by-step setup guides for popular AI clients.':
+      'Step-by-step setup guides for popular AI clients.',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      'Troubleshooting errors and answers about accounts, keys, and billing.',
   },
   zh: {
-    'Internal account profit/loss': '内部账号盈亏',
-    'JiaSu Seedance': '佳速 Seedance',
-    'Request Parameters': '请求参数',
-    'Request parameters were truncated. This is not the complete request.':
-      '请求参数已截断，这不是完整请求。',
-    'Some request parameters were omitted from this log.':
-      '部分请求参数未记录在此日志中。',
+    'API Guide': 'API指南',
+    '{{name}} API Guide': '{{name}} API指南',
+    'Quick Start': '快速开始',
+    'API Reference': 'API 参考',
+    'Client Integrations': '客户端接入',
+    'API Overview': 'API 概览',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': '模型与价格',
+    'Usage and Limits': '用量与限制',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': '常见错误',
+    'General FAQ': '常见问题',
+    'Search docs': '搜索文档',
+    'Search docs...': '搜索文档…',
+    'Search the API guide': '搜索 API 指南',
+    'On this page': '本页目录',
+    'Documentation menu': '文档菜单',
+    'Failed to load the documentation.': '文档加载失败。',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      '接入所需的全部内容：快速开始、API 参考、客户端配置与常见问题解答。',
+    'Register, top up, and make your first call in five steps.':
+      '五步完成注册、充值并发起第一次调用。',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      '各协议的端点、参数与示例。',
+    'Step-by-step setup guides for popular AI clients.':
+      '常用 AI 客户端的分步配置指南。',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      '错误排查与账户、密钥、计费相关解答。',
+  },
+  'zh-TW': {
+    'API Guide': 'API指南',
+    '{{name}} API Guide': '{{name}} API指南',
+    'Quick Start': '快速開始',
+    'API Reference': 'API 參考',
+    'Client Integrations': '用戶端接入',
+    'API Overview': 'API 概覽',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': '模型與價格',
+    'Usage and Limits': '用量與限制',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': '常見錯誤',
+    'General FAQ': '常見問題',
+    'Search docs': '搜尋文件',
+    'Search docs...': '搜尋文件…',
+    'Search the API guide': '搜尋 API 指南',
+    'On this page': '本頁目錄',
+    'Documentation menu': '文件選單',
+    'Failed to load the documentation.': '文件載入失敗。',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      '接入所需的全部內容：快速開始、API 參考、用戶端設定與常見問題解答。',
+    'Register, top up, and make your first call in five steps.':
+      '五步完成註冊、儲值並發起第一次呼叫。',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      '各協定的端點、參數與範例。',
+    'Step-by-step setup guides for popular AI clients.':
+      '常用 AI 用戶端的逐步設定指南。',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      '錯誤排查與帳戶、金鑰、計費相關解答。',
   },
   fr: {
-    'Internal account profit/loss': 'Résultat du compte interne',
-    'JiaSu Seedance': 'JiaSu Seedance',
-    'Request Parameters': 'Paramètres de la requête',
-    'Request parameters were truncated. This is not the complete request.':
-      'Les paramètres ont été tronqués. La requête n’est pas complète.',
-    'Some request parameters were omitted from this log.':
-      'Certains paramètres ne figurent pas dans ce journal.',
+    'API Guide': 'Guide API',
+    '{{name}} API Guide': 'Guide API de {{name}}',
+    'Quick Start': 'Démarrage rapide',
+    'API Reference': 'Référence API',
+    'Client Integrations': 'Intégration des clients',
+    'API Overview': "Vue d'ensemble de l'API",
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': 'Modèles et tarifs',
+    'Usage and Limits': 'Utilisation et limites',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': 'Erreurs courantes',
+    'General FAQ': 'FAQ générale',
+    'Search docs': 'Rechercher dans la doc',
+    'Search docs...': 'Rechercher dans la doc…',
+    'Search the API guide': 'Rechercher dans le guide API',
+    'On this page': 'Sur cette page',
+    'Documentation menu': 'Menu de la documentation',
+    'Failed to load the documentation.':
+      'Échec du chargement de la documentation.',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      'Tout pour intégrer : démarrage rapide, référence API, configuration des clients et réponses aux questions courantes.',
+    'Register, top up, and make your first call in five steps.':
+      'Inscrivez-vous, rechargez et passez votre premier appel en cinq étapes.',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      'Points de terminaison, paramètres et exemples pour chaque protocole pris en charge.',
+    'Step-by-step setup guides for popular AI clients.':
+      'Guides de configuration pas à pas pour les clients IA populaires.',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      'Diagnostic des erreurs et réponses sur les comptes, les clés et la facturation.',
   },
   ja: {
-    'Internal account profit/loss': '内部アカウントの損益',
-    'JiaSu Seedance': 'JiaSu Seedance',
-    'Request Parameters': 'リクエストパラメーター',
-    'Request parameters were truncated. This is not the complete request.':
-      'リクエストパラメーターは切り詰められています。完全なリクエストではありません。',
-    'Some request parameters were omitted from this log.':
-      '一部のリクエストパラメーターはこのログに記録されていません。',
+    'API Guide': 'APIガイド',
+    '{{name}} API Guide': '{{name}} APIガイド',
+    'Quick Start': 'クイックスタート',
+    'API Reference': 'APIリファレンス',
+    'Client Integrations': 'クライアント連携',
+    'API Overview': 'API概要',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': 'モデルと料金',
+    'Usage and Limits': '使用量と制限',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': 'よくあるエラー',
+    'General FAQ': 'よくある質問',
+    'Search docs': 'ドキュメントを検索',
+    'Search docs...': 'ドキュメントを検索…',
+    'Search the API guide': 'APIガイドを検索',
+    'On this page': 'このページの内容',
+    'Documentation menu': 'ドキュメントメニュー',
+    'Failed to load the documentation.':
+      'ドキュメントの読み込みに失敗しました。',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      '導入に必要なすべて：クイックスタート、APIリファレンス、クライアント設定、よくある質問への回答。',
+    'Register, top up, and make your first call in five steps.':
+      '5つのステップで登録・チャージ・最初の呼び出し。',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      '各プロトコルのエンドポイント・パラメータ・サンプル。',
+    'Step-by-step setup guides for popular AI clients.':
+      '人気AIクライアントのステップ別設定ガイド。',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      'エラー対処とアカウント・キー・課金に関する回答。',
   },
   ru: {
-    'Internal account profit/loss': 'Прибыль/убыток внутреннего аккаунта',
-    'JiaSu Seedance': 'JiaSu Seedance',
-    'Request Parameters': 'Параметры запроса',
-    'Request parameters were truncated. This is not the complete request.':
-      'Параметры запроса усечены. Это неполный запрос.',
-    'Some request parameters were omitted from this log.':
-      'Некоторые параметры запроса не записаны в этот журнал.',
+    'API Guide': 'Руководство API',
+    '{{name}} API Guide': 'Руководство API {{name}}',
+    'Quick Start': 'Быстрый старт',
+    'API Reference': 'Справочник API',
+    'Client Integrations': 'Подключение клиентов',
+    'API Overview': 'Обзор API',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': 'Модели и цены',
+    'Usage and Limits': 'Использование и лимиты',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': 'Частые ошибки',
+    'General FAQ': 'Общие вопросы',
+    'Search docs': 'Поиск по документации',
+    'Search docs...': 'Поиск по документации…',
+    'Search the API guide': 'Поиск по руководству API',
+    'On this page': 'На этой странице',
+    'Documentation menu': 'Меню документации',
+    'Failed to load the documentation.': 'Не удалось загрузить документацию.',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      'Всё для интеграции: быстрый старт, справочник API, настройка клиентов и ответы на частые вопросы.',
+    'Register, top up, and make your first call in five steps.':
+      'Регистрация, пополнение и первый вызов за пять шагов.',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      'Эндпоинты, параметры и примеры для всех поддерживаемых протоколов.',
+    'Step-by-step setup guides for popular AI clients.':
+      'Пошаговые руководства по настройке популярных AI-клиентов.',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      'Разбор ошибок и ответы об аккаунтах, ключах и оплате.',
   },
   vi: {
-    'Internal account profit/loss': 'Lãi/lỗ tài khoản nội bộ',
-    'JiaSu Seedance': 'JiaSu Seedance',
-    'Request Parameters': 'Tham số yêu cầu',
-    'Request parameters were truncated. This is not the complete request.':
-      'Tham số yêu cầu đã bị cắt bớt. Đây không phải yêu cầu đầy đủ.',
-    'Some request parameters were omitted from this log.':
-      'Một số tham số yêu cầu đã bị bỏ qua khỏi nhật ký này.',
-  },
-
-  'zh-TW': {
-    'Internal account profit/loss': '內部帳號損益',
-    'Request Parameters': '請求參數',
-    'Request parameters were truncated. This is not the complete request.':
-      '請求參數已截斷，這不是完整請求。',
-    'Some request parameters were omitted from this log.':
-      '部分請求參數未記錄在此日誌中。',
+    'API Guide': 'Hướng dẫn API',
+    '{{name}} API Guide': 'Hướng dẫn API {{name}}',
+    'Quick Start': 'Bắt đầu nhanh',
+    'API Reference': 'Tham chiếu API',
+    'Client Integrations': 'Tích hợp ứng dụng khách',
+    'API Overview': 'Tổng quan API',
+    'OpenAI API': 'OpenAI API',
+    'Claude API': 'Claude API',
+    'Gemini API': 'Gemini API',
+    'Models and Pricing': 'Mô hình và giá',
+    'Usage and Limits': 'Mức dùng và giới hạn',
+    'Cherry Studio': 'Cherry Studio',
+    Chatbox: 'Chatbox',
+    Cursor: 'Cursor',
+    Codex: 'Codex',
+    'Claude Code': 'Claude Code',
+    'Common Errors': 'Lỗi thường gặp',
+    'General FAQ': 'Câu hỏi thường gặp',
+    'Search docs': 'Tìm trong tài liệu',
+    'Search docs...': 'Tìm trong tài liệu…',
+    'Search the API guide': 'Tìm trong hướng dẫn API',
+    'On this page': 'Trong trang này',
+    'Documentation menu': 'Menu tài liệu',
+    'Failed to load the documentation.': 'Không tải được tài liệu.',
+    'Everything you need to integrate: quick start, API reference, client setup, and answers to common questions.':
+      'Mọi thứ cần để tích hợp: bắt đầu nhanh, tham chiếu API, cấu hình ứng dụng khách và giải đáp câu hỏi thường gặp.',
+    'Register, top up, and make your first call in five steps.':
+      'Đăng ký, nạp tiền và gọi lần đầu trong năm bước.',
+    'Endpoints, parameters, and examples for every supported protocol.':
+      'Endpoint, tham số và ví dụ cho mọi giao thức được hỗ trợ.',
+    'Step-by-step setup guides for popular AI clients.':
+      'Hướng dẫn cấu hình từng bước cho các ứng dụng khách AI phổ biến.',
+    'Troubleshooting errors and answers about accounts, keys, and billing.':
+      'Khắc phục lỗi và giải đáp về tài khoản, khóa và thanh toán.',
   },
 }
 

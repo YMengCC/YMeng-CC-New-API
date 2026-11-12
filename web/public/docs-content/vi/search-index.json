@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "Bắt đầu nhanh",
+      "description": "5 bước để đăng ký, nạp tiền, tạo khóa API, cấu hình ứng dụng khách và thực hiện lần gọi đầu tiên.",
+      "headings": [
+        {
+          "id": "bước-1-đăng-ký-tài-khoản",
+          "level": 2,
+          "text": "Bước 1: Đăng ký tài khoản"
+        },
+        {
+          "id": "bước-2-nạp-tiền",
+          "level": 2,
+          "text": "Bước 2: Nạp tiền"
+        },
+        {
+          "id": "bước-3-tạo-khóa-api",
+          "level": 2,
+          "text": "Bước 3: Tạo khóa API"
+        },
+        {
+          "id": "bước-4-cấu-hình-ứng-dụng-khách",
+          "level": 2,
+          "text": "Bước 4: Cấu hình ứng dụng khách"
+        },
+        {
+          "id": "bước-5-thực-hiện-lần-gọi-đầu-tiên",
+          "level": 2,
+          "text": "Bước 5: Thực hiện lần gọi đầu tiên"
+        },
+        {
+          "id": "bước-tiếp-theo",
+          "level": 2,
+          "text": "Bước tiếp theo"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "Tổng quan API",
+      "description": "Base URL, phương thức xác thực, các giao thức API được hỗ trợ và định dạng phản hồi lỗi.",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "xác-thực",
+          "level": 2,
+          "text": "Xác thực"
+        },
+        {
+          "id": "danh-sách-api",
+          "level": 2,
+          "text": "Danh sách API"
+        },
+        {
+          "id": "phản-hồi-lỗi",
+          "level": 2,
+          "text": "Phản hồi lỗi"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "API tương thích OpenAI",
+      "description": "Ví dụ gọi các API Chat Completions, Responses, Embeddings, giọng nói và sắp xếp lại (rerank).",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "sử-dụng-sdk-chính-thức",
+          "level": 2,
+          "text": "Sử dụng SDK chính thức"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "giọng-nói",
+          "level": 2,
+          "text": "Giọng nói"
+        },
+        {
+          "id": "các-api-khác",
+          "level": 2,
+          "text": "Các API khác"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "API Claude",
+      "description": "Gọi các mô hình Claude theo định dạng Anthropic Messages gốc.",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "sử-dụng-anthropic-sdk",
+          "level": 2,
+          "text": "Sử dụng Anthropic SDK"
+        },
+        {
+          "id": "lưu-ý",
+          "level": 2,
+          "text": "Lưu ý"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "API Gemini",
+      "description": "Gọi các mô hình Gemini theo định dạng Google Gemini gốc.",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "phương-thức-xác-thực",
+          "level": 2,
+          "text": "Phương thức xác thực"
+        },
+        {
+          "id": "đầu-vào-video",
+          "level": 2,
+          "text": "Đầu vào video"
+        },
+        {
+          "id": "không-quá-15-mb-dùng-url-video-https",
+          "level": 3,
+          "text": "Không quá 15 MB: dùng URL video HTTPS"
+        },
+        {
+          "id": "trên-15-mb-dùng-base64-nội-tuyến",
+          "level": 3,
+          "text": "Trên 15 MB: dùng Base64 nội tuyến"
+        },
+        {
+          "id": "video-lớn-hơn-và-files-api",
+          "level": 3,
+          "text": "Video lớn hơn và Files API"
+        },
+        {
+          "id": "lưu-ý",
+          "level": 2,
+          "text": "Lưu ý"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "Tạo ảnh",
+      "description": "Tạo và chỉnh sửa ảnh qua API Images tương thích OpenAI.",
+      "headings": [
+        {
+          "id": "tạo-ảnh",
+          "level": 2,
+          "text": "Tạo ảnh"
+        },
+        {
+          "id": "chỉnh-sửa-ảnh",
+          "level": 2,
+          "text": "Chỉnh sửa ảnh"
+        },
+        {
+          "id": "tính-phí",
+          "level": 2,
+          "text": "Tính phí"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "Mô hình và giá",
+      "description": "Lấy danh sách mô hình khả dụng và giá công khai qua API.",
+      "headings": [
+        {
+          "id": "danh-sách-mô-hình",
+          "level": 2,
+          "text": "Danh sách mô hình"
+        },
+        {
+          "id": "giá",
+          "level": 2,
+          "text": "Giá"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "Lượng dùng và giới hạn yêu cầu",
+      "description": "Cách xem token và chi phí của một yêu cầu, cùng giới hạn tần suất cho bảng điều khiển và API.",
+      "headings": [
+        {
+          "id": "xem-lượng-dùng-của-một-yêu-cầu",
+          "level": 2,
+          "text": "Xem lượng dùng của một yêu cầu"
+        },
+        {
+          "id": "trên-bảng-điều-khiển",
+          "level": 3,
+          "text": "Trên bảng điều khiển"
+        },
+        {
+          "id": "theo-mã-yêu-cầu",
+          "level": 3,
+          "text": "Theo mã yêu cầu"
+        },
+        {
+          "id": "khi-chỉ-có-khóa-api",
+          "level": 3,
+          "text": "Khi chỉ có khóa API"
+        },
+        {
+          "id": "quy-đổi-hạn-mức-thành-số-tiền",
+          "level": 3,
+          "text": "Quy đổi hạn mức thành số tiền"
+        },
+        {
+          "id": "giới-hạn-tần-suất-yêu-cầu",
+          "level": 2,
+          "text": "Giới hạn tần suất yêu cầu"
+        },
+        {
+          "id": "bảng-điều-khiển-và-api",
+          "level": 3,
+          "text": "Bảng điều khiển và API"
+        },
+        {
+          "id": "khi-chạm-giới-hạn",
+          "level": 3,
+          "text": "Khi chạm giới hạn"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "Thêm nhà cung cấp tương thích OpenAI trong Cherry Studio để kết nối {{SYSTEM_NAME}}.",
+      "headings": [
+        {
+          "id": "chuẩn-bị",
+          "level": 2,
+          "text": "Chuẩn bị"
+        },
+        {
+          "id": "các-bước-cấu-hình",
+          "level": 2,
+          "text": "Các bước cấu hình"
+        },
+        {
+          "id": "mô-hình-đề-xuất",
+          "level": 2,
+          "text": "Mô hình đề xuất"
+        },
+        {
+          "id": "câu-hỏi-thường-gặp",
+          "level": 2,
+          "text": "Câu hỏi thường gặp"
+        },
+        {
+          "id": "dùng-thử-ngay",
+          "level": 2,
+          "text": "Dùng thử ngay"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "Kết nối {{SYSTEM_NAME}} trong ChatBox bằng nhà cung cấp tùy chỉnh tương thích OpenAI.",
+      "headings": [
+        {
+          "id": "chuẩn-bị",
+          "level": 2,
+          "text": "Chuẩn bị"
+        },
+        {
+          "id": "các-bước-cấu-hình",
+          "level": 2,
+          "text": "Các bước cấu hình"
+        },
+        {
+          "id": "mô-hình-đề-xuất",
+          "level": 2,
+          "text": "Mô hình đề xuất"
+        },
+        {
+          "id": "câu-hỏi-thường-gặp",
+          "level": 2,
+          "text": "Câu hỏi thường gặp"
+        },
+        {
+          "id": "dùng-thử-ngay",
+          "level": 2,
+          "text": "Dùng thử ngay"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "Dùng các mô hình của {{SYSTEM_NAME}} trong Cursor với sự hỗ trợ của cursor-byokcx.",
+      "headings": [
+        {
+          "id": "chuẩn-bị",
+          "level": 2,
+          "text": "Chuẩn bị"
+        },
+        {
+          "id": "các-bước-cấu-hình",
+          "level": 2,
+          "text": "Các bước cấu hình"
+        },
+        {
+          "id": "mô-hình-đề-xuất",
+          "level": 2,
+          "text": "Mô hình đề xuất"
+        },
+        {
+          "id": "câu-hỏi-thường-gặp",
+          "level": 2,
+          "text": "Câu hỏi thường gặp"
+        },
+        {
+          "id": "dùng-thử-ngay",
+          "level": 2,
+          "text": "Dùng thử ngay"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "Dùng biến môi trường để Codex CLI chính thức của OpenAI đi qua {{SYSTEM_NAME}}.",
+      "headings": [
+        {
+          "id": "chuẩn-bị",
+          "level": 2,
+          "text": "Chuẩn bị"
+        },
+        {
+          "id": "các-bước-cấu-hình",
+          "level": 2,
+          "text": "Các bước cấu hình"
+        },
+        {
+          "id": "mô-hình-đề-xuất",
+          "level": 2,
+          "text": "Mô hình đề xuất"
+        },
+        {
+          "id": "câu-hỏi-thường-gặp",
+          "level": 2,
+          "text": "Câu hỏi thường gặp"
+        },
+        {
+          "id": "dùng-thử-ngay",
+          "level": 2,
+          "text": "Dùng thử ngay"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "Thiết lập Base URL và token cho Claude Code chính thức của Anthropic, hoặc nhập bằng CC Switch chỉ với một cú nhấp.",
+      "headings": [
+        {
+          "id": "cách-1-nhập-bằng-cc-switch-chỉ-với-một-cú-nhấp-khuyên-dùng",
+          "level": 2,
+          "text": "Cách 1: Nhập bằng CC Switch chỉ với một cú nhấp (khuyên dùng)"
+        },
+        {
+          "id": "cách-2-thiết-lập-biến-môi-trường-thủ-công",
+          "level": 2,
+          "text": "Cách 2: Thiết lập biến môi trường thủ công"
+        },
+        {
+          "id": "mô-hình-đề-xuất",
+          "level": 2,
+          "text": "Mô hình đề xuất"
+        },
+        {
+          "id": "câu-hỏi-thường-gặp",
+          "level": 2,
+          "text": "Câu hỏi thường gặp"
+        },
+        {
+          "id": "dùng-thử-ngay",
+          "level": 2,
+          "text": "Dùng thử ngay"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "Lỗi thường gặp",
+      "description": "Các lỗi thường gặp được sắp xếp theo mã trạng thái, kèm nguyên nhân và cách khắc phục.",
+      "headings": [
+        {
+          "id": "401-vấn-đề-về-khóa",
+          "level": 2,
+          "text": "401: Vấn đề về khóa"
+        },
+        {
+          "id": "403-không-đủ-quyền-hoặc-số-dư",
+          "level": 2,
+          "text": "403: Không đủ quyền hoặc số dư"
+        },
+        {
+          "id": "400-tham-số-yêu-cầu-không-đúng",
+          "level": 2,
+          "text": "400: Tham số yêu cầu không đúng"
+        },
+        {
+          "id": "429-yêu-cầu-quá-thường-xuyên",
+          "level": 2,
+          "text": "429: Yêu cầu quá thường xuyên"
+        },
+        {
+          "id": "503-tạm-thời-không-có-tuyến-khả-dụng",
+          "level": 2,
+          "text": "503: Tạm thời không có tuyến khả dụng"
+        },
+        {
+          "id": "vẫn-chưa-giải-quyết-được",
+          "level": 2,
+          "text": "Vẫn chưa giải quyết được?"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "Câu hỏi thường gặp",
+      "description": "Các thắc mắc thường gặp về tài khoản, số dư, khóa và mô hình.",
+      "headings": [
+        {
+          "id": "số-dư-có-hết-hạn-không",
+          "level": 2,
+          "text": "Số dư có hết hạn không?"
+        },
+        {
+          "id": "vì-sao-số-dư-bị-trừ-ít-hơn-số-tiền-trong-nhật-ký-sử-dụng",
+          "level": 2,
+          "text": "Vì sao số dư bị trừ ít hơn số tiền trong nhật ký sử dụng?"
+        },
+        {
+          "id": "nên-chọn-nhóm-như-thế-nào",
+          "level": 2,
+          "text": "Nên chọn nhóm như thế nào?"
+        },
+        {
+          "id": "hỗ-trợ-những-mô-hình-nào",
+          "level": 2,
+          "text": "Hỗ trợ những mô hình nào?"
+        },
+        {
+          "id": "một-tài-khoản-có-thể-tạo-nhiều-khóa-không",
+          "level": 2,
+          "text": "Một tài khoản có thể tạo nhiều khóa không?"
+        },
+        {
+          "id": "khóa-bị-lộ-thì-phải-làm-sao",
+          "level": 2,
+          "text": "Khóa bị lộ thì phải làm sao?"
+        },
+        {
+          "id": "làm-sao-xem-mỗi-lần-gọi-tốn-bao-nhiêu-tiền",
+          "level": 2,
+          "text": "Làm sao xem mỗi lần gọi tốn bao nhiêu tiền?"
+        },
+        {
+          "id": "yêu-cầu-chậm-hoặc-bị-quá-thời-gian-thì-phải-làm-sao",
+          "level": 2,
+          "text": "Yêu cầu chậm hoặc bị quá thời gian thì phải làm sao?"
+        },
+        {
+          "id": "nhận-hỗ-trợ-ở-đâu",
+          "level": 2,
+          "text": "Nhận hỗ trợ ở đâu?"
+        }
+      ]
+    }
+  ]
+}

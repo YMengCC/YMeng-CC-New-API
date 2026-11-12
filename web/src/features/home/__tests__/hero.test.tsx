@@ -430,26 +430,28 @@ it('shows the sign-in entry to the dashboard instead of sign-up to signed-in use
   expect(screen.queryByRole('button', { name: /Get Started/ })).toBeNull()
 })
 
-it('opens an external docs link in a new tab', async () => {
-  await renderHero({
-    isAuthenticated: false,
-    docsLink: 'https://docs.example.com',
-  })
+it('labels the API guide button and links it to the in-app docs route', async () => {
+  await renderHero({ isAuthenticated: false })
 
-  const docs = screen.getByRole('button', { name: 'Docs' })
+  const apiGuide = screen.getByRole('button', { name: 'API Guide' })
 
-  expect(docs).toHaveAttribute('href', 'https://docs.example.com')
-  expect(docs).toHaveAttribute('target', '_blank')
+  expect(apiGuide).toHaveAttribute('href', '/docs')
+  expect(apiGuide).not.toHaveAttribute('target')
+  expect(screen.queryByRole('button', { name: 'Docs' })).toBeNull()
 })
 
-it('keeps a relative docs link inside the app', async () => {
-  await renderHero({ isAuthenticated: false, docsLink: '/about' })
+it.each([['https://docs.example.com/guide'], ['/about']])(
+  'ignores a configured docs link (%s) and opens the in-app API guide',
+  async (docsLink) => {
+    await renderHero({ isAuthenticated: false, docsLink })
 
-  const docs = screen.getByRole('button', { name: 'Docs' })
+    const apiGuide = screen.getByRole('button', { name: 'API Guide' })
 
-  expect(docs).toHaveAttribute('href', '/about')
-  expect(docs).not.toHaveAttribute('target')
-})
+    expect(apiGuide).toHaveAttribute('href', '/docs')
+    expect(apiGuide).not.toHaveAttribute('href', docsLink)
+    expect(apiGuide).not.toHaveAttribute('target')
+  }
+)
 
 it('stacks the developer entry above the BaoCode entry below lg', async () => {
   await renderHero({ isAuthenticated: false })

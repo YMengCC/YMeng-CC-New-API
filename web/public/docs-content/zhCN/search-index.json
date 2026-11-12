@@ -1,0 +1,504 @@
+{
+  "pages": [
+    {
+      "slug": "quick-start",
+      "title": "快速开始",
+      "description": "5 步完成注册、充值、创建 API 密钥、配置客户端和第一次调用。",
+      "headings": [
+        {
+          "id": "第-1-步注册账号",
+          "level": 2,
+          "text": "第 1 步：注册账号"
+        },
+        {
+          "id": "第-2-步充值",
+          "level": 2,
+          "text": "第 2 步：充值"
+        },
+        {
+          "id": "第-3-步创建-api-密钥",
+          "level": 2,
+          "text": "第 3 步：创建 API 密钥"
+        },
+        {
+          "id": "第-4-步配置客户端",
+          "level": 2,
+          "text": "第 4 步：配置客户端"
+        },
+        {
+          "id": "第-5-步发起第一次调用",
+          "level": 2,
+          "text": "第 5 步：发起第一次调用"
+        },
+        {
+          "id": "下一步",
+          "level": 2,
+          "text": "下一步"
+        }
+      ]
+    },
+    {
+      "slug": "api/overview",
+      "title": "API 概览",
+      "description": "Base URL、鉴权方式、支持的接口协议，以及错误响应的格式。",
+      "headings": [
+        {
+          "id": "base-url",
+          "level": 2,
+          "text": "Base URL"
+        },
+        {
+          "id": "鉴权",
+          "level": 2,
+          "text": "鉴权"
+        },
+        {
+          "id": "接口一览",
+          "level": 2,
+          "text": "接口一览"
+        },
+        {
+          "id": "错误响应",
+          "level": 2,
+          "text": "错误响应"
+        }
+      ]
+    },
+    {
+      "slug": "api/openai",
+      "title": "OpenAI 兼容接口",
+      "description": "Chat Completions、Responses、Embeddings、语音与重排序接口的调用示例。",
+      "headings": [
+        {
+          "id": "chat-completions",
+          "level": 2,
+          "text": "Chat Completions"
+        },
+        {
+          "id": "使用官方-sdk",
+          "level": 2,
+          "text": "使用官方 SDK"
+        },
+        {
+          "id": "responses",
+          "level": 2,
+          "text": "Responses"
+        },
+        {
+          "id": "embeddings",
+          "level": 2,
+          "text": "Embeddings"
+        },
+        {
+          "id": "语音",
+          "level": 2,
+          "text": "语音"
+        },
+        {
+          "id": "其他接口",
+          "level": 2,
+          "text": "其他接口"
+        }
+      ]
+    },
+    {
+      "slug": "api/claude",
+      "title": "Claude 接口",
+      "description": "以 Anthropic Messages 原生格式调用 Claude 模型。",
+      "headings": [
+        {
+          "id": "messages",
+          "level": 2,
+          "text": "Messages"
+        },
+        {
+          "id": "使用-anthropic-sdk",
+          "level": 2,
+          "text": "使用 Anthropic SDK"
+        },
+        {
+          "id": "注意事项",
+          "level": 2,
+          "text": "注意事项"
+        }
+      ]
+    },
+    {
+      "slug": "api/gemini",
+      "title": "Gemini 接口",
+      "description": "以 Google Gemini 原生格式调用 Gemini 模型。",
+      "headings": [
+        {
+          "id": "generatecontent",
+          "level": 2,
+          "text": "generateContent"
+        },
+        {
+          "id": "鉴权方式",
+          "level": 2,
+          "text": "鉴权方式"
+        },
+        {
+          "id": "视频输入",
+          "level": 2,
+          "text": "视频输入"
+        },
+        {
+          "id": "不超过-15-mb使用-https-视频-url",
+          "level": 3,
+          "text": "不超过 15 MB：使用 HTTPS 视频 URL"
+        },
+        {
+          "id": "超过-15-mb使用内联-base64",
+          "level": 3,
+          "text": "超过 15 MB：使用内联 Base64"
+        },
+        {
+          "id": "更大视频与-files-api",
+          "level": 3,
+          "text": "更大视频与 Files API"
+        },
+        {
+          "id": "注意事项",
+          "level": 2,
+          "text": "注意事项"
+        }
+      ]
+    },
+    {
+      "slug": "api/images",
+      "title": "图像生成",
+      "description": "通过 OpenAI 兼容的 Images 接口生成和编辑图片。",
+      "headings": [
+        {
+          "id": "生成图片",
+          "level": 2,
+          "text": "生成图片"
+        },
+        {
+          "id": "编辑图片",
+          "level": 2,
+          "text": "编辑图片"
+        },
+        {
+          "id": "计费",
+          "level": 2,
+          "text": "计费"
+        }
+      ]
+    },
+    {
+      "slug": "api/models-and-pricing",
+      "title": "模型与价格",
+      "description": "通过接口获取可用模型列表和公开价格。",
+      "headings": [
+        {
+          "id": "模型列表",
+          "level": 2,
+          "text": "模型列表"
+        },
+        {
+          "id": "价格",
+          "level": 2,
+          "text": "价格"
+        }
+      ]
+    },
+    {
+      "slug": "api/usage-and-limits",
+      "title": "用量查询与请求限制",
+      "description": "如何查看单次请求的 token 与费用，以及控制台和接口的请求频率限制。",
+      "headings": [
+        {
+          "id": "查看单次请求的用量",
+          "level": 2,
+          "text": "查看单次请求的用量"
+        },
+        {
+          "id": "在控制台查看",
+          "level": 3,
+          "text": "在控制台查看"
+        },
+        {
+          "id": "按请求-id-查询",
+          "level": 3,
+          "text": "按请求 ID 查询"
+        },
+        {
+          "id": "只有-api-密钥时",
+          "level": 3,
+          "text": "只有 API 密钥时"
+        },
+        {
+          "id": "把额度换算成金额",
+          "level": 3,
+          "text": "把额度换算成金额"
+        },
+        {
+          "id": "请求频率限制",
+          "level": 2,
+          "text": "请求频率限制"
+        },
+        {
+          "id": "控制台与接口的限制",
+          "level": 3,
+          "text": "控制台与接口的限制"
+        },
+        {
+          "id": "触发限制时",
+          "level": 3,
+          "text": "触发限制时"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cherry-studio",
+      "title": "Cherry Studio",
+      "description": "在 Cherry Studio 中添加 OpenAI 兼容服务商，接入 {{SYSTEM_NAME}}。",
+      "headings": [
+        {
+          "id": "准备工作",
+          "level": 2,
+          "text": "准备工作"
+        },
+        {
+          "id": "配置步骤",
+          "level": 2,
+          "text": "配置步骤"
+        },
+        {
+          "id": "推荐模型",
+          "level": 2,
+          "text": "推荐模型"
+        },
+        {
+          "id": "常见问题",
+          "level": 2,
+          "text": "常见问题"
+        },
+        {
+          "id": "立即试用",
+          "level": 2,
+          "text": "立即试用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/chatbox",
+      "title": "ChatBox",
+      "description": "在 ChatBox 中使用自定义 OpenAI 兼容服务商接入 {{SYSTEM_NAME}}。",
+      "headings": [
+        {
+          "id": "准备工作",
+          "level": 2,
+          "text": "准备工作"
+        },
+        {
+          "id": "配置步骤",
+          "level": 2,
+          "text": "配置步骤"
+        },
+        {
+          "id": "推荐模型",
+          "level": 2,
+          "text": "推荐模型"
+        },
+        {
+          "id": "常见问题",
+          "level": 2,
+          "text": "常见问题"
+        },
+        {
+          "id": "立即试用",
+          "level": 2,
+          "text": "立即试用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/cursor",
+      "title": "Cursor",
+      "description": "借助 cursor-byokcx 在 Cursor 中使用 {{SYSTEM_NAME}} 的模型。",
+      "headings": [
+        {
+          "id": "准备工作",
+          "level": 2,
+          "text": "准备工作"
+        },
+        {
+          "id": "配置步骤",
+          "level": 2,
+          "text": "配置步骤"
+        },
+        {
+          "id": "推荐模型",
+          "level": 2,
+          "text": "推荐模型"
+        },
+        {
+          "id": "常见问题",
+          "level": 2,
+          "text": "常见问题"
+        },
+        {
+          "id": "立即试用",
+          "level": 2,
+          "text": "立即试用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/codex",
+      "title": "Codex CLI",
+      "description": "通过环境变量让 OpenAI 官方的 Codex CLI 走 {{SYSTEM_NAME}}。",
+      "headings": [
+        {
+          "id": "准备工作",
+          "level": 2,
+          "text": "准备工作"
+        },
+        {
+          "id": "配置步骤",
+          "level": 2,
+          "text": "配置步骤"
+        },
+        {
+          "id": "推荐模型",
+          "level": 2,
+          "text": "推荐模型"
+        },
+        {
+          "id": "常见问题",
+          "level": 2,
+          "text": "常见问题"
+        },
+        {
+          "id": "立即试用",
+          "level": 2,
+          "text": "立即试用"
+        }
+      ]
+    },
+    {
+      "slug": "clients/claude-code",
+      "title": "Claude Code",
+      "description": "为 Anthropic 官方的 Claude Code 设置 Base URL 与令牌，或用 CC Switch 一键导入。",
+      "headings": [
+        {
+          "id": "方式一用-cc-switch-一键导入推荐",
+          "level": 2,
+          "text": "方式一：用 CC Switch 一键导入（推荐）"
+        },
+        {
+          "id": "方式二手动设置环境变量",
+          "level": 2,
+          "text": "方式二：手动设置环境变量"
+        },
+        {
+          "id": "推荐模型",
+          "level": 2,
+          "text": "推荐模型"
+        },
+        {
+          "id": "常见问题",
+          "level": 2,
+          "text": "常见问题"
+        },
+        {
+          "id": "立即试用",
+          "level": 2,
+          "text": "立即试用"
+        }
+      ]
+    },
+    {
+      "slug": "faq/errors",
+      "title": "常见错误",
+      "description": "按状态码整理的常见报错、原因和解决方法。",
+      "headings": [
+        {
+          "id": "401密钥问题",
+          "level": 2,
+          "text": "401：密钥问题"
+        },
+        {
+          "id": "403权限或余额不足",
+          "level": 2,
+          "text": "403：权限或余额不足"
+        },
+        {
+          "id": "400请求参数有误",
+          "level": 2,
+          "text": "400：请求参数有误"
+        },
+        {
+          "id": "429请求过于频繁",
+          "level": 2,
+          "text": "429：请求过于频繁"
+        },
+        {
+          "id": "503暂无可用线路",
+          "level": 2,
+          "text": "503：暂无可用线路"
+        },
+        {
+          "id": "仍然无法解决",
+          "level": 2,
+          "text": "仍然无法解决？"
+        }
+      ]
+    },
+    {
+      "slug": "faq/general",
+      "title": "常见问题",
+      "description": "关于账户、余额、密钥和模型的常见疑问。",
+      "headings": [
+        {
+          "id": "余额会过期吗",
+          "level": 2,
+          "text": "余额会过期吗？"
+        },
+        {
+          "id": "为什么余额减少的金额比使用日志里的少",
+          "level": 2,
+          "text": "为什么余额减少的金额比使用日志里的少？"
+        },
+        {
+          "id": "分组应该怎么选",
+          "level": 2,
+          "text": "分组应该怎么选？"
+        },
+        {
+          "id": "支持哪些模型",
+          "level": 2,
+          "text": "支持哪些模型？"
+        },
+        {
+          "id": "一个账户可以创建多个密钥吗",
+          "level": 2,
+          "text": "一个账户可以创建多个密钥吗？"
+        },
+        {
+          "id": "密钥泄露了怎么办",
+          "level": 2,
+          "text": "密钥泄露了怎么办？"
+        },
+        {
+          "id": "如何查看每次调用花了多少钱",
+          "level": 2,
+          "text": "如何查看每次调用花了多少钱？"
+        },
+        {
+          "id": "请求很慢或者超时怎么办",
+          "level": 2,
+          "text": "请求很慢或者超时怎么办？"
+        },
+        {
+          "id": "在哪里获得帮助",
+          "level": 2,
+          "text": "在哪里获得帮助？"
+        }
+      ]
+    }
+  ]
+}
