@@ -81,12 +81,19 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
   return (
     <div
       aria-hidden
+      data-relief='raised'
+      data-depth-tilt='6'
+      data-depth-float='3'
+      data-depth-glare
       className={cn(
         'w-full rounded-xl border border-sky-500/15 bg-white/75 p-2 shadow-[0_18px_40px_-30px_rgba(18,183,245,0.8)] backdrop-blur-sm dark:border-sky-400/15 dark:bg-[#0b0f17]/80',
         props.className
       )}
     >
-      <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+      <div
+        data-depth-layer='2'
+        className='flex flex-wrap items-center gap-x-2 gap-y-1'
+      >
         {rounds.map((round, index) => {
           const Icon = round.icon
           return (

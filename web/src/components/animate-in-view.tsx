@@ -28,6 +28,7 @@ interface AnimateInViewProps {
   animation?: 'fade-up' | 'fade-in' | 'scale-in' | 'fade-left' | 'fade-right'
   once?: boolean
   as?: 'div' | 'section' | 'li' | 'span'
+  dataAttributes?: Record<`data-${string}`, string>
 }
 
 export function AnimateInView(props: AnimateInViewProps) {
@@ -72,6 +73,7 @@ export function AnimateInView(props: AnimateInViewProps) {
 
   return (
     <Tag
+      {...props.dataAttributes}
       ref={ref as never}
       className={cn(
         'opacity-0 will-change-[transform,opacity]',

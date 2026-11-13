@@ -2,6 +2,9 @@ package config
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testConfigWithMap struct {
@@ -71,6 +74,26 @@ func TestUpdateConfigFromMap_EmptyMapClearsAll(t *testing.T) {
 	if len(cfg.Exprs) != 0 {
 		t.Errorf("Exprs should be empty after updating with {}, got %v", cfg.Exprs)
 	}
+}
+
+func TestUpdateConfigFromMap_EmptySliceClearsAll(t *testing.T) {
+	type channel struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		Icon string `json:"icon"`
+	}
+	type configWithSlice struct {
+		Channels []channel `json:"channels"`
+	}
+
+	cfg := &configWithSlice{
+		Channels: []channel{
+			{ID: "alipay", Name: "Alipay"},
+			{ID: "wxpay", Name: "WeChat Pay"},
+		},
+	}
+	require.NoError(t, UpdateConfigFromMap(cfg, map[string]string{"channels": `[]`}))
+	assert.Empty(t, cfg.Channels)
 }
 
 func TestUpdateConfigFromMap_ScalarFieldsUnchanged(t *testing.T) {

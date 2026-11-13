@@ -63,6 +63,8 @@ export function BaoCodePanel() {
       </div>
 
       <div
+        data-relief='plate'
+        data-depth='1'
         className='landing-animate-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--paper-pill-border)] bg-[var(--paper-pill-bg)] px-3 py-1 text-xs font-semibold tracking-wide text-[var(--paper-pill-ink)] opacity-0'
         style={{ animationDelay: '40ms' }}
       >
@@ -72,13 +74,16 @@ export function BaoCodePanel() {
       </div>
 
       <h1
+        data-depth='2'
         className='landing-animate-fade-up flex max-w-full flex-wrap items-center gap-x-[0.28em] gap-y-1 font-[family-name:var(--paper-serif)] text-[clamp(2rem,3.4vw,2.75rem)] leading-[1.15] font-semibold tracking-[-0.015em] text-[var(--paper-ink)] opacity-0'
         style={{ animationDelay: '60ms' }}
       >
-        <span className='inline-flex min-w-0 max-w-full items-center gap-[0.28em]'>
+        <span className='inline-flex max-w-full min-w-0 items-center gap-[0.28em]'>
           <img
             src={logo}
             alt=''
+            data-depth-float='1'
+            data-relief='float'
             className='h-[0.78em] w-auto shrink-0 rounded-[0.18em]'
             onError={(event) => {
               // A missing site logo leaves the name on its own
@@ -97,6 +102,8 @@ export function BaoCodePanel() {
           <img
             src={BAOCODE_ICON_URL}
             alt=''
+            data-depth-float='3'
+            data-relief='float'
             className='h-[0.78em] w-auto rounded-[0.18em]'
           />
           BaoCode
@@ -104,6 +111,7 @@ export function BaoCodePanel() {
       </h1>
 
       <p
+        data-depth='1'
         className='landing-animate-fade-up mt-3 font-[family-name:var(--paper-serif)] text-xl leading-snug text-[var(--paper-muted)] opacity-0 md:text-[22px]'
         style={{ animationDelay: '120ms' }}
       >
@@ -111,6 +119,7 @@ export function BaoCodePanel() {
       </p>
 
       <p
+        data-depth='1'
         className='landing-animate-fade-up mt-5 max-w-full font-[family-name:var(--paper-serif)] text-[17px] leading-[1.7] break-words opacity-0'
         style={{ animationDelay: '180ms' }}
       >
@@ -121,6 +130,7 @@ export function BaoCodePanel() {
       </p>
 
       <ol
+        data-depth-group
         className='landing-animate-fade-up mt-6 flex flex-col gap-3 opacity-0'
         style={{ animationDelay: '240ms' }}
       >
@@ -130,6 +140,7 @@ export function BaoCodePanel() {
               {index + 1}
             </span>
             <step.icon
+              data-depth-layer='3'
               className='size-4 shrink-0 text-[var(--paper-muted)]'
               aria-hidden
             />
@@ -143,6 +154,8 @@ export function BaoCodePanel() {
         style={{ animationDelay: '300ms' }}
       >
         <Button
+          data-relief='primary'
+          data-depth-tilt='10'
           className='group h-10 rounded-md border border-[var(--paper-ink)] bg-[var(--paper-ink)] px-4 text-[15px] font-medium text-[var(--paper)] hover:bg-[var(--paper-ink-hover)]'
           render={
             <a href={baocodeLink} target='_blank' rel='noopener noreferrer' />
@@ -157,6 +170,7 @@ export function BaoCodePanel() {
       </div>
 
       <p
+        data-depth='1'
         className='landing-animate-fade-up mt-6 text-[13.5px] text-[var(--paper-muted)] opacity-0'
         style={{ animationDelay: '360ms' }}
       >

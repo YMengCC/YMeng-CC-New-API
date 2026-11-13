@@ -63,6 +63,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
   return (
     <div className='flex w-full min-w-0 flex-col items-start text-left'>
       <div
+        data-depth='1'
         className='landing-animate-fade-up mb-6 flex flex-wrap items-center gap-3 opacity-0'
         style={{ animationDelay: '120ms' }}
       >
@@ -70,7 +71,11 @@ export function ConsolePanel(props: ConsolePanelProps) {
           {t('For developers')}
         </span>
         <span className='bg-border h-px w-8' aria-hidden />
-        <span className='inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 px-3 py-1 text-[11px] font-medium text-blue-600 dark:border-blue-400/20 dark:bg-blue-400/5 dark:text-blue-400'>
+        <span
+          data-relief='plate'
+          data-depth-tilt='12'
+          className='inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 px-3 py-1 text-[11px] font-medium text-blue-600 dark:border-blue-400/20 dark:bg-blue-400/5 dark:text-blue-400'
+        >
           <span className='relative flex size-1.5'>
             <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75' />
             <span className='relative inline-flex size-1.5 rounded-full bg-blue-500 dark:bg-blue-400' />
@@ -80,6 +85,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
       </div>
 
       <h2
+        data-depth='2'
         className='landing-animate-fade-up text-[clamp(2rem,3.6vw,3rem)] leading-[1.12] font-bold tracking-tight opacity-0'
         style={{ animationDelay: '180ms' }}
       >
@@ -90,6 +96,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
         </span>
       </h2>
       <p
+        data-depth='1'
         className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-[15px]'
         style={{ animationDelay: '240ms' }}
       >
@@ -99,12 +106,14 @@ export function ConsolePanel(props: ConsolePanelProps) {
       </p>
 
       <div
+        data-depth-group
         className='landing-animate-fade-up mt-8 flex flex-wrap items-center gap-3 opacity-0'
         style={{ animationDelay: '300ms' }}
       >
         {props.isAuthenticated ? (
           <Button
-            className='group shadow-primary/25 h-12 rounded-lg px-7 text-base font-semibold shadow-md'
+            data-relief='primary'
+            className='group h-12 rounded-lg px-7 text-base font-semibold'
             render={<Link to='/dashboard' />}
           >
             {t('Sign in')}
@@ -113,6 +122,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
         ) : (
           <>
             <Button
+              data-relief='primary'
               className='group h-11 rounded-lg px-5 text-sm font-medium'
               render={<Link to='/sign-up' />}
             >
@@ -135,17 +145,18 @@ export function ConsolePanel(props: ConsolePanelProps) {
         className='landing-animate-fade-up mt-9 w-full max-w-xl opacity-0'
         style={{ animationDelay: '360ms' }}
       >
-        <div className='mb-3 flex items-baseline gap-3'>
+        <div data-depth='1' className='mb-3 flex items-baseline gap-3'>
           <span className='text-muted-foreground/60 text-[10px] font-bold tracking-[0.15em] uppercase'>
             {t('Supported Applications')}
           </span>
           <span className='bg-border/70 h-px flex-1' aria-hidden />
         </div>
-        <div className='flex flex-wrap items-center gap-2.5'>
+        <div data-depth-group className='flex flex-wrap items-center gap-2.5'>
           <a
             href={baocodeLink}
             target='_blank'
             rel='noopener noreferrer'
+            data-relief='plate'
             className={APP_PILL_CLASSES}
           >
             <img
@@ -159,6 +170,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
             href='https://cherry-ai.com'
             target='_blank'
             rel='noopener noreferrer'
+            data-relief='plate'
             className={APP_PILL_CLASSES}
           >
             <CherryStudio.Color size={20} className='shrink-0' />
@@ -168,6 +180,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
             href='https://ccswitch.io'
             target='_blank'
             rel='noopener noreferrer'
+            data-relief='plate'
             className={APP_PILL_CLASSES}
           >
             <img

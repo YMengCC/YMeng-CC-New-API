@@ -53,10 +53,16 @@ export function HowItWorks() {
     <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
+          <p
+            data-depth='1'
+            className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'
+          >
             {t('How It Works')}
           </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
+          <h2
+            data-depth='2'
+            className='text-2xl font-bold tracking-tight md:text-3xl'
+          >
             {t('Three steps to get started')}
           </h2>
         </AnimateInView>
@@ -69,16 +75,32 @@ export function HowItWorks() {
               animation='fade-up'
               className='relative flex flex-col items-center text-center'
             >
-              <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
+              <div
+                data-depth-tilt='14'
+                data-depth-float={String(i + 1)}
+                className='relative mb-6'
+              >
+                <div
+                  data-relief='plate'
+                  className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'
+                >
                   {step.icon}
                 </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
+                <div
+                  data-depth-layer='4'
+                  data-relief='plate'
+                  className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'
+                >
                   {step.num}
                 </div>
               </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
+              <h3 data-depth='1' className='mb-2 text-base font-semibold'>
+                {step.title}
+              </h3>
+              <p
+                data-depth='1'
+                className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'
+              >
                 {step.desc}
               </p>
             </AnimateInView>

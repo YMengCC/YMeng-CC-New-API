@@ -869,6 +869,431 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
+/* ── Home relief: one light source for every visible surface ──
+   Static shading, so it stays on for reduced-motion readers. The light always
+   comes from the top-left; the tiers differ only in elevation, never in
+   direction or colour, which keeps the whole page reading as one object.
+   - data-relief="raised": panels, cards, the terminal, bento cells
+   - data-relief="plate": icon tiles, number badges, avatars, chips, pills
+   - data-relief="inset": recessed wells (terminal body, benchmark tiles)
+   - data-relief="primary": filled buttons; raised plus a tinted cast
+   - data-relief="float": standalone icons and logos
+   - data-relief="band": full-width bands
+   Shadows are fed through Tailwind's own --tw-* channels so focus rings and
+   ring utilities keep working; the vars fall back to transparent because they
+   may be unset on elements that carry no shadow utility. */
+:root[data-home-depth] {
+  --home-hi: rgb(255 255 255 / 0.92);
+  --home-hi-soft: rgb(255 255 255 / 0.5);
+  --home-lo: rgb(15 23 42 / 0.07);
+  --home-shade: rgb(15 23 42 / 0.045);
+  --home-cast: rgb(15 23 42 / 0.1);
+  --home-cast-far: rgb(15 23 42 / 0.16);
+  --home-glow: color-mix(in oklch, var(--primary) 38%, transparent);
+  --home-text-hi: rgb(255 255 255 / 0.7);
+  --home-text-lo: rgb(15 23 42 / 0.1);
+  --home-light-wash: color-mix(in oklch, var(--primary) 6%, transparent);
+}
+:root.dark[data-home-depth] {
+  --home-hi: rgb(255 255 255 / 0.14);
+  --home-hi-soft: rgb(255 255 255 / 0.08);
+  --home-lo: rgb(0 0 0 / 0.45);
+  --home-shade: rgb(0 0 0 / 0.25);
+  --home-cast: rgb(0 0 0 / 0.35);
+  --home-cast-far: rgb(0 0 0 / 0.5);
+  --home-glow: color-mix(in oklch, var(--primary) 45%, transparent);
+  --home-text-hi: rgb(255 255 255 / 0.1);
+  --home-text-lo: rgb(0 0 0 / 0.55);
+  --home-light-wash: color-mix(in oklch, var(--primary) 10%, transparent);
+}
+
+:root[data-home-depth] [data-relief] {
+  /* Spelled out on the element: a custom property would resolve these var()
+     references where it is declared (the root), not on the element. */
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+}
+:root[data-home-depth] [data-relief='raised'] {
+  --tw-inset-shadow:
+    inset 0 1px 0 var(--home-hi), inset 1px 0 0 var(--home-hi-soft),
+    inset -1px 0 0 var(--home-shade), inset 0 -1px 0 var(--home-lo);
+  --tw-shadow:
+    0 1px 2px var(--home-cast), 0 10px 24px -14px var(--home-cast-far);
+}
+:root[data-home-depth] [data-relief='plate'] {
+  --tw-inset-shadow:
+    inset 0 1px 0 var(--home-hi), inset 1px 0 0 var(--home-hi-soft),
+    inset 0 -1px 0 var(--home-lo);
+  --tw-shadow: 0 1px 2px var(--home-cast);
+}
+:root[data-home-depth] [data-relief='inset'] {
+  --tw-inset-shadow:
+    inset 0 1px 3px var(--home-shade), inset 0 -1px 0 var(--home-hi-soft);
+  --tw-shadow: 0 1px 0 var(--home-hi-soft);
+}
+:root[data-home-depth] [data-relief='primary'] {
+  --tw-inset-shadow:
+    inset 0 1px 0 var(--home-hi), inset 0 -1px 0 var(--home-lo);
+  --tw-shadow:
+    0 1px 2px var(--home-cast), 0 14px 26px -16px var(--home-glow),
+    0 2px 8px -4px var(--home-glow);
+}
+:root[data-home-depth] [data-relief='band'] {
+  --tw-inset-shadow:
+    inset 0 1px 0 var(--home-hi-soft), inset 0 -1px 0 var(--home-lo);
+}
+/* Lifting deepens the cast; pressing sinks the surface into its well. */
+:root[data-home-motion]
+  :is([data-relief='raised'], [data-relief='primary'])[data-depth-active] {
+  --tw-shadow:
+    0 2px 4px var(--home-cast), 0 26px 48px -22px var(--home-cast-far);
+}
+:root[data-home-motion]
+  :is([data-relief='raised'], [data-relief='primary'])[data-depth-pressed] {
+  --tw-inset-shadow:
+    inset 0 2px 6px var(--home-shade), inset 0 -1px 0 var(--home-hi-soft);
+  --tw-shadow: 0 1px 1px var(--home-cast);
+}
+
+/* Icons and logos read as cut out of the page and lit from the same corner. */
+:root[data-home-depth] [data-relief='float'] {
+  filter: drop-shadow(-1px -1px 0 var(--home-hi-soft))
+    drop-shadow(1px 2px 2px var(--home-cast));
+}
+
+/* Every button on the page gets a rounded edge; the ones we tag above keep
+   their own tier. */
+:root[data-home-depth] :is(button, [role='button']):not([data-relief]) {
+  --tw-inset-shadow:
+    inset 0 1px 0 var(--home-hi), inset 0 -1px 0 var(--home-lo);
+  --tw-shadow:
+    0 1px 2px var(--home-cast), 0 6px 14px -10px var(--home-cast-far);
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+}
+:root[data-home-depth] :is(button, [role='button']):not([data-relief]):active {
+  --tw-inset-shadow:
+    inset 0 2px 5px var(--home-shade), inset 0 -1px 0 var(--home-hi-soft);
+  --tw-shadow: 0 1px 1px var(--home-cast);
+}
+
+/* Text is embossed by the same light: a hairline highlight under the glyphs
+   and a soft shade over them. text-shadow inherits, so one value covers all
+   copy, while headings sink a little deeper. */
+:root[data-home-depth] :is([data-home-scene], header) {
+  text-shadow:
+    0 1px 0 var(--home-text-hi),
+    0 1px 1px var(--home-text-lo);
+}
+:root[data-home-depth] :is([data-home-scene], header) :is(h1, h2, h3, h4) {
+  text-shadow:
+    0 1px 0 var(--home-text-hi),
+    0 2px 5px var(--home-text-lo);
+}
+/* Gradient headings are clipped to their glyphs, so a text-shadow is erased;
+   the filter shades the painted result instead. */
+:root[data-home-depth] .bg-clip-text {
+  /* The inherited text-shadow would paint glyph-shaped copies over the
+     clipped gradient and wash it out. */
+  text-shadow: none;
+  filter: drop-shadow(0 1px 0 var(--home-text-hi))
+    drop-shadow(0 2px 5px var(--home-text-lo));
+}
+
+/* The page itself sits in one lit room: a fixed wash from the top-left and a
+   faint cool bounce from the far corner, behind every section. */
+:root[data-home-depth] [data-home-scene] {
+  position: relative;
+}
+:root[data-home-depth] [data-home-scene]::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      75rem 45rem at 8% -12%,
+      var(--home-light-wash),
+      transparent 70%
+    ),
+    radial-gradient(
+      60rem 40rem at 108% 112%,
+      color-mix(in oklch, var(--primary) 4%, transparent),
+      transparent 70%
+    );
+}
+/* Paper panels catch the same light across both hero columns. */
+:root[data-home-depth] :is(.home-paper-clip-lg, .home-paper-clip-sm) {
+  background-image: linear-gradient(
+    160deg,
+    var(--home-hi-soft) 0%,
+    transparent 45%,
+    var(--home-shade) 100%
+  );
+}
+
+/* ── Home depth: 3D motion over the landing page ──
+   Gated by data-home-motion, which useHomeDepth only sets when the reader
+   has not asked for reduced motion. The static relief below does not need it.
+   Switched on by useHomeDepth (features/home/hooks/use-home-depth.ts), which
+   sets data-home-depth on <html> and writes the --depth-* values below. Only
+   paint-time properties are used (translate, transform, scale, opacity), so
+   no element moves in the layout.
+   - data-depth="n": parallax with the pointer, n px steps (negative = behind)
+   - data-depth-tilt="deg": tilts toward the pointer and lifts on hover; "0"
+     only tracks the pointer, for elements whose transform is animated
+   - data-depth-group: every direct child behaves like data-depth-tilt
+   - data-depth-layer="n": moves with the pointer inside its tilted ancestor
+   - data-depth-float="1..4": slow idle float, the value picks the phase
+   - data-depth-glare: a light sheen following the pointer while hovered
+   Tilted elements use `transform`, so they must not carry a transform
+   animation; the others use `translate`, so they must not carry Tailwind
+   translate utilities. The float animates `translate` on the compositor, so
+   a floating element must neither carry Tailwind translate utilities nor be
+   a parallax or layer element without a tilt. */
+@property --depth-x {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-y {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-lx {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-ly {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-z {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-rx {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --depth-ry {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --depth-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --depth-glare {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+@property --depth-glare-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+@property --depth-glare-y {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 50%;
+}
+
+:root[data-home-motion]
+  :is([data-depth], [data-depth-layer]):not(
+    [data-depth-tilt],
+    [data-depth-group] > *
+  ) {
+  translate: calc(var(--depth-x) + var(--depth-lx))
+    calc(var(--depth-y) + var(--depth-ly));
+}
+:root[data-home-motion]
+  :is([data-depth-tilt]:not([data-depth-tilt='0']), [data-depth-group] > *) {
+  /* Everything Tailwind's transition-all covers except transform, which the
+     pointer drives frame by frame. */
+  transition-property:
+    color, background-color, border-color, outline-color, text-decoration-color,
+    fill, stroke, opacity, box-shadow, translate, scale, rotate, filter,
+    backdrop-filter;
+}
+:root[data-home-motion]
+  :is(
+    [data-depth-tilt]:not([data-depth-tilt='0']),
+    [data-depth-group] > *
+  )[data-depth] {
+  transform: translate(var(--depth-x), var(--depth-y));
+}
+:root[data-home-motion]
+  :is(
+    [data-depth-tilt]:not([data-depth-tilt='0']),
+    [data-depth-group] > *
+  )[data-depth-active] {
+  transform: perspective(800px)
+    translate3d(var(--depth-x), var(--depth-y), var(--depth-z))
+    rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) scale(var(--depth-scale));
+}
+:root[data-home-motion] [data-depth-glare][data-depth-active]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--depth-glare-x) var(--depth-glare-y),
+    rgb(255 255 255 / 0.16),
+    transparent 60%
+  );
+  opacity: var(--depth-glare);
+}
+:root.dark[data-home-motion] [data-depth-glare][data-depth-active]::after {
+  background: radial-gradient(
+    circle at var(--depth-glare-x) var(--depth-glare-y),
+    rgb(255 255 255 / 0.06),
+    transparent 60%
+  );
+}
+
+@keyframes home-depth-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -4px;
+  }
+}
+:root[data-home-motion] [data-depth-float] {
+  animation: home-depth-float 7s ease-in-out infinite;
+}
+:root[data-home-motion] [data-depth-float='2'] {
+  animation-duration: 8s;
+  animation-delay: -2s;
+}
+:root[data-home-motion] [data-depth-float='3'] {
+  animation-duration: 9s;
+  animation-delay: -4.5s;
+}
+:root[data-home-motion] [data-depth-float='4'] {
+  animation-duration: 7.5s;
+  animation-delay: -6s;
+}
+
+/* Glows and badges breathe; scale, so their translate is untouched. */
+@keyframes home-depth-breathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.05;
+  }
+}
+:root[data-home-motion] [data-depth-breathe] {
+  animation: home-depth-breathe 10s ease-in-out infinite;
+}
+:root[data-home-motion] [data-depth-breathe='fast'] {
+  animation-duration: 4s;
+}
+
+/* Entrances swing in from depth instead of sliding flat; they end on the same
+   transform as the flat ones. */
+@keyframes home-depth-fade-up {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) translateY(24px) rotateX(14deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes home-depth-scale-in {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) rotateX(10deg) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes home-depth-fade-left {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) translateX(24px) rotateY(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes home-depth-fade-right {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) translateX(-24px) rotateY(12deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+:root[data-home-motion] .landing-animate-fade-up {
+  animation-name: home-depth-fade-up;
+}
+:root[data-home-motion] .landing-animate-scale-in {
+  animation-name: home-depth-scale-in;
+}
+:root[data-home-motion] .landing-animate-fade-left {
+  animation-name: home-depth-fade-left;
+}
+:root[data-home-motion] .landing-animate-fade-right {
+  animation-name: home-depth-fade-right;
+}
+
+/* The header drops in once; backwards fill releases its transform afterwards. */
+@keyframes home-depth-drop {
+  from {
+    opacity: 0;
+    transform: perspective(800px) translateY(-12px) rotateX(-24deg);
+  }
+}
+:root[data-home-motion] [data-depth-enter] {
+  animation: home-depth-drop 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Below-the-fold blocks swing up while they scroll into view. Browsers
+   without scroll-driven animations show them as they are. */
+@keyframes home-depth-reveal {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) translateY(28px) rotateX(16deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@supports (animation-timeline: view()) {
+  :root[data-home-motion] [data-depth-reveal] {
+    animation: home-depth-reveal linear backwards;
+    animation-timeline: view();
+    animation-range: entry 0% entry 90%;
+  }
+}
+
 /* Micro-interactions — Vercel-style subtle hover/active feedback */
 @media (prefers-reduced-motion: no-preference) {
   [data-slot='card']:not([data-card-hover='false']) {

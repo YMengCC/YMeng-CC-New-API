@@ -88,6 +88,7 @@ export function CommunityCard(props: CommunityCardProps) {
 
   return (
     <div
+      data-depth-tilt='0'
       className={cn(
         'landing-animate-fade-up w-full max-w-md rounded-xl border border-sky-500/15 bg-white/70 p-3 opacity-0 shadow-[0_16px_40px_-28px_rgba(18,183,245,0.6)] backdrop-blur-sm lg:max-w-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none dark:border-sky-400/15 dark:bg-white/[0.04] dark:lg:bg-transparent',
         props.className
@@ -95,7 +96,10 @@ export function CommunityCard(props: CommunityCardProps) {
       style={{ animationDelay: '60ms' }}
     >
       <div className='flex items-center gap-3 lg:gap-4'>
-        <span className='relative flex size-14 shrink-0 lg:size-16'>
+        <span
+          data-depth-layer='3'
+          className='relative flex size-14 shrink-0 lg:size-16'
+        >
           <span
             aria-hidden
             className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40'
@@ -105,6 +109,7 @@ export function CommunityCard(props: CommunityCardProps) {
             className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40 [animation-delay:1.2s]'
           />
           <span
+            data-relief='plate'
             className={cn(
               'home-qq-float relative flex size-full items-center justify-center rounded-2xl bg-gradient-to-br text-white',
               primary.avatarClassName
@@ -118,6 +123,7 @@ export function CommunityCard(props: CommunityCardProps) {
           </span>
           {secondary && (
             <span
+              data-relief='plate'
               className={cn(
                 'absolute -right-2 -bottom-2 flex size-7 items-center justify-center rounded-xl border-2 border-white bg-gradient-to-br text-white lg:size-8 dark:border-[#0e1520]',
                 secondary.avatarClassName
@@ -128,7 +134,7 @@ export function CommunityCard(props: CommunityCardProps) {
           )}
         </span>
 
-        <div className='flex min-w-0 flex-col'>
+        <div data-depth-layer='1' className='flex min-w-0 flex-col'>
           <span className='flex flex-wrap items-center gap-1.5 font-mono text-[10px] font-semibold tracking-[0.2em] text-sky-600 uppercase dark:text-sky-400'>
             {entries.map((entry, index) => {
               const Icon = entry.icon
@@ -150,7 +156,7 @@ export function CommunityCard(props: CommunityCardProps) {
         </div>
       </div>
 
-      <div className='mt-3 flex flex-wrap items-center gap-2'>
+      <div data-depth-group className='mt-3 flex flex-wrap items-center gap-2'>
         {entries.map((entry) => {
           const Icon = entry.icon
           return (
@@ -175,10 +181,11 @@ export function CommunityCard(props: CommunityCardProps) {
             </Button>
           )
         })}
-        <span className='hidden items-center gap-1.5 xl:flex'>
+        <span data-depth-group className='hidden items-center gap-1.5 xl:flex'>
           {topics.map((topic) => (
             <span
               key={topic}
+              data-relief='plate'
               className='rounded-full border border-sky-500/15 bg-sky-500/5 px-2 py-0.5 text-[11px] text-sky-700 dark:border-sky-400/15 dark:bg-sky-400/5 dark:text-sky-300'
             >
               #{topic}

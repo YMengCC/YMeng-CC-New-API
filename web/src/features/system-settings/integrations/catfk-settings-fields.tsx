@@ -62,6 +62,16 @@ export function CatFKSettingsFields(props: Props) {
   } catch {
     invalid = true
   }
+  // Saved channels stay visible after a read so they can always be unchecked.
+  const savedChannelIds = new Set(channels.map((channel) => channel.id))
+  const newChannels =
+    available?.filter((channel) => !savedChannelIds.has(channel.id)) ?? []
+  const displayChannels = [...channels, ...newChannels]
+  const hasUnreturnedSavedChannels =
+    available !== null &&
+    channels.some(
+      (channel) => !available.some((item) => item.id === channel.id)
+    )
   const readChannels = useMutation({
     mutationFn: async (request: { token: string; generation: number }) => {
       const response = await api.post<{
@@ -213,19 +223,20 @@ export function CatFKSettingsFields(props: Props) {
         {available !== null && !available.length && (
           <p>{t('No CatFK channels returned')}</p>
         )}
-        {channels.length > 0 && available === null && (
-          <p className='text-muted-foreground text-sm'>
-            {t(
-              'Saved channels are not proof of current availability. Read channels again to verify.'
-            )}
-          </p>
-        )}
-        {(available ?? channels).map((channel) => (
+        {channels.length > 0 &&
+          (available === null || hasUnreturnedSavedChannels) && (
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Saved channels are not proof of current availability. Read channels again to verify.'
+              )}
+            </p>
+          )}
+        {displayChannels.map((channel) => (
           <div key={channel.id} className='flex items-center gap-2'>
             <Checkbox
               id={`catfk-channel-${channel.id}`}
               checked={channels.some((item) => item.id === channel.id)}
-              disabled={available === null || invalid}
+              disabled={invalid}
               onCheckedChange={(checked) =>
                 props.onChange(
                   'CatFKChannels',
@@ -233,7 +244,8 @@ export function CatFKSettingsFields(props: Props) {
                     checked
                       ? [
                           ...channels.filter((item) => item.id !== channel.id),
-                          channel,
+                          available?.find((item) => item.id === channel.id) ??
+                            channel,
                         ]
                       : channels.filter((item) => item.id !== channel.id)
                   )

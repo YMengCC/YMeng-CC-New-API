@@ -27,7 +27,7 @@ import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CTA, Features, Hero, HowItWorks, Stats } from './components'
-import { useHomePageContent } from './hooks'
+import { useHomeDepth, useHomePageContent } from './hooks'
 
 export function Home() {
   const { i18n, t } = useTranslation()
@@ -36,6 +36,8 @@ export function Home() {
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
+  // Only the built-in landing page is tagged for the 3D motion.
+  useHomeDepth(isLoaded && !content)
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -122,12 +124,16 @@ export function Home() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <Hero isAuthenticated={isAuthenticated} />
-      <Stats />
-      <Features />
-      <HowItWorks />
-      <CTA isAuthenticated={isAuthenticated} />
-      <Footer />
+      {/* Paints the page-wide light the relief styles share (see "Home
+          relief" in styles/index.css); layout-neutral. */}
+      <div data-home-scene>
+        <Hero isAuthenticated={isAuthenticated} />
+        <Stats />
+        <Features />
+        <HowItWorks />
+        <CTA isAuthenticated={isAuthenticated} />
+        <Footer />
+      </div>
     </PublicLayout>
   )
 }

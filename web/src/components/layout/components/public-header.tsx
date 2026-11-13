@@ -217,6 +217,10 @@ export function PublicHeader(props: PublicHeaderProps) {
           )}
         >
           <nav
+            data-depth-enter
+            // The collapsed pill has a surface to shade; the full-width bar
+            // at the top of the page does not.
+            data-relief={scrolled ? 'raised' : undefined}
             className={cn(
               'flex items-center justify-between gap-2 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
               scrolled
@@ -228,9 +232,13 @@ export function PublicHeader(props: PublicHeaderProps) {
             <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-1 lg:min-w-36'>
               <Link
                 to={homeUrl}
+                data-depth-tilt='8'
                 className='group flex min-w-0 items-center gap-2.5'
               >
-                <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
+                <div
+                  data-depth-layer='3'
+                  className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'
+                >
                   {logoContent}
                 </div>
                 <span
@@ -249,7 +257,10 @@ export function PublicHeader(props: PublicHeaderProps) {
             </div>
 
             {/* Desktop nav */}
-            <div className='hidden min-w-0 items-center gap-0.5 lg:flex'>
+            <div
+              data-depth-group
+              className='hidden min-w-0 items-center gap-0.5 lg:flex'
+            >
               {desktopLinks.visible.map((link) => {
                 const isActive = pathname === link.href
                 if (link.external) {
@@ -362,7 +373,10 @@ export function PublicHeader(props: PublicHeaderProps) {
             </div>
 
             {/* Mobile: compact actions + hamburger */}
-            <div className='flex shrink-0 items-center gap-2 lg:hidden'>
+            <div
+              data-depth-group
+              className='flex shrink-0 items-center gap-2 lg:hidden'
+            >
               {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
                 <ProfileDropdown />

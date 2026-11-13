@@ -40,6 +40,8 @@ export function CTA(props: CTAProps) {
       {/* Gradient mesh background */}
       <div
         aria-hidden
+        data-depth='-3'
+        data-depth-breathe
         className='absolute inset-0 -z-10 opacity-20 dark:opacity-[0.08]'
         style={{
           background: [
@@ -52,21 +54,36 @@ export function CTA(props: CTAProps) {
       <AnimateInView
         className='mx-auto max-w-2xl text-center'
         animation='scale-in'
+        dataAttributes={{ 'data-depth-tilt': '0' }}
       >
-        <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'>
+        <h2
+          data-depth-layer='3'
+          className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'
+        >
           {t('Ready to simplify')}
           <br />
           <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
             {t('your AI integration?')}
           </span>
         </h2>
-        <p className='text-muted-foreground/80 mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'>
+        <p
+          data-depth-layer='1'
+          className='text-muted-foreground/80 mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'
+        >
           {t(
             'Deploy your own gateway and start routing requests through your configured upstream services.'
           )}
         </p>
-        <div className='mt-8 flex items-center justify-center gap-3'>
-          <Button className='group rounded-lg' render={<Link to='/sign-up' />}>
+        <div
+          data-depth-group
+          data-depth-layer='2'
+          className='mt-8 flex items-center justify-center gap-3'
+        >
+          <Button
+            data-relief='primary'
+            className='group rounded-lg'
+            render={<Link to='/sign-up' />}
+          >
             {t('Get Started')}
             <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
           </Button>

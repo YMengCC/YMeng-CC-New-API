@@ -7,6 +7,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
+import { SettingsPageProvider } from '../../components/settings-page-context'
 import {
   CatFKSettingsFields,
   type CatFKFormValues,
@@ -46,6 +47,69 @@ function Wrapper(props: { children: React.ReactNode }) {
   )
   return (
     <QueryClientProvider client={client}>{props.children}</QueryClientProvider>
+  )
+}
+function PaymentForm(props: { initial?: Partial<CatFKFormValues> }) {
+  const [actions, setActions] = useState<HTMLDivElement | null>(null)
+  return (
+    <Wrapper>
+      <div ref={setActions} />
+      <SettingsPageProvider actionsContainer={actions}>
+        <PaymentSettingsSection
+          defaultValues={{
+            PayAddress: '',
+            EpayId: '',
+            EpayKey: '',
+            Price: 1,
+            MinTopUp: 1,
+            CustomCallbackAddress: '',
+            PayMethods: '[]',
+            AmountOptions: '[]',
+            AmountDiscount: '{}',
+            StripeApiSecret: '',
+            StripeWebhookSecret: '',
+            StripePriceId: '',
+            StripeUnitPrice: 1,
+            StripeMinTopUp: 1,
+            StripePromotionCodesEnabled: false,
+            CreemApiKey: '',
+            CreemWebhookSecret: '',
+            CreemTestMode: false,
+            CreemProducts: '[]',
+            ...defaults,
+            ...props.initial,
+          }}
+          waffoDefaultValues={{
+            WaffoEnabled: false,
+            WaffoApiKey: '',
+            WaffoPrivateKey: '',
+            WaffoPublicCert: '',
+            WaffoSandboxPublicCert: '',
+            WaffoSandboxApiKey: '',
+            WaffoSandboxPrivateKey: '',
+            WaffoSandbox: false,
+            WaffoMerchantId: '',
+            WaffoCurrency: 'USD',
+            WaffoUnitPrice: 1,
+            WaffoMinTopUp: 1,
+            WaffoNotifyUrl: '',
+            WaffoReturnUrl: '',
+            WaffoPayMethods: '[]',
+          }}
+          waffoPancakeDefaultValues={{
+            WaffoPancakeMerchantID: '',
+            WaffoPancakePrivateKey: '',
+            WaffoPancakeReturnURL: '',
+          }}
+          complianceDefaults={{
+            confirmed: true,
+            termsVersion: 'v1',
+            confirmedAt: 0,
+            confirmedBy: 1,
+          }}
+        />
+      </SettingsPageProvider>
+    </Wrapper>
   )
 }
 afterEach(() => vi.restoreAllMocks())
@@ -272,10 +336,153 @@ test('reading channels posts only the store token and selections survive a setti
   render(<Fixture initial={{ CatFKChannels: JSON.stringify([channel]) }} />, {
     wrapper: Wrapper,
   })
-  expect(screen.getByRole('checkbox', { name: 'QR channel' })).toBeChecked()
-  expect(screen.getByRole('checkbox', { name: 'QR channel' })).toHaveAttribute(
-    'aria-disabled',
-    'true'
+  const reloaded = screen.getByRole('checkbox', { name: 'QR channel' })
+  expect(reloaded).toBeChecked()
+  expect(reloaded).not.toHaveAttribute('aria-disabled', 'true')
+  expect(reloaded).toBeChecked()
+})
+
+test('unchecking one of several saved channels without reading keeps only the other channel', async () => {
+  const first = { id: 'qr', name: 'QR channel', icon: '' }
+  const second = { id: 'wx', name: 'WeChat channel', icon: '' }
+  const onChange = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <CatFKSettingsFields
+      values={{
+        ...defaults,
+        CatFKChannels: JSON.stringify([first, second]),
+      }}
+      complianceConfirmed
+      onChange={onChange}
+    />,
+    { wrapper: Wrapper }
+  )
+  expect(
+    screen.getByRole('checkbox', { name: 'QR channel' })
+  ).not.toHaveAttribute('aria-disabled', 'true')
+  await user.click(screen.getByRole('checkbox', { name: 'QR channel' }))
+  expect(onChange).toHaveBeenCalledWith(
+    'CatFKChannels',
+    JSON.stringify([second])
+  )
+})
+
+test('unchecking the last saved channel saves an empty list and reloads unchecked', async () => {
+  const channel = { id: 'qr', name: 'QR channel', icon: '' }
+  const onChange = vi.fn()
+  const user = userEvent.setup()
+  const view = render(
+    <CatFKSettingsFields
+      values={{ ...defaults, CatFKChannels: JSON.stringify([channel]) }}
+      complianceConfirmed
+      onChange={onChange}
+    />,
+    { wrapper: Wrapper }
+  )
+  await user.click(screen.getByRole('checkbox', { name: 'QR channel' }))
+  expect(onChange).toHaveBeenCalledWith('CatFKChannels', '[]')
+  view.unmount()
+  render(<Fixture />, { wrapper: Wrapper })
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+})
+
+test('a saved channel missing from the upstream read stays visible and can be unchecked', async () => {
+  const savedOnly = { id: 'old', name: 'Old channel', icon: '' }
+  const current = { id: 'wx', name: 'WeChat channel', icon: '' }
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: [current] },
+  })
+  const onChange = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <CatFKSettingsFields
+      values={{
+        ...defaults,
+        CatFKChannels: JSON.stringify([savedOnly, current]),
+      }}
+      complianceConfirmed
+      onChange={onChange}
+    />,
+    { wrapper: Wrapper }
+  )
+  await user.click(screen.getByRole('button', { name: 'Read CatFK channels' }))
+  const checkbox = await screen.findByRole('checkbox', {
+    name: 'Old channel',
+  })
+  expect(checkbox).toBeChecked()
+  await user.click(checkbox)
+  expect(onChange).toHaveBeenCalledWith(
+    'CatFKChannels',
+    JSON.stringify([current])
+  )
+})
+
+test('checking a newly read channel uses the upstream channel data', async () => {
+  const upstream = { id: 'wx', name: 'WeChat channel', icon: 'wx.png' }
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: [upstream] },
+  })
+  const onChange = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <CatFKSettingsFields
+      values={defaults}
+      complianceConfirmed
+      onChange={onChange}
+    />,
+    { wrapper: Wrapper }
+  )
+  await user.click(screen.getByRole('button', { name: 'Read CatFK channels' }))
+  await user.click(
+    await screen.findByRole('checkbox', { name: 'WeChat channel' })
+  )
+  expect(onChange).toHaveBeenCalledWith(
+    'CatFKChannels',
+    JSON.stringify([upstream])
+  )
+})
+
+test('saving after unchecking a channel sends only the checked channels', async () => {
+  const first = { id: 'qr', name: 'QR channel', icon: '' }
+  const second = { id: 'wx', name: 'WeChat channel', icon: '' }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(
+    <PaymentForm initial={{ CatFKChannels: JSON.stringify([first, second]) }} />
+  )
+  await user.click(
+    screen.getByRole('tab', { name: 'Yunmao consignment store payments' })
+  )
+  await user.click(screen.getByRole('checkbox', { name: 'QR channel' }))
+  await user.click(screen.getByRole('button', { name: 'Save all settings' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith('/api/option/', {
+      key: 'catfk_setting.channels',
+      value: JSON.stringify([second]),
+    })
+  )
+})
+
+test('saving after unchecking every channel sends an empty channel list', async () => {
+  const channel = { id: 'qr', name: 'QR channel', icon: '' }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(<PaymentForm initial={{ CatFKChannels: JSON.stringify([channel]) }} />)
+  await user.click(
+    screen.getByRole('tab', { name: 'Yunmao consignment store payments' })
+  )
+  await user.click(screen.getByRole('checkbox', { name: 'QR channel' }))
+  await user.click(screen.getByRole('button', { name: 'Save all settings' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith('/api/option/', {
+      key: 'catfk_setting.channels',
+      value: '[]',
+    })
   )
 })
 

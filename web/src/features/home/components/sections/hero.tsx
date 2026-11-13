@@ -51,6 +51,8 @@ export function Hero(props: HeroProps) {
       {/* Console side: radial glow and grid */}
       <div
         aria-hidden
+        data-depth='-3'
+        data-depth-breathe
         className='pointer-events-none absolute inset-0 -z-20 opacity-25 dark:opacity-[0.12]'
         style={{
           background: [
@@ -62,6 +64,7 @@ export function Hero(props: HeroProps) {
       />
       <div
         aria-hidden
+        data-depth='-2'
         className='absolute inset-0 -z-20 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_45%_55%_at_75%_35%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.1]'
       />
 
@@ -89,6 +92,9 @@ export function Hero(props: HeroProps) {
       />
       <div
         aria-hidden
+        data-depth-tilt='14'
+        data-depth-breathe='fast'
+        data-relief='plate'
         className='home-paper home-seam-badge absolute top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 lg:flex'
       >
         ×
@@ -111,10 +117,16 @@ export function Hero(props: HeroProps) {
                 className='pointer-events-none absolute inset-0 z-10 overflow-hidden opacity-40 lg:-z-10 lg:opacity-100'
               >
                 {qqLink && (
-                  <RiQqLine className='absolute top-2 right-[12rem] size-36 -rotate-12 text-sky-500/[0.07] dark:text-sky-300/[0.06]' />
+                  <RiQqLine
+                    data-relief='float'
+                    data-depth-float='3'
+                    className='absolute top-2 right-[12rem] size-36 -rotate-12 text-sky-500/[0.07] dark:text-sky-300/[0.06]'
+                  />
                 )}
                 {telegramLink && (
                   <FaTelegram
+                    data-relief='float'
+                    data-depth-float='1'
                     className={cn(
                       'absolute -top-4 -right-4 text-sky-500/[0.07] dark:text-sky-300/[0.06]',
                       qqLink ? 'size-20 rotate-12' : 'size-36 -rotate-12'
@@ -145,6 +157,9 @@ export function Hero(props: HeroProps) {
           />
           <div
             aria-hidden
+            data-depth-tilt='14'
+            data-depth-breathe='fast'
+            data-relief='plate'
             className='home-paper home-seam-badge absolute bottom-7 left-1/2 z-10 flex -translate-x-1/2 translate-y-1/2 lg:hidden'
           >
             ×

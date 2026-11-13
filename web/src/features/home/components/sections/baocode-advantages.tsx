@@ -52,8 +52,17 @@ export function BaoCodeAdvantages() {
   ]
 
   return (
-    <div className='w-full max-w-md rounded-xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/80 p-4 shadow-[0_18px_40px_-28px_rgba(122,78,20,0.45)] backdrop-blur-[2px]'>
-      <p className='flex flex-wrap items-baseline gap-x-2 font-[family-name:var(--paper-serif)] text-base leading-snug font-semibold text-[var(--paper-ink)]'>
+    <div
+      data-relief='raised'
+      data-depth-tilt='5'
+      data-depth-float='4'
+      data-depth-glare
+      className='w-full max-w-md rounded-xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/80 p-4 shadow-[0_18px_40px_-28px_rgba(122,78,20,0.45)] backdrop-blur-[2px]'
+    >
+      <p
+        data-depth-layer='1'
+        className='flex flex-wrap items-baseline gap-x-2 font-[family-name:var(--paper-serif)] text-base leading-snug font-semibold text-[var(--paper-ink)]'
+      >
         <span className='font-sans text-[10px] font-semibold tracking-[0.18em] text-[var(--paper-faint)] uppercase'>
           {t('Why BaoCode')}
         </span>
@@ -64,6 +73,8 @@ export function BaoCodeAdvantages() {
         {BENCHMARKS.map((item) => (
           <div
             key={item.labelKey}
+            data-relief='plate'
+            data-depth-layer='2'
             className='rounded-lg border border-[var(--paper-rule)] bg-[var(--paper)]/70 px-3 py-2'
           >
             <dt className='text-[11px] text-[var(--paper-muted)]'>
@@ -89,10 +100,11 @@ export function BaoCodeAdvantages() {
         ))}
       </dl>
 
-      <ul className='mt-2 grid grid-cols-3 gap-2'>
+      <ul data-depth-group className='mt-2 grid grid-cols-3 gap-2'>
         {rivals.map((rival) => (
           <li
             key={rival.name}
+            data-relief='plate'
             className='flex min-w-0 flex-col gap-0.5 rounded-lg border border-[var(--paper-pill-border)] bg-[var(--paper-pill-bg)] px-2.5 py-1.5'
           >
             <span className='flex items-center gap-1 text-[11px] text-[var(--paper-pill-ink)]'>
