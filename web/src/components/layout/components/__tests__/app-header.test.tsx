@@ -39,6 +39,12 @@ vi.mock('@/features/system-update/system-update-action', () => ({
 vi.mock('@/hooks/use-notifications', () => ({
   useNotifications: () => ({}),
 }))
+const statusMock = vi.hoisted(() => ({
+  value: null as Record<string, unknown> | null,
+}))
+vi.mock('@/hooks/use-status', () => ({
+  useStatus: () => ({ status: statusMock.value, loading: false, error: null }),
+}))
 vi.mock('@/hooks/use-top-nav-links', () => ({
   useTopNavLinks: () => [],
 }))
@@ -83,6 +89,8 @@ async function renderHeader(showProfileDropdown: boolean) {
 
 afterEach(() => {
   clients.splice(0).forEach((client) => client.clear())
+  statusMock.value = null
+  window.localStorage.clear()
   vi.restoreAllMocks()
   useAuthStore.setState(useAuthStore.getInitialState(), true)
 })
@@ -101,4 +109,18 @@ it('hides the recharge alongside a hidden profile entry', async () => {
 
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
   expect(screen.queryByText('Profile')).not.toBeInTheDocument()
+})
+
+it('places the announcement ticker after the GitHub link in the brand cluster', async () => {
+  statusMock.value = {
+    announcements_enabled: true,
+    announcements: [{ id: 1, content: '维护通知' }],
+  }
+
+  await renderHeader(true)
+
+  const ticker = screen.getByRole('region', { name: 'Announcements' })
+  expect(ticker.previousElementSibling).toBe(
+    screen.getByRole('button', { name: 'GitHub' })
+  )
 })

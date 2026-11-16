@@ -443,6 +443,52 @@ For commercial licensing, please contact support@quantumnous.com
   .scroll-container:hover .animate-scroll-down {
     animation-play-state: paused;
   }
+
+  /* Horizontal marquee for the header announcement ticker */
+  @keyframes announcement-ticker-ltr {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* In RTL the overflowing track is right-aligned, so it travels the other way. */
+  @keyframes announcement-ticker-rtl {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(50%);
+    }
+  }
+
+  .announcement-ticker-track {
+    animation-name: announcement-ticker-ltr;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    will-change: transform;
+  }
+
+  [dir='rtl'] .announcement-ticker-track {
+    animation-name: announcement-ticker-rtl;
+  }
+
+  .announcement-ticker:hover .announcement-ticker-track,
+  .announcement-ticker:focus-within .announcement-ticker-track {
+    animation-play-state: paused;
+  }
+
+  .announcement-ticker-mask {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 0.75rem,
+      black calc(100% - 0.75rem),
+      transparent 100%
+    );
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -454,6 +500,17 @@ For commercial licensing, please contact support@quantumnous.com
     animation: none !important;
     opacity: 1;
     transform: none;
+  }
+
+  /* Without motion only the newest announcement stays readable; the rest are
+   * still available in the notification popover. */
+  .announcement-ticker-track {
+    animation: none !important;
+  }
+
+  .announcement-ticker-track [data-announcement-copy='duplicate'],
+  .announcement-ticker-track [data-announcement-item]:not(:first-child) {
+    display: none;
   }
 }
 
