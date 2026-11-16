@@ -659,9 +659,11 @@ func TestUpdateUserSettingKeepsWhatTheRequestLeavesOut(t *testing.T) {
 		Language:                         "zhCN",
 		SidebarModules:                   `{"chat":{"enabled":true}}`,
 		BillingPreference:                "wallet_only",
+		TextMaskingEnabled:               true,
 	}
 	kept := func(setting dto.UserSetting) dto.UserSetting {
 		setting.Language, setting.SidebarModules, setting.BillingPreference = stored.Language, stored.SidebarModules, stored.BillingPreference
+		setting.TextMaskingEnabled = stored.TextMaskingEnabled
 		return setting
 	}
 	switchesChanged := `{"notify_type":"email","quota_warning_threshold":0,"quota_warning_enabled":true,"channel_notify_enabled":false,"upstream_model_update_notify_enabled":false}`
@@ -721,6 +723,50 @@ func TestUpdateUserSettingKeepsWhatTheRequestLeavesOut(t *testing.T) {
 			assert.Contains(t, recorder.Body.String(), fmt.Sprintf(`"success":%t`, tc.wantSuccess))
 			require.NoError(t, db.First(&user, user.Id).Error)
 			assert.Equal(t, tc.want, user.GetSetting())
+		})
+	}
+}
+
+func TestUpdateUserPrivacySettingsChangesOnlyTextMaskingOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		body        string
+		wantSuccess bool
+		wantEnabled bool
+	}{
+		{name: "enable", body: `{"text_masking_enabled":true}`, wantSuccess: true, wantEnabled: true},
+		{name: "disable", body: `{"text_masking_enabled":false}`, wantSuccess: true},
+		{name: "omitted", body: `{}`},
+		{name: "null", body: `{"text_masking_enabled":null}`},
+		{name: "wrong type", body: `{"text_masking_enabled":"true"}`},
+		{name: "unrelated field", body: `{"text_masking_enabled":true,"language":"en"}`},
+		{name: "invalid json", body: `{"text_masking_enabled":`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupManageUserTestDB(t)
+			initial := dto.UserSetting{Language: "zhCN", SidebarModules: `{"chat":{"enabled":true}}`, BillingPreference: "wallet_only"}
+			initialBytes, err := common.Marshal(initial)
+			require.NoError(t, err)
+			user := model.User{Username: "privacy-setting-owner", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AffCode: "privacy-setting-aff", Setting: string(initialBytes)}
+			require.NoError(t, db.Create(&user).Error)
+
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPut, "/api/user/privacy-settings", strings.NewReader(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			c.Set("id", user.Id)
+			UpdateUserPrivacySettings(c)
+
+			assert.Contains(t, recorder.Body.String(), fmt.Sprintf(`"success":%t`, tc.wantSuccess))
+			if tc.wantSuccess {
+				assert.Contains(t, recorder.Body.String(), `"message":"Settings updated"`)
+			}
+			require.NoError(t, db.First(&user, user.Id).Error)
+			got := user.GetSetting()
+			assert.Equal(t, tc.wantEnabled, got.TextMaskingEnabled)
+			assert.Equal(t, initial.Language, got.Language)
+			assert.Equal(t, initial.SidebarModules, got.SidebarModules)
+			assert.Equal(t, initial.BillingPreference, got.BillingPreference)
 		})
 	}
 }

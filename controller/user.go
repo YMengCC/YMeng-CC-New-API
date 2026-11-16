@@ -1355,6 +1355,24 @@ type UpdateUserSettingRequest struct {
 	RecordIpLog                      bool    `json:"record_ip_log"`
 }
 
+func UpdateUserPrivacySettings(c *gin.Context) {
+	var request map[string]any
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil || len(request) != 1 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	enabled, ok := request["text_masking_enabled"].(bool)
+	if !ok {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if err := model.UpdateUserTextMaskingEnabled(c.GetInt("id"), enabled); err != nil {
+		common.ApiErrorT(c, "Update failed")
+		return
+	}
+	common.ApiSuccessT(c, "Settings updated", nil)
+}
+
 func UpdateUserSetting(c *gin.Context) {
 	var req UpdateUserSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

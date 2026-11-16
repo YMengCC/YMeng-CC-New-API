@@ -36,6 +36,7 @@ import { AccessTokensCard } from './components/access-tokens-card'
 import { AccountActionCard } from './components/account-action-card'
 import { AccountBindings } from './components/account-bindings'
 import { LoginSessionsCard } from './components/login-sessions-card'
+import { MengmengPrivacyCard } from './components/mengmeng-privacy-card'
 import { PasskeyCard } from './components/passkey-card'
 import { PrivacyCard } from './components/privacy-card'
 import { TwoFACard } from './components/two-fa-card'
@@ -129,6 +130,7 @@ export function Security() {
             <h3 id='security-privacy' className='text-sm font-semibold'>
               {t('Privacy')}
             </h3>
+            <MengmengPrivacyCard profile={profile} onUpdate={refreshProfile} />
             <PrivacyCard profile={profile} onUpdate={refreshProfile} />
           </section>
         </aside>

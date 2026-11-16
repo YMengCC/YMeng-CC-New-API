@@ -120,6 +120,8 @@ export interface UserSettings {
   gotify_priority?: number
   /** Accept unset model ratio model */
   accept_unset_model_ratio_model?: boolean
+  /** Opt-in text masking; absent means off */
+  text_masking_enabled?: boolean
   /** Record IP log */
   record_ip_log?: boolean
   /** Receive upstream model update notifications (admin only) */
@@ -150,6 +152,11 @@ export interface EmailBindingFlow extends AccountSecurityResult {
   old_email_required: boolean
   expires_at: number
   resend_at: number
+}
+
+/** Dedicated opt-in privacy settings update. */
+export interface UpdatePrivacySettingsRequest {
+  text_masking_enabled: boolean
 }
 
 /**

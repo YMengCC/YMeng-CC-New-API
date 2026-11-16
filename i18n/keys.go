@@ -6,6 +6,10 @@ package i18n
 
 // Errors returned to AI clients
 const (
+	MsgPrivacySettingsUnavailable = "privacy.settings_unavailable"
+	MsgPrivacyUnsupportedRequest  = "privacy.unsupported_request"
+	MsgPrivacyResponseFailed      = "privacy.response_failed"
+
 	MsgDatabaseError          = "common.database_error"
 	MsgAuthUserBanned         = "auth.user_banned"
 	MsgTokenGetInfoFailed     = "token.get_info_failed"

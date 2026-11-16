@@ -67,7 +67,7 @@ func SetRelayRouter(router *gin.Engine) {
 	// Media routes are rewritten to their /v1 equivalents before Distribute so
 	// relay-mode resolution, channel selection and task fetch builders work
 	// unchanged. /pg/chat/completions keeps its original path.
-	playgroundRouter.Use(middleware.UserAuth())
+	playgroundRouter.Use(middleware.UserAuth(), middleware.TextMasking())
 	playgroundRouter.Use(controller.PreparePlaygroundMedia, controller.RewritePlaygroundPath)
 	{
 		playgroundRouter.POST("/chat/completions", middleware.Distribute(), controller.Playground)
@@ -101,7 +101,7 @@ func SetRelayRouter(router *gin.Engine) {
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
-	relayV1Router.Use(middleware.TokenAuth())
+	relayV1Router.Use(middleware.TokenAuth(), middleware.TextMasking())
 	{
 		// Responses WebSocket route. Channel selection happens after the first
 		// response.create event; each event runs the ordinary request limiter.
@@ -240,7 +240,7 @@ func SetRelayRouter(router *gin.Engine) {
 	})
 	relayGeminiRouter.Use(middleware.RouteTag("relay"))
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())
-	relayGeminiRouter.Use(middleware.TokenAuth())
+	relayGeminiRouter.Use(middleware.TokenAuth(), middleware.TextMasking())
 	relayGeminiRouter.Use(middleware.ModelRequestRateLimit())
 	relayGeminiRouter.Use(middleware.Distribute())
 	{
@@ -253,7 +253,7 @@ func SetRelayRouter(router *gin.Engine) {
 
 func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {
 	relayMjRouter.GET("/image/:id", relay.RelayMidjourneyImage)
-	relayMjRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	relayMjRouter.Use(middleware.TokenAuth(), middleware.TextMasking(), middleware.Distribute())
 	{
 		relayMjRouter.POST("/submit/action", controller.RelayMidjourney)
 		relayMjRouter.POST("/submit/shorten", controller.RelayMidjourney)
