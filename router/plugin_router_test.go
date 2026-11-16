@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/plugins"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -892,20 +893,16 @@ func TestProductionPluginNativeQueryTraversesInnerRouter(t *testing.T) {
 		group jsplugin.RouteGroup,
 	) []gin.HandlerFunc {
 		production := productionPluginRouteHandlers(generation, group)
-		return []gin.HandlerFunc{
+		return append([]gin.HandlerFunc{
 			production[0],
 			func(c *gin.Context) {
 				common.SetContextKey(c, constant.ContextKeyUserId, 91)
 				common.SetContextKey(c, constant.ContextKeyUserGroup, "default")
 				common.SetContextKey(c, constant.ContextKeyTokenGroup, "default")
+				common.SetContextKey(c, constant.ContextKeyUserSetting, dto.UserSetting{})
 				c.Next()
 			},
-			production[3],
-			production[4],
-			production[5],
-			production[6],
-			production[7],
-		}
+		}, production[3:]...)
 	}
 	outer, registry := newPluginRouterTest(t, []*jsplugin.LoadedPlugin{kling}, authenticatedProductionHandlers)
 	outer.NoRoute((&pluginRouteDispatcher{registry: registry}).dispatch)

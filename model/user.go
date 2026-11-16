@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -186,18 +187,73 @@ func (user *User) SetSetting(setting dto.UserSetting) {
 }
 
 func UpdateUserSetting(userId int, setting dto.UserSetting) error {
-	if userId == 0 {
+	return updateUserSettings(userId, func(current string) (string, error) {
+		var saved dto.UserSetting
+		if current != "" {
+			if err := common.UnmarshalJsonStr(current, &saved); err != nil {
+				return "", err
+			}
+		}
+		// Only the dedicated privacy endpoint may change this opt-in. In
+		// particular, older clients and stale setting snapshots must preserve it.
+		setting.TextMaskingEnabled = saved.TextMaskingEnabled
+		settingBytes, err := common.Marshal(setting)
+		return string(settingBytes), err
+	})
+}
+
+// UpdateUserTextMaskingEnabled changes only the explicitly approved opt-in,
+// preserving even settings unknown to this server version.
+func UpdateUserTextMaskingEnabled(userID int, enabled bool) error {
+	return updateUserSettings(userID, func(current string) (string, error) {
+		settings := make(map[string]json.RawMessage)
+		if current != "" {
+			if err := common.UnmarshalJsonStr(current, &settings); err != nil {
+				return "", err
+			}
+		}
+		if settings == nil {
+			settings = make(map[string]json.RawMessage)
+		}
+		value, err := common.Marshal(enabled)
+		if err != nil {
+			return "", err
+		}
+		settings["text_masking_enabled"] = value
+		settingBytes, err := common.Marshal(settings)
+		return string(settingBytes), err
+	})
+}
+
+// updateUserSettings retries against the authoritative JSON after a concurrent
+// writer wins. Unlike row locking alone, this also protects SQLite updates.
+func updateUserSettings(userID int, update func(string) (string, error)) error {
+	if userID <= 0 {
 		return common.NewMessage("ID is empty!")
 	}
-	settingBytes, err := common.Marshal(setting)
-	if err != nil {
-		return err
+	for range 3 {
+		var current User
+		if err := DB.Select("id", "setting").First(&current, userID).Error; err != nil {
+			return err
+		}
+		next, err := update(current.Setting)
+		if err != nil {
+			return err
+		}
+		if next != current.Setting {
+			result := DB.Model(&User{}).Where("id = ?", userID).
+				Where("(setting = ? OR (setting IS NULL AND ? = ''))", current.Setting, current.Setting).
+				Update("setting", next)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				continue
+			}
+		}
+		return invalidateUserCache(userID)
 	}
-	settingValue := string(settingBytes)
-	if err = DB.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error; err != nil {
-		return err
-	}
-	return updateUserSettingCache(userId, settingValue)
+	return errors.New("user settings changed repeatedly during update")
 }
 
 // UpdateUserDisplayName preserves explicit empty names and touches no security

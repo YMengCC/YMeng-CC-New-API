@@ -145,6 +145,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/catfk/orders/:trade_no/redemption", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetCatFKRedemption)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
+				selfRoute.PUT("/privacy-settings", controller.UpdateUserPrivacySettings)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)

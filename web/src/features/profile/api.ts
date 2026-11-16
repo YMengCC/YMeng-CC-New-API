@@ -27,6 +27,7 @@ import type {
   UserProfile,
   UpdateUserRequest,
   UpdateUserSettingsRequest,
+  UpdatePrivacySettingsRequest,
   CheckinStatusResponse,
   CheckinResponse,
   AccountSecurityResult,
@@ -85,6 +86,14 @@ export async function updateUserSettings(
   }
   const settings = normalizeUserSettings(profile.data.setting)
   const res = await api.put('/api/user/setting', { ...settings, ...data })
+  return res.data
+}
+
+/** Update privacy preferences independently of notification settings. */
+export async function updatePrivacySettings(
+  data: UpdatePrivacySettingsRequest
+): Promise<ApiResponse> {
+  const res = await api.put('/api/user/privacy-settings', data)
   return res.data
 }
 
