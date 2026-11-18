@@ -19,6 +19,7 @@ export const catfkChannelSchema = z.object({
   id: z.string().trim().min(1).max(128),
   name: z.string().trim().min(1).max(200),
   icon: z.string().max(2048).default(''),
+  payment_type: z.enum(['alipay', 'wxpay']).optional(),
 })
 export type CatFKChannel = z.infer<typeof catfkChannelSchema>
 export const catfkProductsSchema = z

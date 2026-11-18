@@ -100,6 +100,8 @@ export interface PaymentMethod {
   min_topup?: number
   /** Display-only fee percentage for this payment method */
   fee_percent?: number
+  /** Upstream Catfk channel ID selected for this payment method */
+  channel_id?: string
   /** Optional react-icons component name or safe icon URL */
   icon?: string
   /** Whether to show the compatibility notice in the confirmation dialog */
@@ -140,6 +142,7 @@ export interface CatfkChannel {
   id: string
   name: string
   icon?: string
+  payment_type?: 'alipay' | 'wxpay'
 }
 
 export interface CatfkInfo {

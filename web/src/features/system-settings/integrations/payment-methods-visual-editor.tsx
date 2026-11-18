@@ -41,10 +41,13 @@ import {
 type PaymentMethodsVisualEditorProps = {
   value: string
   onChange: (value: string) => void
+  catfkChannels?: import('./catfk-schema').CatFKChannel[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
   catfk: 'SiAlipay',
+  catfk_alipay: 'SiAlipay',
+  catfk_wxpay: 'SiWechat',
   alipay: 'SiAlipay',
   stripe: 'SiStripe',
   waffo_pancake: 'LuCreditCard',
@@ -62,6 +65,7 @@ function getEffectiveIconName(method: PaymentMethodData) {
 export function PaymentMethodsVisualEditor({
   value,
   onChange,
+  catfkChannels = [],
 }: PaymentMethodsVisualEditorProps) {
   const { t } = useTranslation()
   const paymentTemplates = [
@@ -98,10 +102,23 @@ export function PaymentMethodsVisualEditor({
         type: 'waffo_pancake',
       },
     },
-    {
-      name: t('Yunmao consignment store payments'),
-      template: { icon: 'SiAlipay', name: t('Alipay'), type: 'catfk' },
-    },
+    ...catfkChannels
+      .filter(
+        (channel) =>
+          channel.payment_type === 'alipay' || channel.payment_type === 'wxpay'
+      )
+      .map((channel) => {
+        const isWeChat = channel.payment_type === 'wxpay'
+        return {
+          name: `${t(isWeChat ? 'Catfk WeChat Pay' : 'Catfk Alipay')} (${channel.name})`,
+          template: {
+            icon: isWeChat ? 'SiWechat' : 'SiAlipay',
+            name: t(isWeChat ? 'Catfk WeChat Pay' : 'Catfk Alipay'),
+            type: isWeChat ? 'catfk_wxpay' : 'catfk_alipay',
+            channel_id: channel.id,
+          },
+        }
+      }),
     {
       name: t('Custom Epay method'),
       template: {
@@ -135,6 +152,7 @@ export function PaymentMethodsVisualEditor({
         (!('icon' in item) || typeof item.icon === 'string') &&
         (!('min_topup' in item) || typeof item.min_topup === 'string') &&
         (!('fee_percent' in item) || typeof item.fee_percent === 'string') &&
+        (!('channel_id' in item) || typeof item.channel_id === 'string') &&
         (!('color' in item) || typeof item.color === 'string') &&
         (!('show_topup_notice' in item) ||
           typeof item.show_topup_notice === 'string') &&
@@ -378,7 +396,7 @@ export function PaymentMethodsVisualEditor({
                 id: 'display-fee',
                 header: t('Display fee (%)'),
                 cell: (method) =>
-                  method.type !== 'catfk' ? (
+                  !method.type.startsWith('catfk') ? (
                     <span className='font-mono text-sm'>
                       {method.fee_percent || '0'}%
                     </span>
@@ -414,6 +432,7 @@ export function PaymentMethodsVisualEditor({
                 method.icon,
                 method.min_topup,
                 method.fee_percent,
+                method.channel_id,
                 method.color,
                 method.show_topup_notice,
                 method.show_topup_link,
@@ -488,7 +507,7 @@ export function PaymentMethodsVisualEditor({
                         <span className='font-mono'>{method.min_topup}</span>
                       </div>
                     )}
-                    {method.type !== 'catfk' && (
+                    {!method.type.startsWith('catfk') && (
                       <div className='flex items-center gap-2'>
                         <span className='text-muted-foreground min-w-20'>
                           {t('Display fee (%)')}
@@ -511,6 +530,7 @@ export function PaymentMethodsVisualEditor({
         onOpenChange={setDialogOpen}
         onSave={handleSave}
         editData={editData}
+        catfkChannels={catfkChannels}
       />
     </div>
   )

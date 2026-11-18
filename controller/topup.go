@@ -308,7 +308,8 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	if operation_setting.IsCatFKPaymentMethod(req.PaymentMethod) ||
+		!operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		paymentError(c, common.NewMessage("Payment method does not exist"))
 		return
 	}

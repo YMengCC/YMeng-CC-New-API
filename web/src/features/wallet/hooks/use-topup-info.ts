@@ -76,8 +76,10 @@ function parsePaymentMethods(
       return {
         name: typeof item.name === 'string' ? item.name : '',
         type,
+        channel_id:
+          typeof item.channel_id === 'string' ? item.channel_id : undefined,
         fee_percent:
-          type !== 'catfk' &&
+          !type.startsWith('catfk') &&
           Number.isFinite(feePercent) &&
           feePercent >= 0 &&
           feePercent <= 100

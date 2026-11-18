@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -32,6 +31,7 @@ export type CatFKFormValues = {
 type Props = {
   values: CatFKFormValues
   onChange: (key: keyof CatFKFormValues, value: string | boolean) => void
+  onReadChannels?: (token: string) => Promise<CatFKChannel[]>
   complianceConfirmed: boolean
 }
 export function CatFKSettingsFields(props: Props) {
@@ -62,18 +62,10 @@ export function CatFKSettingsFields(props: Props) {
   } catch {
     invalid = true
   }
-  // Saved channels stay visible after a read so they can always be unchecked.
-  const savedChannelIds = new Set(channels.map((channel) => channel.id))
-  const newChannels =
-    available?.filter((channel) => !savedChannelIds.has(channel.id)) ?? []
-  const displayChannels = [...channels, ...newChannels]
-  const hasUnreturnedSavedChannels =
-    available !== null &&
-    channels.some(
-      (channel) => !available.some((item) => item.id === channel.id)
-    )
+  const displayChannels = available ?? channels
   const readChannels = useMutation({
     mutationFn: async (request: { token: string; generation: number }) => {
+      if (props.onReadChannels) return props.onReadChannels(request.token)
       const response = await api.post<{
         success: boolean
         message?: string
@@ -87,6 +79,7 @@ export function CatFKSettingsFields(props: Props) {
         request.token === tokenRef.current
       ) {
         setChannelResult({ token: request.token, channels })
+        props.onChange('CatFKChannels', JSON.stringify(channels))
       }
     },
     onError: (error) => handleServerError(error),
@@ -99,7 +92,7 @@ export function CatFKSettingsFields(props: Props) {
         )}
       </p>
       <div className='flex items-center justify-between gap-4'>
-        <Label htmlFor='catfk-enabled'>{t('Enable CatFK')}</Label>
+        <Label htmlFor='catfk-enabled'>{t('Enable Catfk')}</Label>
         <Switch
           id='catfk-enabled'
           checked={props.values.CatFKEnabled}
@@ -121,6 +114,7 @@ export function CatFKSettingsFields(props: Props) {
           value={props.values.CatFKStoreToken}
           onChange={(event) => {
             props.onChange('CatFKStoreToken', event.target.value)
+            props.onChange('CatFKChannels', '[]')
             setChannelResult(null)
           }}
         />
@@ -205,7 +199,14 @@ export function CatFKSettingsFields(props: Props) {
         </Button>
       </div>
       <div className='space-y-3'>
-        <h4 className='font-medium'>{t('CatFK payment channels')}</h4>
+        <div>
+          <h4 className='font-medium'>{t('Catfk available channels')}</h4>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Channels are enabled by adding their payment methods in General.'
+            )}
+          </p>
+        </div>
         <Button
           type='button'
           variant='outline'
@@ -218,45 +219,30 @@ export function CatFKSettingsFields(props: Props) {
             })
           }}
         >
-          {readChannels.isPending ? t('Loading...') : t('Read CatFK channels')}
+          {readChannels.isPending ? t('Loading...') : t('Read Catfk channels')}
         </Button>
         {available !== null && !available.length && (
-          <p>{t('No CatFK channels returned')}</p>
+          <p>{t('No Catfk channels returned')}</p>
         )}
-        {channels.length > 0 &&
-          (available === null || hasUnreturnedSavedChannels) && (
-            <p className='text-muted-foreground text-sm'>
-              {t(
-                'Saved channels are not proof of current availability. Read channels again to verify.'
-              )}
-            </p>
-          )}
-        {displayChannels.map((channel) => (
-          <div key={channel.id} className='flex items-center gap-2'>
-            <Checkbox
-              id={`catfk-channel-${channel.id}`}
-              checked={channels.some((item) => item.id === channel.id)}
-              disabled={invalid}
-              onCheckedChange={(checked) =>
-                props.onChange(
-                  'CatFKChannels',
-                  JSON.stringify(
-                    checked
-                      ? [
-                          ...channels.filter((item) => item.id !== channel.id),
-                          available?.find((item) => item.id === channel.id) ??
-                            channel,
-                        ]
-                      : channels.filter((item) => item.id !== channel.id)
-                  )
-                )
-              }
-            />
-            <Label htmlFor={`catfk-channel-${channel.id}`}>
-              {channel.name}
-            </Label>
-          </div>
-        ))}
+        {displayChannels.map((channel) => {
+          let paymentIdentifier = t('Unsupported channel')
+          if (channel.payment_type === 'wxpay') {
+            paymentIdentifier = 'catfk_wxpay'
+          } else if (channel.payment_type === 'alipay') {
+            paymentIdentifier = 'catfk_alipay'
+          }
+          return (
+            <div
+              key={channel.id}
+              className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'
+            >
+              <span className='min-w-0 truncate'>{channel.name}</span>
+              <code className='text-muted-foreground shrink-0 text-xs'>
+                {paymentIdentifier}
+              </code>
+            </div>
+          )
+        })}
       </div>
       <CatFKProductDialog
         open={open}
@@ -283,7 +269,7 @@ export function CatFKSettingsFields(props: Props) {
         }}
         title={t('Delete product')}
         desc={t(
-          'Remove this CatFK mapping? Existing orders keep their original product snapshot.'
+          'Remove this Catfkmapping? Existing orders keep their original product snapshot.'
         )}
         destructive
         confirmText={t('Delete')}

@@ -156,7 +156,14 @@ func (f *catFKTestStore) Capacity(int, int) error { return nil }
 
 func catFKFixture(t *testing.T) (*catFKService, *catFKTestAdapter, *catFKTestStore, *operation_setting.CatFKSetting) {
 	t.Helper()
-	cfg := &operation_setting.CatFKSetting{Enabled: true, StoreToken: "private-store-token", Products: []operation_setting.CatFKProduct{{ID: "tier", Name: "Credit", GoodsKey: "goods", Amount: 2.5}}, Channels: []operation_setting.CatFKChannel{{ID: "pay", Name: "Pay"}}}
+	previousPayMethods := operation_setting.PayMethods
+	t.Cleanup(func() { operation_setting.PayMethods = previousPayMethods })
+	operation_setting.PayMethods = []map[string]string{{
+		"name": "Catfk WeChat",
+		"type": operation_setting.CatFKPaymentMethodWeChat,
+		"channel_id": "pay",
+	}}
+	cfg := &operation_setting.CatFKSetting{Enabled: true, StoreToken: "private-store-token", Products: []operation_setting.CatFKProduct{{ID: "tier", Name: "Credit", GoodsKey: "goods", Amount: 2.5}}, Channels: []operation_setting.CatFKChannel{{ID: "pay", Name: "WeChat Pay", PaymentType: "wxpay"}}}
 	adapter := &catFKTestAdapter{offer: CatFKOffer{ShopID: "shop", ProductID: "goods", ChannelID: "pay", Amount: "18.00", Currency: "CNY", Quantity: 1, InStock: true}}
 	store := &catFKTestStore{}
 	service := &catFKService{adapter: adapter, store: store, setting: func() *operation_setting.CatFKSetting { return cfg }, now: func() time.Time { return time.Unix(1700000000, 0) }, key: func() ([]byte, error) { return make([]byte, 32), nil }}
@@ -209,6 +216,36 @@ func TestCatFKUnverifiedAdapterRejectsPaymentOperations(t *testing.T) {
 	require.ErrorIs(t, err, ErrCatFKInvalidRequest)
 	assert.True(t, (catFKPollHandler{}).Enabled())
 	assert.Equal(t, ErrCatFKOrderUnavailable, catFKPublicError(errors.New("SQL contains sensitive value")))
+}
+
+func TestCatFKChannelRequiresMatchingGeneralPaymentMethod(t *testing.T) {
+	s, _, store, _ := catFKFixture(t)
+	operation_setting.PayMethods = []map[string]string{{
+		"type": operation_setting.CatFKPaymentMethodAlipay,
+		"channel_id": "pay",
+	}}
+	_, err := s.quote(context.Background(), 7, "tier", "pay")
+	require.ErrorIs(t, err, ErrCatFKInvalidRequest)
+	assert.Nil(t, store.order)
+
+	operation_setting.PayMethods = []map[string]string{{
+		"type": operation_setting.CatFKPaymentMethodWeChat,
+		"channel_id": "another-channel",
+	}}
+	_, err = s.quote(context.Background(), 7, "tier", "pay")
+	require.ErrorIs(t, err, ErrCatFKInvalidRequest)
+	assert.Nil(t, store.order)
+}
+
+func TestCatFKPaymentMethodRemovalAfterQuoteBlocksNewOrder(t *testing.T) {
+	s, a, store, _ := catFKFixture(t)
+	req := catFKRequest(t, s)
+	operation_setting.PayMethods = nil
+
+	_, err := s.create(context.Background(), 7, req)
+	require.ErrorIs(t, err, ErrCatFKInvalidRequest)
+	assert.Nil(t, store.order)
+	assert.Zero(t, a.creates.Load())
 }
 
 func TestCatFKQuoteAndCreateBindings(t *testing.T) {

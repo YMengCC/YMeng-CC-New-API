@@ -18,9 +18,32 @@ type CatFKProduct struct {
 }
 
 type CatFKChannel struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Icon string `json:"icon"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	PaymentType string `json:"payment_type,omitempty"`
+}
+
+const (
+	CatFKPaymentMethodLegacy = "catfk"
+	CatFKPaymentMethodAlipay = "catfk_alipay"
+	CatFKPaymentMethodWeChat = "catfk_wxpay"
+)
+
+func CatFKPaymentTypeForChannelName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.Contains(name, "微信") || strings.Contains(name, "wechat") || strings.Contains(name, "weixin") {
+		return "wxpay"
+	}
+	if strings.Contains(name, "支付宝") || strings.Contains(name, "alipay") {
+		return "alipay"
+	}
+	return ""
+}
+
+func IsCatFKPaymentMethod(method string) bool {
+	method = strings.ToLower(strings.TrimSpace(method))
+	return method == CatFKPaymentMethodLegacy || strings.HasPrefix(method, "catfk_")
 }
 
 type CatFKSetting struct {
@@ -92,7 +115,8 @@ func ValidateCatFKOption(key, value string) error {
 		}
 		ids := make(map[string]bool, len(channels))
 		for _, channel := range channels {
-			if strings.TrimSpace(channel.ID) == "" || len(channel.ID) > 128 || ids[channel.ID] || strings.TrimSpace(channel.Name) == "" || len(channel.Name) > 200 || len(channel.Icon) > 2048 {
+			validPaymentType := channel.PaymentType == "" || channel.PaymentType == "alipay" || channel.PaymentType == "wxpay"
+			if strings.TrimSpace(channel.ID) == "" || len(channel.ID) > 128 || ids[channel.ID] || strings.TrimSpace(channel.Name) == "" || len(channel.Name) > 200 || len(channel.Icon) > 2048 || !validPaymentType {
 				return common.NewMessage("Invalid CatFK payment channels")
 			}
 			ids[channel.ID] = true

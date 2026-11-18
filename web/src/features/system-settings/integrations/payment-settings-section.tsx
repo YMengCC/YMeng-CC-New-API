@@ -47,7 +47,9 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getPaymentErrorTranslation } from '@/features/wallet/lib/payment'
+import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { confirmPaymentCompliance } from '../api'
@@ -62,7 +64,11 @@ import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
-import { parseCatFKProducts, parseCatFKChannels } from './catfk-schema'
+import {
+  parseCatFKProducts,
+  parseCatFKChannels,
+  type CatFKChannel,
+} from './catfk-schema'
 import { CatFKSettingsFields } from './catfk-settings-fields'
 import { CatFKSetupGuide } from './catfk-setup-guide'
 import { CreemProductsVisualEditor } from './creem-products-visual-editor'
@@ -282,10 +288,19 @@ export function PaymentSettingsSection({
       storeID: waffoPancakeProvisionedStoreID ?? '',
       productID: waffoPancakeProvisionedProductID ?? '',
     })
+  const [catfkChannels, setCatfkChannels] = React.useState<CatFKChannel[]>(() =>
+    parseCatFKChannels(defaultValues.CatFKChannels)
+  )
+  const catfkTokenGeneration = React.useRef(0)
 
   React.useEffect(() => {
     setWaffoPayMethods(parseWaffoPayMethods(waffoDefaultValues.WaffoPayMethods))
   }, [waffoDefaultValues.WaffoPayMethods])
+
+  React.useEffect(() => {
+    setCatfkChannels(parseCatFKChannels(initialFormValues.CatFKChannels))
+    catfkTokenGeneration.current++
+  }, [initialFormValues.CatFKChannels])
 
   React.useEffect(() => {
     const nextBinding = {
@@ -383,6 +398,11 @@ export function PaymentSettingsSection({
   })
 
   const { isSubmitting } = form.formState
+  const catfkStoreToken = form.watch('CatFKStoreToken')
+
+  React.useEffect(() => {
+    catfkTokenGeneration.current++
+  }, [catfkStoreToken])
 
   const setPaymentValue = React.useCallback(
     (
@@ -397,6 +417,30 @@ export function PaymentSettingsSection({
           shouldValidate: true,
         }
       )
+    },
+    [form]
+  )
+
+  const readCatfkChannels = React.useCallback(
+    async (token: string) => {
+      const generation = ++catfkTokenGeneration.current
+      const response = await api.post('/api/option/catfk/channels', {
+        store_token: token.trim(),
+      })
+      const channels = parseCatFKChannels(
+        JSON.stringify(requireServerSuccess(response.data).data)
+      )
+      if (
+        generation === catfkTokenGeneration.current &&
+        form.getValues('CatFKStoreToken').trim() === token.trim()
+      ) {
+        setCatfkChannels(channels)
+        form.setValue('CatFKChannels', JSON.stringify(channels), {
+          shouldDirty: true,
+          shouldValidate: true,
+        })
+      }
+      return channels
     },
     [form]
   )
@@ -951,7 +995,7 @@ export function PaymentSettingsSection({
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='catfk'>
-                  {t('Yunmao consignment store payments')}
+                  {t('Catfk consignment store payments')}
                 </TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
                 <TabsTrigger value='waffo'>Waffo</TabsTrigger>
@@ -1053,6 +1097,7 @@ export function PaymentSettingsSection({
                           <PaymentMethodsVisualEditor
                             value={field.value}
                             onChange={field.onChange}
+                            catfkChannels={catfkChannels}
                           />
                         ) : (
                           <JsonCodeEditor
@@ -1678,7 +1723,7 @@ export function PaymentSettingsSection({
             <TabsContent value='catfk' className={paymentTabContentClassName}>
               <div className='flex flex-wrap items-center justify-between gap-3'>
                 <h3 className='text-lg font-medium'>
-                  {t('Yunmao consignment store payments')}
+                  {t('Catfk consignment store payments')}
                 </h3>
                 <CatFKSetupGuide />
               </div>
@@ -1690,6 +1735,7 @@ export function PaymentSettingsSection({
                   CatFKChannels: form.watch('CatFKChannels'),
                 }}
                 complianceConfirmed={complianceConfirmed}
+                onReadChannels={readCatfkChannels}
                 onChange={(key, value) => {
                   if (key === 'CatFKEnabled') {
                     form.setValue(key, Boolean(value), {

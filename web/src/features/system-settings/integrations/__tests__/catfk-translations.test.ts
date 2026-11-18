@@ -24,7 +24,7 @@ it.each(Object.entries(resources))(
       'Enable CatFK',
       'CatFK store token',
       'CatFK product mappings',
-      'Read CatFK channels',
+      'Read Catfk channels',
       'Expected credited balance (USD)',
       'CatFK product IDs must be unique',
       'Cancel payment',
@@ -45,9 +45,22 @@ it.each(Object.entries(resources))(
       'Contact method',
       'Enter QQ number (5-12 digits)',
       'Custom amounts are not supported',
-      'Yunmao consignment store payments',
-      'Yunmao payment setup guide',
-      'Open Yunmao merchant console',
+      'Catfk consignment store payments',
+      'Catfk payment setup guide',
+      'Open Catfk merchant console',
+      'Catfk available channels',
+      'Read Catfk channels',
+      'Catfk Alipay',
+      'Catfk WeChat Pay',
+      'Select payment type',
+      'Custom Epay payment identifier',
+      'Payment method display name',
+      'Choose the payment provider.',
+      'Custom Epay payment type key',
+      'Custom Epay payment identifier',
+      'Enter payment type key',
+      'Icon name or HTTPS image URL',
+      'Catfk payment identifiers must use the verified channel list',
       'Copy the part of the store link after /shop/ and paste it into the store token field. You can also paste the full store link.',
       'Open the product page and copy the part of the product link after /item/. Paste only this part into the goods key field.',
       'Match each product’s expected credited balance (USD) to an amount option in General. Use the balance value, not the CNY selling price or converted display amount. Unmatched presets cannot use this payment method.',
@@ -78,19 +91,14 @@ it('shows the requested Chinese custom amount note and switches gateway labels w
     '请输入QQ号（5-12位数字）'
   )
   expect(i18n.t('Custom amounts are not supported')).toBe('不支持自定义金额')
-  expect(i18n.t('Enable CatFK')).toBe('启用云猫支付')
-  expect(i18n.t('Yunmao consignment store payments')).toBe('云猫寄售店铺支付')
-  expect(i18n.t('Yunmao payment setup guide')).toBe('云猫支付配置教程')
-  expect(
-    i18n.t(
-      'Click {{read}}, select the channels to offer, turn on payments, then click {{save}}.',
-      { read: i18n.t('Read CatFK channels'), save: i18n.t('Save all settings') }
-    )
-  ).toBe(
-    '点击“读取 云猫 渠道”，勾选要提供的支付渠道，打开支付开关，然后点击“保存所有设置”。'
-  )
+  expect(i18n.t('Enable CatFK')).toBe('启用 Catfk 支付')
+  expect(i18n.t('Catfk consignment store payments')).toBe('Catfk 店铺支付')
+  expect(i18n.t('Catfk payment setup guide')).toBe('Catfk 支付设置指南')
+  expect(i18n.t('Catfk Alipay')).toBe('Catfk 支付宝')
+  expect(i18n.t('Catfk WeChat Pay')).toBe('Catfk 微信支付')
+  expect(i18n.t('Select payment type')).toBe('请选择支付处理标识')
   await i18n.changeLanguage('en')
-  expect(i18n.t('Enable CatFK')).toBe('Enable Yunmao payments')
+  expect(i18n.t('Enable CatFK')).toBe('Enable Catfk payments')
   await i18n.changeLanguage('zh-TW')
   expect(i18n.t('Custom amounts are not supported')).toBe('不支援自訂金額')
 })

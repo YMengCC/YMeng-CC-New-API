@@ -14,9 +14,9 @@ export function CatFKSetupGuide() {
     <Dialog
       open={open}
       onOpenChange={setOpen}
-      title={t('Yunmao payment setup guide')}
+      title={t('Catfk payment setup guide')}
       description={t(
-        'Follow these steps to find the store token and goods keys in your Yunmao merchant account.'
+        'Follow these steps to find the store token and goods keys in your Catfk merchant account.'
       )}
       contentClassName='sm:max-w-xl'
       bodyClassName='text-sm break-words'
@@ -46,7 +46,7 @@ export function CatFKSetupGuide() {
               />
             }
           >
-            {t('Open Yunmao merchant console')}
+            {t('Open Catfk merchant console')}
           </Button>
         </>
       }
@@ -56,7 +56,7 @@ export function CatFKSetupGuide() {
           <h3 className='font-medium'>{t('Get the store token')}</h3>
           <p className='text-muted-foreground'>
             {t(
-              'Sign in to the Yunmao merchant console and open your store page.'
+              'Sign in to the Catfk merchant console and open your store page.'
             )}
           </p>
           <p className='text-muted-foreground'>
@@ -117,14 +117,12 @@ export function CatFKSetupGuide() {
           </p>
         </li>
         <li className='space-y-1.5'>
-          <h3 className='font-medium'>{t('Choose channels and enable')}</h3>
+          <h3 className='font-medium'>
+            {t('Configure Catfk payment methods')}
+          </h3>
           <p className='text-muted-foreground'>
             {t(
-              'Click {{read}}, select the channels to offer, turn on payments, then click {{save}}.',
-              {
-                read: t('Read CatFK channels'),
-                save: t('Save all settings'),
-              }
+              'Read the available channels, add the matching Catfk payment methods in General, then save all settings.'
             )}
           </p>
           <p className='text-muted-foreground'>

@@ -208,7 +208,12 @@ func (a *catFKHTTPAdapter) Channels(ctx context.Context, token string) ([]operat
 		if !catFKValidPaymentURL(icon) {
 			icon = ""
 		}
-		channels = append(channels, operation_setting.CatFKChannel{ID: strconv.Itoa(channel.ID), Name: name, Icon: icon})
+		channels = append(channels, operation_setting.CatFKChannel{
+			ID:          strconv.Itoa(channel.ID),
+			Name:        name,
+			Icon:        icon,
+			PaymentType: operation_setting.CatFKPaymentTypeForChannelName(name),
+		})
 	}
 	return channels, nil
 }

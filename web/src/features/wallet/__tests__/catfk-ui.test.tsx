@@ -19,7 +19,7 @@ import { useCatfkPayment } from '../hooks/use-catfk-payment'
 import { useTopupInfo } from '../hooks/use-topup-info'
 import type { TopupInfo } from '../types'
 
-const channel = { id: 'wechat', name: 'WeChat' }
+const channel = { id: 'wechat', name: 'WeChat', payment_type: 'wxpay' as const }
 const product = { id: 'ten', name: 'Ten dollars', amount: 10 }
 const quote = { quote_id: 'q1', amount: 72, currency: 'CNY', topup_amount: 10 }
 const topupInfo: TopupInfo = {
@@ -81,7 +81,7 @@ it('places store channels in the same payment grid with identical button styling
         enable_online_topup: true,
         pay_methods: [
           { type: 'alipay', name: 'Existing Alipay' },
-          { type: 'catfk', name: 'WeChat' },
+          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
         ],
       }}
       onCatfkPaymentSelect={vi.fn()}
@@ -112,6 +112,29 @@ it('does not show CatFK channels until a CatFK payment method is configured', ()
       'No payment methods available. Please contact administrator.'
     )
   ).toBeVisible()
+})
+
+it('does not show a Catfk payment method whose configured channel does not match its identifier', () => {
+  render(
+    <RechargeFormCard
+      {...base}
+      topupInfo={{
+        ...topupInfo,
+        pay_methods: [
+          {
+            type: 'catfk_alipay',
+            channel_id: 'alipay-id',
+            name: 'Catfk Alipay',
+          },
+        ],
+      }}
+      onCatfkPaymentSelect={vi.fn()}
+    />
+  )
+
+  expect(
+    screen.queryByRole('button', { name: 'Catfk Alipay' })
+  ).not.toBeInTheDocument()
 })
 
 it('adds the configured payment method display fee only to the You Pay amount', () => {
@@ -164,7 +187,9 @@ it('uses the original preset buttons and keeps custom input visible while quotin
           {...base}
           topupInfo={{
             ...topupInfo,
-            pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+            pay_methods: [
+              { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+            ],
           }}
           catfkChannel={payment.channel}
           onCatfkPaymentSelect={(selectedChannel, selectedProduct) =>
@@ -237,7 +262,7 @@ it('disables the store method for custom input even matching a tier and re-enabl
           enable_online_topup: true,
           pay_methods: [
             { type: 'alipay', name: 'Existing Alipay' },
-            { type: 'catfk', name: 'WeChat' },
+            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
           ],
         }}
         topupAmount={amount}
@@ -298,7 +323,7 @@ it('shows the custom amount note on the initially disabled store method and hide
           enable_online_topup: true,
           pay_methods: [
             { type: 'alipay', name: 'Existing Alipay' },
-            { type: 'catfk', name: 'WeChat' },
+            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
           ],
         }}
       />
@@ -332,7 +357,9 @@ it('maps a shared preset to a newly configured product by credited USD amount ra
       topupAmount={20}
       topupInfo={{
         ...topupInfo,
-        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+        pay_methods: [
+          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+        ],
         catfk: {
           enabled: true,
           available: true,
@@ -358,7 +385,9 @@ it('disables an unmapped preset without replacing the shared amount buttons', ()
       topupAmount={20}
       topupInfo={{
         ...topupInfo,
-        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+        pay_methods: [
+          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+        ],
       }}
     />
   )
@@ -372,7 +401,9 @@ it('displays the server unavailable reason and disables the store method without
       {...base}
       topupInfo={{
         ...topupInfo,
-        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+        pay_methods: [
+          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+        ],
         catfk: {
           enabled: true,
           products: [product],
@@ -428,9 +459,14 @@ it('preserves the configured store method name and icon when loading payment set
       success: true,
       data: {
         ...topupInfo,
+        catfk: {
+          ...topupInfo.catfk,
+          channels: [{ id: 'alipay', name: 'Alipay', payment_type: 'alipay' }],
+        },
         pay_methods: [
           {
-            type: 'catfk',
+            type: 'catfk_alipay',
+            channel_id: 'alipay',
             name: 'Configured Alipay',
             icon: 'https://example.com/alipay.png',
           },
@@ -571,7 +607,11 @@ it('requires a valid quote and ASCII QQ before confirmation', async () => {
         onConfirm={confirm}
         topupAmount={10}
         paymentAmount={72}
-        paymentMethod={{ type: 'catfk', name: 'WeChat' }}
+        paymentMethod={{
+          type: 'catfk_wxpay',
+          channel_id: 'wechat',
+          name: 'WeChat',
+        }}
         calculating={false}
         processing={false}
         catfk={{ quote, qq, onQQChange: setQQ, available: true }}

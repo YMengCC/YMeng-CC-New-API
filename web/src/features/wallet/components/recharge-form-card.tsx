@@ -157,24 +157,35 @@ export function RechargeFormCard({
     enableWaffoTopup ||
     enableWaffoPancakeTopup
   const hasAnyTopup =
-    hasConfigurableTopup || enableCreemTopup || topupInfo?.catfk?.enabled
+    hasConfigurableTopup ||
+    enableCreemTopup ||
+    (topupInfo?.catfk?.enabled && topupInfo.catfk.channels.length > 0)
   const paymentMethods: Array<PaymentMethod & { channel?: CatfkChannel }> = (
     topupInfo?.pay_methods ?? []
-  ).filter((method) => method.type !== 'catfk')
-  const configuredCatfkMethod = topupInfo?.pay_methods?.find(
-    (method) => method.type === 'catfk'
+  ).filter(
+    (method) =>
+      method.type !== 'catfk' &&
+      method.type !== 'catfk_alipay' &&
+      method.type !== 'catfk_wxpay'
   )
-  if (topupInfo?.catfk?.enabled && configuredCatfkMethod) {
+  if (topupInfo?.catfk?.enabled) {
     for (const channel of topupInfo.catfk.channels) {
+      let catfkType: string | undefined
+      if (channel.payment_type === 'wxpay') catfkType = 'catfk_wxpay'
+      if (channel.payment_type === 'alipay') catfkType = 'catfk_alipay'
+      if (!catfkType) continue
+      const configured = topupInfo.pay_methods?.find(
+        (method) =>
+          method.type === catfkType && method.channel_id === channel.id
+      )
+      const method = configured
+      if (!method) continue
       paymentMethods.push({
-        ...configuredCatfkMethod,
+        ...method,
         fee_percent: undefined,
         type: `catfk:${channel.id}`,
-        name:
-          topupInfo.catfk.channels.length === 1
-            ? configuredCatfkMethod.name
-            : channel.name,
-        icon: configuredCatfkMethod.icon || channel.icon,
+        name: method.name || channel.name,
+        icon: method.icon || channel.icon,
         channel,
       })
     }

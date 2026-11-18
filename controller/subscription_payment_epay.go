@@ -45,7 +45,8 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorT(c, "Plan amount is too low")
 		return
 	}
-	if !operation_setting.ContainsPayMethod(req.PaymentMethod) {
+	if operation_setting.IsCatFKPaymentMethod(req.PaymentMethod) ||
+		!operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		common.ApiErrorT(c, "Payment method does not exist")
 		return
 	}

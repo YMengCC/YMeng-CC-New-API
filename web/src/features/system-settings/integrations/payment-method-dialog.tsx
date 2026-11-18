@@ -17,14 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
-import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -35,32 +34,60 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { getPaymentIcon } from '@/features/wallet/lib/ui'
 import { isHttpsUrl } from '@/lib/content-format'
 
+import type { CatFKChannel } from './catfk-schema'
+
 const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
-  z.object({
-    name: z.string().min(1, t('Payment method name is required')),
-    type: z.string().min(1, t('Payment type key is required')),
-    icon: z.string().optional(),
-    min_topup: z.string().optional(),
-    fee_percent: z.string().refine((value) => {
-      if (!value.trim()) return true
-      const feePercent = Number(value)
-      return Number.isFinite(feePercent) && feePercent >= 0 && feePercent <= 100
-    }, t('Enter a percentage from 0 to 100')),
-    show_topup_notice: z.boolean(),
-    show_topup_link: z.boolean(),
-    topup_notice_text: z.string().optional(),
-    topup_link_image: z
-      .string()
-      .refine(
-        (value) => !value.trim() || isHttpsUrl(value.trim()),
-        t('Enter a valid HTTPS image URL')
-      ),
-  })
+  z
+    .object({
+      name: z.string().min(1, t('Payment method name is required')),
+      type: z.string().min(1, t('Payment type key is required')),
+      custom_type: z
+        .string()
+        .refine(
+          (value) => !value.trim().toLowerCase().startsWith('catfk'),
+          t('Catfk payment identifiers must use the verified channel list')
+        ),
+      channel_id: z.string(),
+      icon: z.string().optional(),
+      min_topup: z.string().optional(),
+      fee_percent: z.string().refine((value) => {
+        if (!value.trim()) return true
+        const feePercent = Number(value)
+        return (
+          Number.isFinite(feePercent) && feePercent >= 0 && feePercent <= 100
+        )
+      }, t('Enter a percentage from 0 to 100')),
+      show_topup_notice: z.boolean(),
+      show_topup_link: z.boolean(),
+      topup_notice_text: z.string().optional(),
+      topup_link_image: z
+        .string()
+        .refine(
+          (value) => !value.trim() || isHttpsUrl(value.trim()),
+          t('Enter a valid HTTPS image URL')
+        ),
+    })
+    .superRefine((values, ctx) => {
+      if (values.type === '__custom_epay__' && !values.custom_type.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['custom_type'],
+          message: t('Payment type key is required'),
+        })
+      }
+    })
 
 type PaymentMethodDialogFormValues = z.infer<
   ReturnType<typeof createPaymentMethodDialogSchema>
@@ -74,6 +101,7 @@ export type PaymentMethodData = {
   icon?: string
   min_topup?: string
   fee_percent?: string
+  channel_id?: string
   color?: string
   show_topup_notice?: string
   show_topup_link?: string
@@ -81,16 +109,27 @@ export type PaymentMethodData = {
   topup_link_image?: string
 }
 
+type PaymentTypeOption = {
+  iconName: string
+  label: string
+  name: string
+  value: string
+  channelID?: string
+}
+
 type PaymentMethodDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (data: PaymentMethodData) => void
   editData?: PaymentMethodData | null
+  catfkChannels?: CatFKChannel[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
-  catfk: 'SiAlipay',
   alipay: 'SiAlipay',
+  catfk: 'SiAlipay',
+  catfk_alipay: 'SiAlipay',
+  catfk_wxpay: 'SiWechat',
   stripe: 'SiStripe',
   waffo_pancake: 'LuCreditCard',
   wxpay: 'SiWechat',
@@ -103,50 +142,79 @@ export function PaymentMethodDialog({
   onOpenChange,
   onSave,
   editData,
+  catfkChannels = [],
 }: PaymentMethodDialogProps) {
   const { t } = useTranslation()
   const isEditMode = !!editData
   const paymentMethodDialogSchema = createPaymentMethodDialogSchema(t)
-  const paymentTypeOptions = [
-    {
-      iconName: 'SiAlipay',
-      label: `${t('Alipay')} (Epay: alipay)`,
-      name: t('Alipay'),
-      value: 'alipay',
-    },
-    {
-      iconName: 'SiAlipay',
-      label: `${t('Alipay')} (${t('Yunmao consignment store payments')}: catfk)`,
-      name: t('Alipay'),
-      value: 'catfk',
-    },
-    {
-      iconName: 'SiWechat',
-      label: `${t('WeChat Pay')} (Epay: wxpay)`,
-      name: t('WeChat Pay'),
-      value: 'wxpay',
-    },
-    {
-      iconName: 'SiStripe',
-      label: `${t('Stripe')} (stripe)`,
-      name: t('Stripe'),
-      value: 'stripe',
-    },
-    {
-      iconName: 'LuCreditCard',
-      label: 'Waffo Pancake (waffo_pancake)',
-      name: 'Waffo Pancake',
-      value: 'waffo_pancake',
-    },
-  ]
+  const catfkOptions = useMemo(
+    () =>
+      catfkChannels.flatMap((channel) => {
+        let value: string | undefined
+        if (channel.payment_type === 'wxpay') value = 'catfk_wxpay'
+        if (channel.payment_type === 'alipay') value = 'catfk_alipay'
+        if (!value) return []
+        return [
+          {
+            iconName: getDefaultIconName(value),
+            label: `${t(channel.payment_type === 'wxpay' ? 'Catfk WeChat Pay' : 'Catfk Alipay')} (${channel.name}, Catfk: ${value})`,
+            name: t(
+              channel.payment_type === 'wxpay'
+                ? 'Catfk WeChat Pay'
+                : 'Catfk Alipay'
+            ),
+            value,
+            channelID: channel.id,
+          },
+        ]
+      }),
+    [catfkChannels, t]
+  )
+  const paymentTypeOptions = useMemo<PaymentTypeOption[]>(
+    () => [
+      {
+        iconName: 'SiAlipay',
+        label: `${t('Alipay')} (Epay: alipay)`,
+        name: t('Alipay'),
+        value: 'alipay',
+      },
+      {
+        iconName: 'SiWechat',
+        label: `${t('WeChat Pay')} (Epay: wxpay)`,
+        name: t('WeChat Pay'),
+        value: 'wxpay',
+      },
+      {
+        iconName: 'SiStripe',
+        label: `${t('Stripe')} (stripe)`,
+        name: t('Stripe'),
+        value: 'stripe',
+      },
+      {
+        iconName: 'LuCreditCard',
+        label: `${t('Waffo Pancake')} (waffo_pancake)`,
+        name: t('Waffo Pancake'),
+        value: 'waffo_pancake',
+      },
+      ...catfkOptions,
+      {
+        iconName: 'LuCreditCard',
+        label: t('Custom Epay payment identifier'),
+        name: t('Custom Epay payment identifier'),
+        value: '__custom_epay__',
+      },
+    ],
+    [catfkOptions, t]
+  )
   const getPaymentTypeOption = (value: string) =>
     paymentTypeOptions.find((option) => option.value === value)
-
   const form = useForm<PaymentMethodDialogFormValues>({
     resolver: zodResolver(paymentMethodDialogSchema),
     defaultValues: {
       name: '',
       type: '',
+      custom_type: '',
+      channel_id: '',
       icon: '',
       min_topup: '',
       fee_percent: '0',
@@ -157,6 +225,12 @@ export function PaymentMethodDialog({
     },
   })
 
+  const selectedPaymentType = form.watch('type')
+  const customType = form.watch('custom_type')
+  const resolvedPaymentType =
+    selectedPaymentType === '__custom_epay__'
+      ? customType.trim()
+      : selectedPaymentType
   const iconValue = form.watch('icon')
   const showTopupNotice = form.watch('show_topup_notice')
   const showTopupLink = form.watch('show_topup_link')
@@ -167,9 +241,19 @@ export function PaymentMethodDialog({
 
   useEffect(() => {
     if (editData) {
+      const knownType =
+        ['alipay', 'wxpay', 'stripe', 'waffo_pancake'].includes(
+          editData.type
+        ) || editData.type.startsWith('catfk_')
+      const legacyCatfkMethod = editData.type === 'catfk'
+      let initialType = '__custom_epay__'
+      if (knownType) initialType = editData.type
+      if (legacyCatfkMethod) initialType = ''
       form.reset({
         name: editData.name,
-        type: editData.type,
+        type: initialType,
+        custom_type: knownType || legacyCatfkMethod ? '' : editData.type,
+        channel_id: editData.channel_id ?? '',
         icon: editData.icon ?? getDefaultIconName(editData.type),
         min_topup: editData.min_topup ?? '',
         fee_percent: editData.fee_percent ?? '0',
@@ -182,6 +266,8 @@ export function PaymentMethodDialog({
       form.reset({
         name: '',
         type: '',
+        custom_type: '',
+        channel_id: '',
         icon: '',
         min_topup: '',
         fee_percent: '0',
@@ -194,11 +280,18 @@ export function PaymentMethodDialog({
   }, [editData, form, open])
 
   const handleSubmit = (values: PaymentMethodDialogFormValues) => {
+    const type =
+      values.type === '__custom_epay__'
+        ? values.custom_type.trim()
+        : values.type
     const data: PaymentMethodData = {
       name: values.name,
-      type: values.type,
+      type,
       show_topup_notice: String(values.show_topup_notice),
       show_topup_link: String(values.show_topup_link),
+    }
+    if (type.startsWith('catfk_') && values.channel_id) {
+      data.channel_id = values.channel_id
     }
     if (editData?.color) {
       data.color = editData.color
@@ -209,7 +302,7 @@ export function PaymentMethodDialog({
     if (values.min_topup && values.min_topup.trim() !== '') {
       data.min_topup = values.min_topup
     }
-    if (values.type !== 'catfk') {
+    if (!type.startsWith('catfk')) {
       data.fee_percent = values.fee_percent.trim() || '0'
     }
     if (values.topup_notice_text?.trim()) {
@@ -260,7 +353,10 @@ export function PaymentMethodDialog({
               <FormItem>
                 <FormLabel>{t('Name')}</FormLabel>
                 <FormControl>
-                  <Input placeholder={t('e.g., Alipay, WeChat')} {...field} />
+                  <Input
+                    placeholder={t('Payment method display name')}
+                    {...field}
+                  />
                 </FormControl>
                 <FormDescription>
                   {t('Display name for this payment method.')}
@@ -276,50 +372,84 @@ export function PaymentMethodDialog({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t('Payment type key')}</FormLabel>
-                <FormControl>
-                  <Combobox
-                    options={paymentTypeOptions}
-                    value={field.value}
-                    onValueChange={(value) => {
-                      if (value === null) return
-                      const currentIcon = form.getValues('icon')?.trim()
-                      const currentName = form.getValues('name')?.trim()
-                      const previousOption = getPaymentTypeOption(field.value)
-                      const nextOption = getPaymentTypeOption(value)
-
-                      field.onChange(value)
+                <Select
+                  value={field.value}
+                  onValueChange={(value) => {
+                    if (!value) return
+                    const currentIcon = form.getValues('icon')?.trim()
+                    const currentName = form.getValues('name')?.trim()
+                    const previousOption =
+                      getPaymentTypeOption(selectedPaymentType)
+                    const nextOption = getPaymentTypeOption(value)
+                    field.onChange(value)
+                    if (value !== '__custom_epay__') {
+                      form.setValue('custom_type', '')
+                      form.setValue('channel_id', nextOption?.channelID ?? '')
+                    } else {
+                      form.setValue('channel_id', '')
                       if (
-                        nextOption?.iconName &&
-                        (!currentIcon ||
-                          currentIcon === previousOption?.iconName)
+                        resolvedPaymentType &&
+                        resolvedPaymentType !== '__custom_epay__'
                       ) {
-                        form.setValue('icon', nextOption.iconName, {
-                          shouldDirty: true,
-                        })
+                        form.setValue('custom_type', resolvedPaymentType)
                       }
-                      if (
-                        nextOption?.name &&
-                        (!currentName || currentName === previousOption?.name)
-                      ) {
-                        form.setValue('name', nextOption.name, {
-                          shouldDirty: true,
-                        })
-                      }
-                    }}
-                    placeholder={t('Select or enter payment type key')}
-                    searchPlaceholder={t('Search payment type keys...')}
-                    allowCustomValue
-                  />
-                </FormControl>
+                    }
+                    if (
+                      nextOption?.iconName &&
+                      (!currentIcon || currentIcon === previousOption?.iconName)
+                    ) {
+                      form.setValue('icon', nextOption.iconName, {
+                        shouldDirty: true,
+                      })
+                    }
+                    if (
+                      nextOption?.name &&
+                      (!currentName || currentName === previousOption?.name)
+                    ) {
+                      form.setValue('name', nextOption.name, {
+                        shouldDirty: true,
+                      })
+                    }
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger aria-label={t('Payment type key')}>
+                      <SelectValue placeholder={t('Select payment type')} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {paymentTypeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormDescription className='leading-relaxed'>
-                  {t(
-                    'Choose the payment provider. Store payments use the configured product tiers.'
-                  )}
+                  {t('Choose the payment provider.')}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+          {selectedPaymentType === '__custom_epay__' && (
+            <FormField
+              control={form.control}
+              name='custom_type'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Custom Epay payment type key')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder={t('Enter payment type key')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -330,13 +460,13 @@ export function PaymentMethodDialog({
                 <FormControl>
                   <div className='flex items-center gap-2'>
                     <Input
-                      placeholder={t('e.g., SiAlipay')}
+                      placeholder={t('Icon name or HTTPS image URL')}
                       {...field}
                       className='flex-1'
                     />
                     {iconValue?.trim() &&
                       getPaymentIcon(
-                        form.watch('type'),
+                        resolvedPaymentType,
                         'text-muted-foreground size-5 shrink-0',
                         iconValue,
                         form.watch('name')
@@ -375,7 +505,7 @@ export function PaymentMethodDialog({
             )}
           />
 
-          {form.watch('type') && form.watch('type') !== 'catfk' && (
+          {resolvedPaymentType && !resolvedPaymentType.startsWith('catfk') && (
             <FormField
               control={form.control}
               name='fee_percent'

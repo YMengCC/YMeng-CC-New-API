@@ -191,6 +191,43 @@ func catFKProductionService() *catFKService {
 	return &catFKService{adapter: newCatFKHTTPAdapter(), store: catFKModelStore{}, setting: operation_setting.GetCatFKSetting, now: time.Now, key: catFKEncryptionKey}
 }
 func CatFKProtocolReady() bool { return newCatFKHTTPAdapter().Ready() }
+func catFKChannelPaymentType(channel operation_setting.CatFKChannel) string {
+	if channel.PaymentType != "" {
+		return channel.PaymentType
+	}
+	return operation_setting.CatFKPaymentTypeForChannelName(channel.Name)
+}
+
+func catFKConfiguredChannel(cfg *operation_setting.CatFKSetting, channelID string) bool {
+	var channel *operation_setting.CatFKChannel
+	for i := range cfg.Channels {
+		if cfg.Channels[i].ID == channelID {
+			channel = &cfg.Channels[i]
+			break
+		}
+	}
+	if channel == nil {
+		return false
+	}
+
+	paymentType := catFKChannelPaymentType(*channel)
+	if paymentType == "" {
+		return false
+	}
+	methodType := operation_setting.CatFKPaymentMethodAlipay
+	if paymentType == "wxpay" {
+		methodType = operation_setting.CatFKPaymentMethodWeChat
+	} else if paymentType != "alipay" {
+		return false
+	}
+	for _, method := range operation_setting.PayMethods {
+		if method["type"] == methodType && method["channel_id"] == channelID {
+			return true
+		}
+	}
+	return false
+}
+
 func CatFKUnavailableReason() string {
 	if !CatFKProtocolReady() {
 		return ErrCatFKProtocolUnverified.Error()
@@ -203,8 +240,18 @@ func CatFKUnavailableReason() string {
 	}
 	cfg := operation_setting.GetCatFKSetting()
 	token, err := operation_setting.NormalizeCatFKStoreToken(cfg.StoreToken)
-	if err != nil || token == "" || len(cfg.Products) == 0 || len(cfg.Channels) == 0 {
+	if err != nil || token == "" || len(cfg.Products) == 0 {
 		return "Invalid CatFK settings"
+	}
+	configuredChannel := false
+	for _, channel := range cfg.Channels {
+		if catFKConfiguredChannel(cfg, channel.ID) {
+			configuredChannel = true
+			break
+		}
+	}
+	if !configuredChannel {
+		return "No CatFK payment method is configured"
 	}
 	return ""
 }
@@ -218,8 +265,16 @@ func CatFKPublicInfo() CatFKInfo {
 	for _, p := range cfg.Products {
 		info.Products = append(info.Products, CatFKPublicProduct{ID: p.ID, Name: p.Name, Amount: p.Amount})
 	}
-	for _, c := range cfg.Channels {
-		info.Channels = append(info.Channels, operation_setting.CatFKChannel{ID: c.ID, Name: c.Name, Icon: c.Icon})
+	for _, channel := range cfg.Channels {
+		if !catFKConfiguredChannel(cfg, channel.ID) {
+			continue
+		}
+		info.Channels = append(info.Channels, operation_setting.CatFKChannel{
+			ID:          channel.ID,
+			Name:        channel.Name,
+			Icon:        channel.Icon,
+			PaymentType: catFKChannelPaymentType(channel),
+		})
 	}
 	return info
 }
@@ -372,14 +427,7 @@ func (s *catFKService) quote(ctx context.Context, userID int, productID, channel
 			break
 		}
 	}
-	channelOK := false
-	for _, c := range cfg.Channels {
-		if c.ID == channelID {
-			channelOK = true
-			break
-		}
-	}
-	if product == nil || !channelOK || product.GoodsKey == "" || math.IsNaN(product.Amount) || math.IsInf(product.Amount, 0) || product.Amount <= 0 {
+	if product == nil || !catFKConfiguredChannel(cfg, channelID) || product.GoodsKey == "" || math.IsNaN(product.Amount) || math.IsInf(product.Amount, 0) || product.Amount <= 0 {
 		return nil, ErrCatFKInvalidRequest
 	}
 	quota, err := common.WalletQuotaFromDecimalStrict(decimal.NewFromFloat(product.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
@@ -446,6 +494,9 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 	cfg := s.setting()
 	if !cfg.Enabled {
 		return nil, ErrCatFKDisabled
+	}
+	if !catFKConfiguredChannel(cfg, req.ChannelID) {
+		return nil, ErrCatFKInvalidRequest
 	}
 	key, err := s.key()
 	if err != nil {

@@ -38,7 +38,11 @@ func TestCatFKHTTPQuoteUsesStockOwnershipAndFeeInclusivePrice(t *testing.T) {
 					if condition == "disabled-channel" {
 						status = 0
 					}
-					data = []any{map[string]any{"id": 1, "show_name": "Alipay", "status": status, "custom_status": 1, "paytype": map[string]any{"icon": "https://catfk.com/icon.png"}}}
+					data = []any{
+					map[string]any{"id": 1, "show_name": "Alipay", "status": status, "custom_status": 1, "paytype": map[string]any{"icon": "https://catfk.com/icon.png"}},
+					map[string]any{"id": 2, "show_name": "WeChat Pay", "status": 1, "custom_status": 1, "paytype": map[string]any{"icon": "https://catfk.com/wechat.png"}},
+					map[string]any{"id": 3, "show_name": "Unknown", "status": 1, "custom_status": 1},
+				}
 				case "/shopApi/Shop/getGoodsPrice":
 					var request map[string]any
 					require.NoError(t, common.DecodeJson(r.Body, &request))
@@ -70,6 +74,30 @@ func TestCatFKHTTPQuoteUsesStockOwnershipAndFeeInclusivePrice(t *testing.T) {
 			assert.True(t, offer.InStock)
 		})
 	}
+}
+
+func TestCatFKHTTPChannelsClassifyOnlyRecognizedPaymentNames(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/shopApi/Shop/getUserChannel", r.URL.Path)
+		body, err := common.Marshal(map[string]any{"code": 1, "data": []any{
+			map[string]any{"id": 1, "show_name": "Alipay", "status": 1, "custom_status": 1},
+			map[string]any{"id": 2, "show_name": "微信支付", "status": 1, "custom_status": 1},
+			map[string]any{"id": 3, "show_name": "Gift Card", "status": 1, "custom_status": 1},
+			map[string]any{"id": 4, "show_name": "WeChat disabled", "status": 0, "custom_status": 1},
+		}})
+		require.NoError(t, err)
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	adapter := newCatFKHTTPAdapter()
+	adapter.baseURL = server.URL
+	channels, err := adapter.Channels(context.Background(), "YMengCC")
+	require.NoError(t, err)
+	require.Len(t, channels, 3)
+	assert.Equal(t, "alipay", channels[0].PaymentType)
+	assert.Equal(t, "wxpay", channels[1].PaymentType)
+	assert.Empty(t, channels[2].PaymentType)
 }
 
 // The chain mirrors a captured Alipay desktop payment: a catfk redirect, an
