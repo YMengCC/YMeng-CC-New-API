@@ -46,6 +46,11 @@ const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
     type: z.string().min(1, t('Payment type key is required')),
     icon: z.string().optional(),
     min_topup: z.string().optional(),
+    fee_percent: z.string().refine((value) => {
+      if (!value.trim()) return true
+      const feePercent = Number(value)
+      return Number.isFinite(feePercent) && feePercent >= 0 && feePercent <= 100
+    }, t('Enter a percentage from 0 to 100')),
     show_topup_notice: z.boolean(),
     show_topup_link: z.boolean(),
     topup_notice_text: z.string().optional(),
@@ -68,6 +73,7 @@ export type PaymentMethodData = {
   type: string
   icon?: string
   min_topup?: string
+  fee_percent?: string
   color?: string
   show_topup_notice?: string
   show_topup_link?: string
@@ -110,7 +116,7 @@ export function PaymentMethodDialog({
     },
     {
       iconName: 'SiAlipay',
-      label: t('Yunmao consignment store payments'),
+      label: `${t('Alipay')} (${t('Yunmao consignment store payments')}: catfk)`,
       name: t('Alipay'),
       value: 'catfk',
     },
@@ -143,6 +149,7 @@ export function PaymentMethodDialog({
       type: '',
       icon: '',
       min_topup: '',
+      fee_percent: '0',
       show_topup_notice: true,
       show_topup_link: true,
       topup_notice_text: '',
@@ -165,6 +172,7 @@ export function PaymentMethodDialog({
         type: editData.type,
         icon: editData.icon ?? getDefaultIconName(editData.type),
         min_topup: editData.min_topup ?? '',
+        fee_percent: editData.fee_percent ?? '0',
         show_topup_notice: editData.show_topup_notice !== 'false',
         show_topup_link: editData.show_topup_link !== 'false',
         topup_notice_text: editData.topup_notice_text ?? '',
@@ -176,6 +184,7 @@ export function PaymentMethodDialog({
         type: '',
         icon: '',
         min_topup: '',
+        fee_percent: '0',
         show_topup_notice: true,
         show_topup_link: true,
         topup_notice_text: '',
@@ -199,6 +208,9 @@ export function PaymentMethodDialog({
     }
     if (values.min_topup && values.min_topup.trim() !== '') {
       data.min_topup = values.min_topup
+    }
+    if (values.type !== 'catfk') {
+      data.fee_percent = values.fee_percent.trim() || '0'
     }
     if (values.topup_notice_text?.trim()) {
       data.topup_notice_text = values.topup_notice_text.trim()
@@ -362,6 +374,33 @@ export function PaymentMethodDialog({
               </FormItem>
             )}
           />
+
+          {form.watch('type') && form.watch('type') !== 'catfk' && (
+            <FormField
+              control={form.control}
+              name='fee_percent'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Display fee (%)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={100}
+                      step='0.01'
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Added only to the amount shown on the confirmation page.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <div className='space-y-3'>
             <FormField

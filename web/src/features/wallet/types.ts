@@ -98,6 +98,8 @@ export interface PaymentMethod {
   color?: string
   /** Minimum topup amount for this payment method */
   min_topup?: number
+  /** Display-only fee percentage for this payment method */
+  fee_percent?: number
   /** Optional react-icons component name or safe icon URL */
   icon?: string
   /** Whether to show the compatibility notice in the confirmation dialog */

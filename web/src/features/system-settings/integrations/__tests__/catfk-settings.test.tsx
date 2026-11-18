@@ -237,12 +237,35 @@ test('adding a store payment uses the normal payment method dialog and preserves
     await screen.findByRole('option', { name: /Epay: alipay/ })
   ).toBeVisible()
   await user.click(
-    screen.getByRole('option', { name: 'Yunmao consignment store payments' })
+    screen.getByRole('option', {
+      name: 'Alipay (Yunmao consignment store payments: catfk)',
+    })
   )
   expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Alipay')
+  expect(
+    screen.queryByRole('spinbutton', { name: 'Display fee (%)' })
+  ).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Add' }))
   expect(save).toHaveBeenCalledWith(
     expect.objectContaining({ type: 'catfk', name: 'Alipay', icon: 'SiAlipay' })
+  )
+})
+
+test('configures and saves a per-method display fee for Epay payments', async () => {
+  const user = userEvent.setup()
+  const save = vi.fn()
+  render(<PaymentMethodDialog open onOpenChange={vi.fn()} onSave={save} />)
+
+  await user.click(screen.getByRole('combobox', { name: 'Payment type key' }))
+  await user.click(await screen.findByRole('option', { name: /Epay: alipay/ }))
+  const fee = screen.getByRole('spinbutton', { name: 'Display fee (%)' })
+  expect(fee).toHaveValue(0)
+  await user.clear(fee)
+  await user.type(fee, '2.5')
+  await user.click(screen.getByRole('button', { name: 'Add' }))
+
+  expect(save).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'alipay', fee_percent: '2.5' })
   )
 })
 

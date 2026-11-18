@@ -161,19 +161,20 @@ export function RechargeFormCard({
   const paymentMethods: Array<PaymentMethod & { channel?: CatfkChannel }> = (
     topupInfo?.pay_methods ?? []
   ).filter((method) => method.type !== 'catfk')
-  if (topupInfo?.catfk?.enabled) {
-    const configured = topupInfo.pay_methods?.find(
-      (method) => method.type === 'catfk'
-    )
+  const configuredCatfkMethod = topupInfo?.pay_methods?.find(
+    (method) => method.type === 'catfk'
+  )
+  if (topupInfo?.catfk?.enabled && configuredCatfkMethod) {
     for (const channel of topupInfo.catfk.channels) {
       paymentMethods.push({
-        ...configured,
+        ...configuredCatfkMethod,
+        fee_percent: undefined,
         type: `catfk:${channel.id}`,
         name:
-          topupInfo.catfk.channels.length === 1 && configured?.name
-            ? configured.name
+          topupInfo.catfk.channels.length === 1
+            ? configuredCatfkMethod.name
             : channel.name,
-        icon: configured?.icon || channel.icon,
+        icon: configuredCatfkMethod.icon || channel.icon,
         channel,
       })
     }
@@ -484,17 +485,15 @@ export function RechargeFormCard({
                     })}
                   </div>
                 ) : null}
-                {!hasStandardPaymentMethods &&
-                  !hasWaffoPaymentMethods &&
-                  !topupInfo?.catfk?.enabled && (
-                    <Alert>
-                      <AlertDescription>
-                        {t(
-                          'No payment methods available. Please contact administrator.'
-                        )}
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                {!hasStandardPaymentMethods && !hasWaffoPaymentMethods && (
+                  <Alert>
+                    <AlertDescription>
+                      {t(
+                        'No payment methods available. Please contact administrator.'
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               {topupInfo?.catfk?.enabled && !topupInfo.catfk.available && (

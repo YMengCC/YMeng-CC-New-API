@@ -134,6 +134,7 @@ export function PaymentMethodsVisualEditor({
         typeof item.type === 'string' &&
         (!('icon' in item) || typeof item.icon === 'string') &&
         (!('min_topup' in item) || typeof item.min_topup === 'string') &&
+        (!('fee_percent' in item) || typeof item.fee_percent === 'string') &&
         (!('color' in item) || typeof item.color === 'string') &&
         (!('show_topup_notice' in item) ||
           typeof item.show_topup_notice === 'string') &&
@@ -374,6 +375,18 @@ export function PaymentMethodsVisualEditor({
                   ),
               },
               {
+                id: 'display-fee',
+                header: t('Display fee (%)'),
+                cell: (method) =>
+                  method.type !== 'catfk' ? (
+                    <span className='font-mono text-sm'>
+                      {method.fee_percent || '0'}%
+                    </span>
+                  ) : (
+                    <span className='text-muted-foreground text-sm'>—</span>
+                  ),
+              },
+              {
                 id: 'actions',
                 header: t('Actions'),
                 className: 'text-right',
@@ -400,6 +413,7 @@ export function PaymentMethodsVisualEditor({
                 method.name,
                 method.icon,
                 method.min_topup,
+                method.fee_percent,
                 method.color,
                 method.show_topup_notice,
                 method.show_topup_link,
@@ -472,6 +486,16 @@ export function PaymentMethodsVisualEditor({
                           {t('Min Top-up:')}
                         </span>
                         <span className='font-mono'>{method.min_topup}</span>
+                      </div>
+                    )}
+                    {method.type !== 'catfk' && (
+                      <div className='flex items-center gap-2'>
+                        <span className='text-muted-foreground min-w-20'>
+                          {t('Display fee (%)')}
+                        </span>
+                        <span className='font-mono'>
+                          {method.fee_percent || '0'}%
+                        </span>
                       </div>
                     )}
                   </div>

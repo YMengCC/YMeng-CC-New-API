@@ -71,10 +71,18 @@ function parsePaymentMethods(
       const rawMinTopup = Number(item.min_topup)
       const normalizedMinTopup = Number.isFinite(rawMinTopup) ? rawMinTopup : 0
       const type = typeof item.type === 'string' ? item.type : ''
+      const feePercent = Number(item.fee_percent)
 
       return {
         name: typeof item.name === 'string' ? item.name : '',
         type,
+        fee_percent:
+          type !== 'catfk' &&
+          Number.isFinite(feePercent) &&
+          feePercent >= 0 &&
+          feePercent <= 100
+            ? feePercent
+            : undefined,
         color: typeof item.color === 'string' ? item.color : undefined,
         icon: typeof item.icon === 'string' ? item.icon : undefined,
         show_topup_notice: parsePaymentMethodDisplayFlag(

@@ -95,6 +95,63 @@ it('places store channels in the same payment grid with identical button styling
   expect(screen.getAllByRole('button', { name: 'WeChat' })).toHaveLength(1)
 })
 
+it('does not show CatFK channels until a CatFK payment method is configured', () => {
+  render(
+    <RechargeFormCard
+      {...base}
+      topupInfo={{ ...topupInfo, enable_online_topup: true }}
+      onCatfkPaymentSelect={vi.fn()}
+    />
+  )
+
+  expect(
+    screen.queryByRole('button', { name: 'WeChat' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByText(
+      'No payment methods available. Please contact administrator.'
+    )
+  ).toBeVisible()
+})
+
+it('adds the configured payment method display fee only to the You Pay amount', () => {
+  render(
+    <PaymentConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      onConfirm={vi.fn()}
+      topupAmount={10}
+      paymentAmount={100}
+      paymentMethod={{ type: 'alipay', name: 'Alipay' }}
+      calculating={false}
+      processing={false}
+      paymentFeePercent={2.5}
+    />
+  )
+
+  expect(screen.getByText('102.5')).toBeVisible()
+})
+
+it('does not apply a configured display fee to CatFK and keeps its contact input', () => {
+  render(
+    <PaymentConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      onConfirm={vi.fn()}
+      topupAmount={10}
+      paymentAmount={72}
+      paymentMethod={{ type: 'catfk', name: 'Alipay', fee_percent: 25 }}
+      calculating={false}
+      processing={false}
+      paymentFeePercent={25}
+      catfk={{ quote, qq: '', onQQChange: vi.fn(), available: true }}
+    />
+  )
+
+  expect(screen.getByText('72')).toBeVisible()
+  expect(screen.getByRole('textbox', { name: /Contact method/ })).toBeRequired()
+})
+
 it('uses the original preset buttons and keeps custom input visible while quoting the selected amount', async () => {
   const post = vi.spyOn(api, 'post').mockResolvedValue({
     data: { success: true, data: quote },
@@ -105,6 +162,10 @@ it('uses the original preset buttons and keeps custom input visible while quotin
       <>
         <RechargeFormCard
           {...base}
+          topupInfo={{
+            ...topupInfo,
+            pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+          }}
           catfkChannel={payment.channel}
           onCatfkPaymentSelect={(selectedChannel, selectedProduct) =>
             payment.selectProduct(selectedProduct, selectedChannel)
@@ -174,7 +235,10 @@ it('disables the store method for custom input even matching a tier and re-enabl
         topupInfo={{
           ...topupInfo,
           enable_online_topup: true,
-          pay_methods: [{ type: 'alipay', name: 'Existing Alipay' }],
+          pay_methods: [
+            { type: 'alipay', name: 'Existing Alipay' },
+            { type: 'catfk', name: 'WeChat' },
+          ],
         }}
         topupAmount={amount}
         selectedPreset={preset}
@@ -232,7 +296,10 @@ it('shows the custom amount note on the initially disabled store method and hide
         topupInfo={{
           ...topupInfo,
           enable_online_topup: true,
-          pay_methods: [{ type: 'alipay', name: 'Existing Alipay' }],
+          pay_methods: [
+            { type: 'alipay', name: 'Existing Alipay' },
+            { type: 'catfk', name: 'WeChat' },
+          ],
         }}
       />
     )
@@ -265,6 +332,7 @@ it('maps a shared preset to a newly configured product by credited USD amount ra
       topupAmount={20}
       topupInfo={{
         ...topupInfo,
+        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
         catfk: {
           enabled: true,
           available: true,
@@ -283,7 +351,17 @@ it('maps a shared preset to a newly configured product by credited USD amount ra
 })
 
 it('disables an unmapped preset without replacing the shared amount buttons', () => {
-  render(<RechargeFormCard {...base} selectedPreset={20} topupAmount={20} />)
+  render(
+    <RechargeFormCard
+      {...base}
+      selectedPreset={20}
+      topupAmount={20}
+      topupInfo={{
+        ...topupInfo,
+        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
+      }}
+    />
+  )
   expect(screen.getByRole('button', { name: /WeChat/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: /^20 Pay/ })).toBeEnabled()
 })
@@ -294,6 +372,7 @@ it('displays the server unavailable reason and disables the store method without
       {...base}
       topupInfo={{
         ...topupInfo,
+        pay_methods: [{ type: 'catfk', name: 'WeChat' }],
         catfk: {
           enabled: true,
           products: [product],
@@ -307,6 +386,40 @@ it('displays the server unavailable reason and disables the store method without
   expect(screen.getByText('Protocol not verified')).toBeVisible()
   expect(screen.getByRole('button', { name: /WeChat/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: /^10 Pay/ })).toBeEnabled()
+})
+
+it('loads the display fee from the selected payment method configuration', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        ...topupInfo,
+        pay_methods: [
+          { type: 'alipay', name: 'Alipay', fee_percent: '2.5' },
+          { type: 'catfk', name: 'Yunmao', fee_percent: '99' },
+        ],
+      },
+    },
+  })
+  const select = vi.fn()
+  function LoadedMethods() {
+    const info = useTopupInfo()
+    return (
+      <RechargeFormCard
+        {...base}
+        topupInfo={info.topupInfo}
+        presetAmounts={info.presetAmounts}
+        loading={info.loading}
+        onPaymentMethodSelect={select}
+      />
+    )
+  }
+  const user = userEvent.setup()
+  render(<LoadedMethods />)
+  await user.click(await screen.findByRole('button', { name: 'Alipay' }))
+  expect(select).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'alipay', fee_percent: 2.5 })
+  )
 })
 
 it('preserves the configured store method name and icon when loading payment settings', async () => {

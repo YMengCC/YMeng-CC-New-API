@@ -423,6 +423,7 @@ export function Wallet(props: WalletProps) {
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
         processing={processing || waffoProcessing || pancakeProcessing}
+        paymentFeePercent={selectedPaymentMethod?.fee_percent ?? 0}
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
         topupLink={topupInfo?.topup_link}

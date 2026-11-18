@@ -47,6 +47,7 @@ interface PaymentConfirmDialogProps {
   paymentMethod: PaymentMethod | undefined
   calculating: boolean
   processing: boolean
+  paymentFeePercent?: number
   discountRate?: number
   usdExchangeRate?: number
   catfk?: {
@@ -67,6 +68,7 @@ export function PaymentConfirmDialog({
   paymentMethod,
   calculating,
   processing,
+  paymentFeePercent = 0,
   discountRate = DEFAULT_DISCOUNT_RATE,
   usdExchangeRate = 1,
   catfk,
@@ -78,6 +80,14 @@ export function PaymentConfirmDialog({
   const invalidQQ = !!catfk && catfk.qq.length > 0 && !isValidCatfkQQ(catfk.qq)
   const hasDiscount =
     !catfk && discountRate > 0 && discountRate < 1 && paymentAmount > 0
+  const displayFeePercent =
+    !catfk &&
+    Number.isFinite(paymentFeePercent) &&
+    paymentFeePercent > 0 &&
+    paymentFeePercent <= 100
+      ? paymentFeePercent
+      : 0
+  const displayedPaymentAmount = paymentAmount * (1 + displayFeePercent / 100)
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
   const topupPromptVisibility = getTopupPromptVisibility(
@@ -145,7 +155,7 @@ export function PaymentConfirmDialog({
             <div className='flex flex-col items-end'>
               <div className='flex items-baseline gap-2'>
                 <span className='text-2xl font-semibold'>
-                  {formatCurrency(paymentAmount)}
+                  {formatCurrency(displayedPaymentAmount)}
                 </span>
                 {hasDiscount && (
                   <span className='text-muted-foreground text-sm line-through'>
