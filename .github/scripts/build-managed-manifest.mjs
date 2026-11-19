@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export function buildManagedManifest(tag, image, compatibility, approval) {
-  if (!/^v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(tag) || approval?.version !== tag) {
+  if (!/^v\d+(?:\.\d+){2,}(?:[-+][\w.-]+)?$/.test(tag) || approval?.version !== tag) {
     throw new Error('Source-version approval must match the release tag');
   }
   const sources = approval.from_versions;
   if (!Array.isArray(sources) || sources.length === 0 ||
       sources.some(source => typeof source !== 'string' || source === tag ||
-        !/^v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(source)) ||
+        !/^v\d+(?:\.\d+){2,}(?:[-+][\w.-]+)?$/.test(source)) ||
       new Set(sources).size !== sources.length) {
     throw new Error('Explicit, unique prior source versions are required');
   }

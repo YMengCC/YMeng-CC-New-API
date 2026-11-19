@@ -72,3 +72,23 @@ test('malformed signature and empty or duplicate assets prevent publication', ()
   duplicate.assets.push({ ...duplicate.assets[0] });
   assert.throws(() => verifyManagedRelease(duplicate), /Release asset/);
 });
+
+test('a four-segment release version verifies with its own asset names', () => {
+  const patchTag = 'v1.2.23.1';
+  const manifest = {
+    version: patchTag, image, from_versions: ['v1.2.20'],
+    schema_unchanged: true, shared_state_compatible: true,
+    platforms: ['linux/amd64', 'linux/arm64'], databases: ['sqlite', 'mysql', 'postgres'],
+  };
+  const manifestBytes = Buffer.from(JSON.stringify(manifest));
+  const assets = [
+    `new-api-${patchTag}`, `new-api-arm64-${patchTag}`, `new-api-macos-${patchTag}`, `new-api-${patchTag}.exe`,
+    'checksums-linux.txt', 'checksums-macos.txt', 'checksums-windows.txt',
+    'update-manifest.json', 'update-manifest.sig',
+  ].map(name => ({ name, size: 123 }));
+  const result = verifyManagedRelease({
+    tag: patchTag, image, manifestBytes, assets, publicKey,
+    signature: Buffer.from(sign(null, manifestBytes, privateKey).toString('base64')),
+  });
+  assert.equal(result.version, patchTag);
+});

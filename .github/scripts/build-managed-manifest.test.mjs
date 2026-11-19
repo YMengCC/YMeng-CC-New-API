@@ -45,3 +45,11 @@ test('a mutable image tag is rejected', () => {
   assert.throws(() => buildManagedManifest(tag, 'ghcr.io/ymengcc/ymeng-cc-new-api:v1.2.13', compatibility,
     { version: tag, from_versions: ['v1.2.12'] }), /immutable/);
 });
+
+test('a four-segment release version is accepted', () => {
+  const patchTag = 'v1.2.23.1';
+  const result = buildManagedManifest(patchTag, image, compatibility,
+    { version: patchTag, from_versions: ['v1.2.20'] });
+  assert.equal(result.version, patchTag);
+  assert.deepEqual(result.from_versions, ['v1.2.20']);
+});

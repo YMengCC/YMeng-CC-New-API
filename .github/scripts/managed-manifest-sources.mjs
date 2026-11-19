@@ -2,7 +2,7 @@ import { verify } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const VERSION_PATTERN = /^v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const VERSION_PATTERN = /^v\d+(?:\.\d+){2,}(?:[-+][\w.-]+)?$/;
 
 /** Validate a direct-upgrade evidence ledger entry for an exact signed target. */
 export function approvedSources({ tag, image, sources, ledger, results }) {

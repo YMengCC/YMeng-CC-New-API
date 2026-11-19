@@ -146,6 +146,8 @@ func TestCompareReleaseVersions(t *testing.T) {
 		{"v1.2.17", "v1.2.17", 0, true},
 		{"1.2.17", "v1.2.17", 0, true},
 		{"v1.2.17+build.2", "v1.2.17", 0, true},
+		{"v1.2.23.1", "v1.2.23", 1, true},
+		{"v1.2.23", "v1.2.23.1", -1, true},
 		{"v1.2", "v1.2.0", 0, false},
 		{"dev", "v1.2.17", 0, false},
 		{"v1.2.17", "", 0, false},

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export function verifyManagedRelease({ tag, image, manifestBytes, signature, publicKey, assets }) {
-  if (!/^v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(tag)) {
+  if (!/^v\d+(?:\.\d+){2,}(?:[-+][\w.-]+)?$/.test(tag)) {
     throw new Error('Invalid release tag');
   }
   const signatureText = signature.toString().trim();
