@@ -153,6 +153,25 @@ it('adds the configured payment method display fee only to the You Pay amount', 
   )
 
   expect(screen.getByText('102.5')).toBeVisible()
+  expect(screen.getByText('Includes a 2.5% fee (2.5)')).toBeVisible()
+})
+
+it('shows no fee note for a payment method without a display fee', () => {
+  render(
+    <PaymentConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      onConfirm={vi.fn()}
+      topupAmount={10}
+      paymentAmount={100}
+      paymentMethod={{ type: 'alipay', name: 'Alipay' }}
+      calculating={false}
+      processing={false}
+    />
+  )
+
+  expect(screen.getByText('100')).toBeVisible()
+  expect(screen.queryByText(/Includes a .* fee/)).not.toBeInTheDocument()
 })
 
 it('does not apply a configured display fee to CatFK and keeps its contact input', () => {

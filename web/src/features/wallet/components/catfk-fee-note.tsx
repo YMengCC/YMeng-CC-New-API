@@ -5,7 +5,7 @@ import { formatNumber } from '@/lib/format'
 
 import { formatCurrency } from '../lib'
 
-// The fee CatFK adds to the goods price, shown under a payment amount.
+// A fee already included in a payment amount, shown under that amount.
 export function CatfkFeeNote(props: { fee?: number; feeRate?: number }) {
   const { t, i18n } = useTranslation()
   if (

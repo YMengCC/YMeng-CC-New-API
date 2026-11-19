@@ -88,6 +88,7 @@ export function PaymentConfirmDialog({
       ? paymentFeePercent
       : 0
   const displayedPaymentAmount = paymentAmount * (1 + displayFeePercent / 100)
+  const displayedFeeAmount = displayedPaymentAmount - paymentAmount
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
   const topupPromptVisibility = getTopupPromptVisibility(
@@ -163,10 +164,15 @@ export function PaymentConfirmDialog({
                   </span>
                 )}
               </div>
-              {catfk?.quote && (
+              {catfk?.quote ? (
                 <CatfkFeeNote
                   fee={catfk.quote.fee}
                   feeRate={catfk.quote.fee_rate}
+                />
+              ) : (
+                <CatfkFeeNote
+                  fee={displayedFeeAmount}
+                  feeRate={displayFeePercent}
                 />
               )}
             </div>
