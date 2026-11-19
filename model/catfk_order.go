@@ -128,11 +128,26 @@ func GetCatFKRedemptionForUser(userID int, tradeNo string) (*Redemption, error) 
 	if err != nil {
 		return nil, err
 	}
+	return catFKRedemptionForOrder(order)
+}
+
+// GetCatFKRedemptionByTradeNo reads the code consumed by one order without
+// caller ownership. Callers MUST authorize staff access; the code is already
+// used, so showing it grants nothing new.
+func GetCatFKRedemptionByTradeNo(tradeNo string) (*Redemption, error) {
+	order, err := GetCatFKOrderByTradeNo(tradeNo)
+	if err != nil {
+		return nil, err
+	}
+	return catFKRedemptionForOrder(order)
+}
+
+func catFKRedemptionForOrder(order *CatFKOrder) (*Redemption, error) {
 	if order.Status != CatFKOrderStatusCompleted || order.RedemptionID == nil {
 		return nil, ErrCatFKOrderConflict
 	}
 	redemption := &Redemption{}
-	err = DB.Unscoped().Where("id = ? AND used_user_id = ?", *order.RedemptionID, userID).First(redemption).Error
+	err := DB.Unscoped().Where("id = ? AND used_user_id = ?", *order.RedemptionID, order.UserID).First(redemption).Error
 	return redemption, err
 }
 

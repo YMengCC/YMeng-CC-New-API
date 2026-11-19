@@ -59,7 +59,11 @@ func GetCatFKPayment(c *gin.Context) {
 }
 
 func GetCatFKRedemption(c *gin.Context) {
-	redemption, err := service.GetUserCatFKRedemption(c.GetInt("id"), c.Param("trade_no"))
+	redemption, err := service.GetCatFKOrderRedemption(
+		c.GetInt("id"),
+		c.Param("trade_no"),
+		c.GetInt("role") >= common.RoleAdminUser,
+	)
 	if err != nil {
 		common.ApiError(c, err)
 		return

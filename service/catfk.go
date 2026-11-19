@@ -297,13 +297,22 @@ func GetUserCatFKPayment(ctx context.Context, userID int, tradeNo string) (*CatF
 	return catFKSafePayment(order), nil
 }
 
-// GetUserCatFKRedemption returns the code a completed order of this user
-// redeemed. The code is already used, so showing it grants nothing new.
-func GetUserCatFKRedemption(userID int, tradeNo string) (*CatFKRedemption, error) {
-	if userID <= 0 || tradeNo == "" {
+// GetCatFKOrderRedemption returns the code a completed order redeemed. A
+// caller allowed to view any order may read orders of other users; the code is
+// already used, so showing it grants nothing new.
+func GetCatFKOrderRedemption(viewerID int, tradeNo string, canViewAnyOrder bool) (*CatFKRedemption, error) {
+	if viewerID <= 0 || tradeNo == "" {
 		return nil, ErrCatFKInvalidRequest
 	}
-	redemption, err := model.GetCatFKRedemptionForUser(userID, tradeNo)
+	var (
+		redemption *model.Redemption
+		err        error
+	)
+	if canViewAnyOrder {
+		redemption, err = model.GetCatFKRedemptionByTradeNo(tradeNo)
+	} else {
+		redemption, err = model.GetCatFKRedemptionForUser(viewerID, tradeNo)
+	}
 	if errors.Is(err, model.ErrCatFKOrderConflict) {
 		return nil, ErrCatFKRedemptionPending
 	}
