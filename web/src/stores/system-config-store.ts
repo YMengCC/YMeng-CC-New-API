@@ -34,6 +34,11 @@ export interface CurrencyConfig {
   usdExchangeRate: number
   /** Custom currency symbol configured by the admin (used when type === CUSTOM) */
   customCurrencySymbol: string
+  /**
+   * Absolute HTTP(S) image URL when the admin configured the symbol as an image.
+   * Absent from historical snapshots such as withdrawal currency snapshots.
+   */
+  customCurrencyImageUrl?: string
   /** Exchange rate from USD to the custom currency (used when type === CUSTOM) */
   customCurrencyExchangeRate: number
 }

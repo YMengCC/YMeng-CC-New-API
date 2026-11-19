@@ -1,6 +1,13 @@
 package operation_setting
 
-import "github.com/QuantumNous/new-api/setting/config"
+import (
+	"net/url"
+	"regexp"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/QuantumNous/new-api/setting/config"
+)
 
 // 额度展示类型
 const (
@@ -66,12 +73,46 @@ func GetCurrencySymbol() string {
 	case QuotaDisplayTypeCNY:
 		return "¥"
 	case QuotaDisplayTypeCustom:
-		if generalSetting.CustomCurrencySymbol != "" {
-			return generalSetting.CustomCurrencySymbol
-		}
-		return "¤"
+		symbol, _ := SplitCustomCurrencySymbol(generalSetting.CustomCurrencySymbol)
+		return symbol
 	default:
 		return ""
+	}
+}
+
+var currencyURLLikePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://`)
+
+// IsCurrencyImageURL reports whether value is an absolute HTTP(S) URL, the only
+// form the console accepts as an image currency symbol.
+func IsCurrencyImageURL(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	return parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+// SplitCustomCurrencySymbol separates the configured custom symbol into the
+// text rendered next to amounts and, when it is an image, that image URL.
+// URL-shaped values longer than the console's 8-character text limit can only
+// be legacy data, so they degrade to the generic mark instead of a raw URL.
+// Stale dashboard bundles that only know custom_currency_symbol therefore never
+// render an image URL as text.
+func SplitCustomCurrencySymbol(value string) (symbol string, imageURL string) {
+	trimmed := strings.TrimSpace(value)
+	switch {
+	case trimmed == "":
+		return "¤", ""
+	case IsCurrencyImageURL(trimmed):
+		return "¤", trimmed
+	case utf8.RuneCountInString(trimmed) > 8 && currencyURLLikePattern.MatchString(trimmed):
+		return "¤", ""
+	default:
+		return trimmed, ""
 	}
 }
 

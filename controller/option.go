@@ -259,12 +259,9 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorT(c, "Custom currency symbol is too long")
 			return
 		}
-		if characterCount > 8 {
-			parsed, err := url.Parse(value)
-			if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-				common.ApiErrorT(c, "Custom currency symbol must be 8 characters or an HTTP(S) image URL")
-				return
-			}
+		if characterCount > 8 && !operation_setting.IsCurrencyImageURL(value) {
+			common.ApiErrorT(c, "Custom currency symbol must be 8 characters or an HTTP(S) image URL")
+			return
 		}
 		option.Value = value
 	case "GitHubOAuthEnabled":

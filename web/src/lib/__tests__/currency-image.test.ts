@@ -86,3 +86,64 @@ it('formats historical billing snapshots without using the current image', () =>
 
   expect(formatBillingCurrencyFromUSD(1, {}, snapshot)).toBe('€ 2')
 })
+
+it('uses the server-provided image URL when the symbol is already masked', () => {
+  const imageUrl = 'https://cdn.example.com/coin.png'
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '¤',
+      customCurrencyImageUrl: imageUrl,
+      customCurrencyExchangeRate: 2,
+    },
+  })
+
+  expect(formatQuotaWithCurrency(500000)).toBe('¤ 2')
+  const meta = getCurrencyDisplay().meta
+  expect(meta.kind === 'tokens' ? '' : meta.symbol).toBe('¤')
+  expect(getCurrencyImageUrl()).toBe(imageUrl)
+})
+
+it('renders URL-shaped legacy values above the text limit as the generic mark', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: 'ftp://cdn.example.com/coin.png',
+      customCurrencyExchangeRate: 2,
+    },
+  })
+
+  expect(formatQuotaWithCurrency(500000)).toBe('¤ 2')
+  expect(getCurrencyImageUrl()).toBeNull()
+})
+
+it('keeps short URL-shaped text symbols verbatim', () => {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: 'a://b',
+      customCurrencyExchangeRate: 2,
+    },
+  })
+
+  expect(formatQuotaWithCurrency(500000)).toBe('a://b 2')
+  expect(getCurrencyImageUrl()).toBeNull()
+})
+
+it('resolves an image carried by a currency snapshot', () => {
+  const snapshot = {
+    ...DEFAULT_CURRENCY_CONFIG,
+    quotaDisplayType: 'CUSTOM' as const,
+    customCurrencySymbol: '¤',
+    customCurrencyImageUrl: 'https://cdn.example.com/snapshot.svg',
+    customCurrencyExchangeRate: 2,
+  }
+
+  expect(getCurrencyImageUrl(snapshot)).toBe(
+    'https://cdn.example.com/snapshot.svg'
+  )
+  expect(formatQuotaWithCurrency(500000, {}, snapshot)).toBe('¤ 2')
+})

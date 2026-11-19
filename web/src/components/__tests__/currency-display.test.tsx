@@ -43,6 +43,17 @@ function setImageCurrency(imageUrl = IMAGE_URL) {
   })
 }
 
+function setMaskedImageCurrency(imageUrl = IMAGE_URL) {
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '¤',
+      customCurrencyImageUrl: imageUrl,
+    },
+  })
+}
+
 beforeEach(() => {
   useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
 })
@@ -102,6 +113,17 @@ describe('CurrencySymbol', () => {
     expect(screen.getByText('HK$')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
+
+  it('renders the server image when the configured symbol is already masked', () => {
+    setMaskedImageCurrency()
+
+    render(<CurrencySymbol />)
+
+    expect(screen.getByRole('img', { name: '¤' })).toHaveAttribute(
+      'src',
+      IMAGE_URL
+    )
+  })
 })
 
 describe('CurrencyFormattedText', () => {
@@ -134,6 +156,18 @@ describe('CurrencyFormattedText', () => {
       expect(screen.queryByRole('img')).not.toBeInTheDocument()
     }
   )
+
+  it('replaces placeholders with the server image when the symbol is masked', () => {
+    setMaskedImageCurrency()
+    const { container } = render(<CurrencyFormattedText value='¤ 2' />)
+
+    expect(screen.getByRole('img', { name: '¤' })).toHaveAttribute(
+      'src',
+      IMAGE_URL
+    )
+    expect(container).toHaveTextContent('2')
+    expect(container.textContent).not.toContain(IMAGE_URL)
+  })
 
   it('keeps a textual custom symbol and its formatted string unchanged', () => {
     useSystemConfigStore.getState().setConfig({
@@ -260,6 +294,21 @@ describe('CurrencyAmount', () => {
       IMAGE_URL
     )
     expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('renders the image and bare amount when the symbol arrives masked', () => {
+    setMaskedImageCurrency()
+
+    const { container } = render(
+      <CurrencyAmount amount={500000} mode='quota' />
+    )
+
+    expect(screen.getByRole('img', { name: '¤' })).toHaveAttribute(
+      'src',
+      IMAGE_URL
+    )
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(container.textContent).not.toContain(IMAGE_URL)
   })
 
   it('follows currency setting changes while mounted', () => {

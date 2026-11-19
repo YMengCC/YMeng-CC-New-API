@@ -60,7 +60,10 @@ export function CurrencySymbol(props: CurrencySymbolProps) {
   const overrideImageUrl = isCurrencyImageUrl(props.imageUrlOverride)
     ? props.imageUrlOverride.trim()
     : ''
-  const imageUrl = directImageUrl || overrideImageUrl
+  // The server now sends an already-masked symbol plus the image separately.
+  const snapshotImageUrl =
+    props.value === undefined ? getCurrencyImageUrl(snapshot) : null
+  const imageUrl = directImageUrl || overrideImageUrl || snapshotImageUrl || ''
   const [imageFailed, setImageFailed] = useState(false)
 
   useEffect(() => {

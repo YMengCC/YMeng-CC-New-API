@@ -46,6 +46,12 @@ func GetStatus(c *gin.Context) {
 
 	legalSetting := system_setting.GetLegalSettings()
 
+	// Dashboards loaded before an upgrade keep running older bundles, so the
+	// symbol field must never carry an image URL; the image travels separately.
+	customCurrencySymbol, customCurrencyImageURL := operation_setting.SplitCustomCurrencySymbol(
+		operation_setting.GetGeneralSetting().CustomCurrencySymbol,
+	)
+
 	data := gin.H{
 		"version":                     common.Version,
 		"start_time":                  common.StartTime,
@@ -77,7 +83,8 @@ func GetStatus(c *gin.Context) {
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),
 		"quota_display_type":            operation_setting.GetQuotaDisplayType(),
-		"custom_currency_symbol":        operation_setting.GetGeneralSetting().CustomCurrencySymbol,
+		"custom_currency_symbol":        customCurrencySymbol,
+		"custom_currency_image_url":     customCurrencyImageURL,
 		"custom_currency_exchange_rate": operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate,
 		"enable_batch_update":           common.BatchUpdateEnabled,
 		"enable_drawing":                common.DrawingEnabled,

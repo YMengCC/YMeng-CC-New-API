@@ -157,13 +157,33 @@ export function isCurrencyImageUrl(value: unknown): value is string {
   }
 }
 
+const CURRENCY_URL_LIKE_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
+
+/**
+ * Whether a value is shaped like an absolute URL. Used to keep legacy or
+ * malformed URL values from being rendered as a text currency symbol.
+ */
+export function isCurrencySymbolUrlLike(value: unknown): value is string {
+  return (
+    typeof value === 'string' && CURRENCY_URL_LIKE_PATTERN.test(value.trim())
+  )
+}
+
+function resolveCurrencyImageUrl(config: CurrencyConfig): string | null {
+  if (config.quotaDisplayType !== 'CUSTOM') return null
+  if (isCurrencyImageUrl(config.customCurrencyImageUrl)) {
+    return config.customCurrencyImageUrl.trim()
+  }
+  // Older servers and historical snapshots only carry the image in the symbol.
+  if (isCurrencyImageUrl(config.customCurrencySymbol)) {
+    return config.customCurrencySymbol.trim()
+  }
+  return null
+}
+
 /** Return the configured custom currency image URL, if the symbol is an image. */
 export function getCurrencyImageUrl(snapshot?: CurrencyConfig): string | null {
-  const config = getConfig(snapshot)
-  if (config.quotaDisplayType !== 'CUSTOM') return null
-  return isCurrencyImageUrl(config.customCurrencySymbol)
-    ? config.customCurrencySymbol.trim()
-    : null
+  return resolveCurrencyImageUrl(getConfig(snapshot))
 }
 
 export function isCurrencyDisplayType(
@@ -216,14 +236,23 @@ function getDisplayMeta(config: CurrencyConfig): DisplayMeta {
         currencyCode: 'CNY',
         exchangeRate: config.usdExchangeRate,
       }
-    case 'CUSTOM':
+    case 'CUSTOM': {
+      const configuredSymbol = config.customCurrencySymbol?.trim() ?? ''
+      let textSymbol = configuredSymbol
+      if (
+        isCurrencySymbolUrlLike(configuredSymbol) &&
+        [...configuredSymbol].length > 8
+      ) {
+        // The console only allows URL-shaped values above 8 characters when
+        // they are images, so anything else here is legacy junk.
+        textSymbol = '¤'
+      }
       return {
         kind: 'custom',
-        symbol: isCurrencyImageUrl(config.customCurrencySymbol)
-          ? '¤'
-          : config.customCurrencySymbol,
+        symbol: resolveCurrencyImageUrl(config) ? '¤' : textSymbol,
         exchangeRate: config.customCurrencyExchangeRate,
       }
+    }
     case 'TOKENS':
       return {
         kind: 'tokens',

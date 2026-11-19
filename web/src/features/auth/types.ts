@@ -125,6 +125,7 @@ export interface SystemStatus {
     quota_display_type?: string
     usd_exchange_rate?: number
     custom_currency_symbol?: string
+    custom_currency_image_url?: string
     custom_currency_exchange_rate?: number
     demo_site_enabled?: boolean
     user_agreement_enabled?: boolean
@@ -172,6 +173,7 @@ export interface SystemStatus {
   quota_display_type?: string
   usd_exchange_rate?: number
   custom_currency_symbol?: string
+  custom_currency_image_url?: string
   custom_currency_exchange_rate?: number
   demo_site_enabled?: boolean
   user_agreement_enabled?: boolean

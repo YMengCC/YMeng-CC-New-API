@@ -133,10 +133,7 @@ func LogQuota(quota int) string {
 	case operation_setting.QuotaDisplayTypeCustom:
 		usd := q / common.QuotaPerUnit
 		rate := operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate
-		symbol := operation_setting.GetGeneralSetting().CustomCurrencySymbol
-		if symbol == "" {
-			symbol = "¤"
-		}
+		symbol, _ := operation_setting.SplitCustomCurrencySymbol(operation_setting.GetGeneralSetting().CustomCurrencySymbol)
 		if rate <= 0 {
 			rate = 1
 		}
@@ -159,10 +156,7 @@ func FormatQuota(quota int) string {
 	case operation_setting.QuotaDisplayTypeCustom:
 		usd := q / common.QuotaPerUnit
 		rate := operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate
-		symbol := operation_setting.GetGeneralSetting().CustomCurrencySymbol
-		if symbol == "" {
-			symbol = "¤"
-		}
+		symbol, _ := operation_setting.SplitCustomCurrencySymbol(operation_setting.GetGeneralSetting().CustomCurrencySymbol)
 		if rate <= 0 {
 			rate = 1
 		}

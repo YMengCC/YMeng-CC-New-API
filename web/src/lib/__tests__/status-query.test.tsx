@@ -30,9 +30,13 @@ import {
 import {
   STATUS_QUERY_KEY,
   ensureStatus,
+  mapStatusDataToConfig,
   statusQueryOptions,
 } from '@/lib/status-query'
-import { useSystemConfigStore } from '@/stores/system-config-store'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 /**
  * Guards the deduplication contract of the shared `['status']` query: several
@@ -262,4 +266,49 @@ describe('module guard status freshness', () => {
       })
     }
   )
+})
+
+describe('custom currency status mapping', () => {
+  test('keeps the server-masked symbol and stores the image separately', () => {
+    const imageUrl = 'https://cdn.example.com/coin.png'
+    const config = mapStatusDataToConfig({
+      quota_display_type: 'CUSTOM',
+      custom_currency_symbol: '¤',
+      custom_currency_image_url: imageUrl,
+      custom_currency_exchange_rate: 2,
+    })
+
+    expect(config.currency?.customCurrencySymbol).toBe('¤')
+    expect(config.currency?.customCurrencyImageUrl).toBe(imageUrl)
+  })
+
+  test('splits an image URL that an older server still packs into the symbol', () => {
+    const imageUrl = 'https://cdn.example.com/coin.png'
+    const config = mapStatusDataToConfig({
+      quota_display_type: 'CUSTOM',
+      custom_currency_symbol: imageUrl,
+    })
+
+    expect(config.currency?.customCurrencySymbol).toBe('¤')
+    expect(config.currency?.customCurrencyImageUrl).toBe(imageUrl)
+  })
+
+  test('leaves text symbols alone and never reports an image', () => {
+    const config = mapStatusDataToConfig({
+      quota_display_type: 'CUSTOM',
+      custom_currency_symbol: 'HK$',
+    })
+
+    expect(config.currency?.customCurrencySymbol).toBe('HK$')
+    expect(config.currency?.customCurrencyImageUrl).toBeUndefined()
+  })
+
+  test('falls back to defaults when the fields are absent', () => {
+    const config = mapStatusDataToConfig({})
+
+    expect(config.currency?.customCurrencySymbol).toBe(
+      DEFAULT_CURRENCY_CONFIG.customCurrencySymbol
+    )
+    expect(config.currency?.customCurrencyImageUrl).toBeUndefined()
+  })
 })

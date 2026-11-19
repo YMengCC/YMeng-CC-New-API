@@ -99,3 +99,22 @@ it.each(['zhCN', 'zhTW', 'en', 'fr', 'ru', 'ja', 'vi', 'invalid_locale'])(
     ).toBe(original)
   }
 )
+
+it('formats a withdrawal snapshot whose symbol is an image URL as the generic mark', () => {
+  const snapshot: CurrencyConfig = {
+    ...DEFAULT_CURRENCY_CONFIG,
+    quotaDisplayType: 'CUSTOM',
+    customCurrencySymbol: 'https://cdn.example.com/coin.png',
+    customCurrencyExchangeRate: 2,
+  }
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '€',
+      customCurrencyExchangeRate: 3,
+    },
+  })
+
+  expect(formatQuotaWithCurrency(500000, {}, snapshot)).toBe('¤ 2')
+})

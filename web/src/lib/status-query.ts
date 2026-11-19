@@ -20,6 +20,7 @@ import { queryOptions, type QueryClient } from '@tanstack/react-query'
 
 import { getStatus } from '@/lib/api'
 import { DEFAULT_SYSTEM_NAME, DEFAULT_LOGO } from '@/lib/constants'
+import { isCurrencyImageUrl } from '@/lib/currency'
 import {
   useSystemConfigStore,
   type CurrencyConfig,
@@ -69,6 +70,21 @@ export function mapStatusDataToConfig(
     (data.quota_display_type as CurrencyDisplayType | undefined) ??
     DEFAULT_CURRENCY_CONFIG.quotaDisplayType
 
+  const reportedSymbol =
+    (data.custom_currency_symbol as string | undefined)?.trim() ||
+    DEFAULT_CURRENCY_CONFIG.customCurrencySymbol
+  const reportedImageUrl = (
+    data.custom_currency_image_url as string | undefined
+  )?.trim()
+  let customCurrencyImageUrl: string | undefined
+  if (isCurrencyImageUrl(reportedImageUrl)) {
+    customCurrencyImageUrl = reportedImageUrl
+  } else if (isCurrencyImageUrl(reportedSymbol)) {
+    // A newer console against a server that still packs the image into the
+    // symbol field: keep the image and store a safe text symbol.
+    customCurrencyImageUrl = reportedSymbol
+  }
+
   const currency: CurrencyConfig = {
     displayInCurrency:
       (data.display_in_currency as boolean | undefined) ??
@@ -82,9 +98,8 @@ export function mapStatusDataToConfig(
       data.usd_exchange_rate,
       DEFAULT_CURRENCY_CONFIG.usdExchangeRate
     ),
-    customCurrencySymbol:
-      (data.custom_currency_symbol as string | undefined)?.trim() ||
-      DEFAULT_CURRENCY_CONFIG.customCurrencySymbol,
+    customCurrencySymbol: customCurrencyImageUrl ? '¤' : reportedSymbol,
+    customCurrencyImageUrl,
     customCurrencyExchangeRate: toNumber(
       data.custom_currency_exchange_rate,
       DEFAULT_CURRENCY_CONFIG.customCurrencyExchangeRate
