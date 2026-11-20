@@ -29,6 +29,96 @@ import zhCN from '../locales/zh.json'
 
 const resources = { en, zhCN, zhTW, fr, ru, ja, vi }
 
+const regionNoticeKeys = [
+  'Model availability in your region',
+  'We detected you are accessing from a mainland China network. Below are the models you can use now and the ones available only to overseas networks.',
+  'This API service is strictly limited to personal learning and technical research use. Please do not use it for any commercial or illegal purpose.',
+  'Do not remind today',
+  'I understand',
+  'Available now',
+  'Overseas only',
+  'Total models',
+  'Search model names',
+  'Available to you now ({{count}})',
+  'No matching available models',
+  'Overseas networks only ({{count}})',
+  'The following models belong to groups that are not opened to mainland China networks. An overseas network environment is required to use them in the web interface.',
+  'No matching restricted models',
+]
+
+const siteSettingsKeys = [
+  'Mainland IP Web Visibility',
+  'Enable Mainland IP UI filtering',
+  'When enabled, Mainland China users only see the selected groups in the web interface. Model API calls are never restricted.',
+  'Groups allowed for Mainland IPs',
+  'Select allowed groups',
+  'The list controls web visibility only. An empty list hides every model group from Mainland China users; API Key calls remain unaffected.',
+  'Save IP visibility settings',
+  'Affiliate Commission',
+  'Commission is settled after each successful billing: the inviter receives the configured percentage of the invitee consumption. Amounts below one quota unit are carried over to the next settlement.',
+  'Enable affiliate commission',
+  'When disabled, no new commission is settled. Existing balances and history stay untouched.',
+  'Commission rate (%)',
+  'Percentage of the invitee consumption credited to the inviter. Allowed range is 0 to 100.',
+  'Save affiliate settings',
+  'Navigation order',
+  'Drag items or use the arrow buttons to change their order.',
+  '{{enabled}} / {{limit}} enabled',
+  'Drag to reorder',
+  'Custom navigation link',
+  'Custom link to a site page or external URL.',
+  'Navigation name',
+  'For example: Community',
+  'Jump link',
+  'Use a site path beginning with / or a complete HTTP(S) URL.',
+  '/page or https://example.com',
+  'Move up',
+  'Move down',
+  'Delete custom navigation link',
+  'Add custom navigation link',
+  'Save navigation',
+]
+
+const prefillGroupKeys = [
+  'Model Group',
+  'Reusable sets of models you can attach to channels.',
+  'Tag Group',
+  'Collections of metadata tags for bulk operations.',
+  'Endpoint Group',
+  'HTTP endpoint mappings shared across providers.',
+  'Group Type',
+  'No description provided',
+  'Items',
+  'No endpoint mappings configured.',
+  'No items configured yet.',
+  '+{{count}} more',
+  '{{count}} item',
+  '{{count}} items',
+]
+
+it.each(Object.entries(resources))(
+  'translates region notice, settings, and prefill group text in %s',
+  async (language, resource) => {
+    const i18n = createInstance()
+    await i18n.init({
+      lng: language,
+      fallbackLng: 'en',
+      resources: { [language]: resource, en },
+    })
+
+    for (const key of [
+      ...regionNoticeKeys,
+      ...siteSettingsKeys,
+      ...prefillGroupKeys,
+    ]) {
+      expect(i18n.exists(key, { lng: language })).toBe(true)
+      if (language !== 'en') {
+        expect(i18n.t(key)).not.toBe(i18n.t(key, { lng: 'en' }))
+      }
+    }
+  }
+)
+
 it.each(Object.entries(resources))(
   'resolves invoice submission and available commission in %s',
   async (language, resource) => {

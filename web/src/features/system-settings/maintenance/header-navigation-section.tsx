@@ -489,7 +489,9 @@ export function HeaderNavigationSection(props: HeaderNavigationSectionProps) {
                                 <FormControl>
                                   <Input
                                     {...field}
-                                    placeholder='/page or https://example.com'
+                                    placeholder={t(
+                                      '/page or https://example.com'
+                                    )}
                                   />
                                 </FormControl>
                                 <FormDescription>

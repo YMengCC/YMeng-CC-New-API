@@ -85,7 +85,6 @@ function ModelList(props: ModelListProps) {
 /**
  * 大陆访客的模型可见性提示弹窗。
  * 同时列出当前可用模型与仅海外可访问的模型，说明差异原因。
- * 该弹窗面向大陆网络访客，文案强制使用简体中文展示，不随界面语言切换。
  */
 export function RegionNoticeDialog() {
   const { t } = useTranslation()
@@ -104,9 +103,6 @@ export function RegionNoticeDialog() {
       overseas: notice.overseas_only_models.filter(match),
     }
   }, [notice, keyword])
-
-  const zh = (key: string, options?: Record<string, unknown>) =>
-    t(key, { ...options, lng: 'zhCN' })
 
   if (!notice) return null
 
@@ -132,11 +128,11 @@ export function RegionNoticeDialog() {
             </span>
           </div>
           <span className='text-base font-semibold tracking-tight'>
-            {zh('Model availability in your region')}
+            {t('Model availability in your region')}
           </span>
         </div>
       }
-      description={zh(
+      description={t(
         'We detected you are accessing from a mainland China network. Below are the models you can use now and the ones available only to overseas networks.'
       )}
       titleClassName='contents'
@@ -157,14 +153,14 @@ export function RegionNoticeDialog() {
               htmlFor='region-notice-snooze'
               className='text-muted-foreground min-w-0 text-sm leading-tight font-normal'
             >
-              {zh('Do not remind today')}
+              {t('Do not remind today')}
             </Label>
           </div>
           <Button
             onClick={() => close(dontRemindToday)}
             className='shrink-0 px-4 sm:w-auto'
           >
-            {zh('I understand')}
+            {t('I understand')}
           </Button>
         </div>
       }
@@ -173,7 +169,7 @@ export function RegionNoticeDialog() {
         <Alert className='border-info/25 bg-info/10 text-info'>
           <Info aria-hidden='true' />
           <AlertDescription className='text-info text-xs leading-relaxed sm:text-sm'>
-            {zh(
+            {t(
               'This API service is strictly limited to personal learning and technical research use. Please do not use it for any commercial or illegal purpose.'
             )}
           </AlertDescription>
@@ -183,7 +179,7 @@ export function RegionNoticeDialog() {
         <div className='grid grid-cols-3 gap-1.5 sm:gap-3'>
           <div className='border-success/25 bg-success/10 min-w-0 rounded-lg border p-2 sm:p-3'>
             <p className='text-success text-xs leading-tight font-medium'>
-              {zh('Available now')}
+              {t('Available now')}
             </p>
             <p className='text-success mt-1 text-xl leading-none font-semibold tabular-nums'>
               {notice.available_model_count}
@@ -191,7 +187,7 @@ export function RegionNoticeDialog() {
           </div>
           <div className='border-warning/30 bg-warning/10 min-w-0 rounded-lg border p-2 sm:p-3'>
             <p className='text-warning text-xs leading-tight font-medium'>
-              {zh('Overseas only')}
+              {t('Overseas only')}
             </p>
             <p className='text-warning mt-1 text-xl leading-none font-semibold tabular-nums'>
               {notice.overseas_model_count}
@@ -199,7 +195,7 @@ export function RegionNoticeDialog() {
           </div>
           <div className='border-border/60 bg-muted/30 min-w-0 rounded-lg border p-2 sm:p-3'>
             <p className='text-muted-foreground text-xs leading-tight font-medium'>
-              {zh('Total models')}
+              {t('Total models')}
             </p>
             <p className='mt-1 text-xl leading-none font-semibold tabular-nums'>
               {notice.total_model_count}
@@ -210,7 +206,7 @@ export function RegionNoticeDialog() {
         <Input
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder={zh('Search model names')}
+          placeholder={t('Search model names')}
         />
 
         {/* 移动端复用弹窗主体滚动，桌面端保留模型列表的独立滚动区域。 */}
@@ -223,7 +219,7 @@ export function RegionNoticeDialog() {
                   aria-hidden='true'
                 />
                 <h4 className='text-sm font-medium'>
-                  {zh('Available to you now ({{count}})', {
+                  {t('Available to you now ({{count}})', {
                     count: filtered.available.length,
                   })}
                 </h4>
@@ -231,7 +227,7 @@ export function RegionNoticeDialog() {
               <ModelList
                 models={filtered.available}
                 variant='available'
-                emptyText={zh('No matching available models')}
+                emptyText={t('No matching available models')}
               />
             </section>
 
@@ -241,20 +237,20 @@ export function RegionNoticeDialog() {
               <div className='flex items-center gap-2'>
                 <Lock className='text-warning size-4' aria-hidden='true' />
                 <h4 className='text-sm font-medium'>
-                  {zh('Overseas networks only ({{count}})', {
+                  {t('Overseas networks only ({{count}})', {
                     count: filtered.overseas.length,
                   })}
                 </h4>
               </div>
               <p className='text-muted-foreground text-xs'>
-                {zh(
+                {t(
                   'The following models belong to groups that are not opened to mainland China networks. An overseas network environment is required to use them in the web interface.'
                 )}
               </p>
               <ModelList
                 models={filtered.overseas}
                 variant='restricted'
-                emptyText={zh('No matching restricted models')}
+                emptyText={t('No matching restricted models')}
               />
             </section>
           </div>

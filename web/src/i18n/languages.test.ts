@@ -18,7 +18,28 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import { convertDetectedLanguage } from './languages'
+import {
+  convertDetectedLanguage,
+  normalizeInterfaceLanguage,
+} from './languages'
+
+describe('normalizeInterfaceLanguage', () => {
+  test.each([
+    ['zh', 'zhCN'],
+    ['zh-CN', 'zhCN'],
+    ['zh_cn', 'zhCN'],
+    ['zh-Hans-CN', 'zhCN'],
+    ['zhCN', 'zhCN'],
+    ['zh-TW', 'zhTW'],
+    ['zh_tw', 'zhTW'],
+    ['zh-Hant-TW', 'zhTW'],
+    ['zhTW', 'zhTW'],
+    ['fr', 'fr'],
+    ['unknown', 'en'],
+  ])('normalizes %s to %s', (value, expected) => {
+    expect(normalizeInterfaceLanguage(value)).toBe(expected)
+  })
+})
 
 describe('convertDetectedLanguage', () => {
   test('maps browser BCP-47 Chinese tags onto interface codes', () => {
