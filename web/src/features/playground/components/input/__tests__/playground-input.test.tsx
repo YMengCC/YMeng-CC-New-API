@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
+import { toast } from 'sonner'
 import { afterAll, beforeAll, expect, test, vi } from 'vitest'
 
 import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../../constants'
@@ -135,7 +136,7 @@ test('Enter submits the typed text and clears the composer', async () => {
   const textarea = screen.getByPlaceholderText('Ask anything')
   await user.type(textarea, 'hello{Enter}')
 
-  expect(onSubmit).toHaveBeenCalledWith('hello', undefined)
+  expect(onSubmit).toHaveBeenCalledWith('hello')
   expect(textarea).toHaveValue('')
 })
 
@@ -173,7 +174,12 @@ test('the submit control keeps a stable touch size across Send and Stop', () => 
 test('all four tool buttons have accessible names and are focusable', () => {
   renderInput()
 
-  for (const name of ['Attach', 'Search', 'Parameters', 'Clear chat history']) {
+  for (const name of [
+    'Attach files',
+    'Web search',
+    'Parameters',
+    'Clear chat history',
+  ]) {
     expect(screen.getByRole('button', { name })).toBeInTheDocument()
   }
 })
@@ -236,9 +242,9 @@ test('the mobile control bar stays on one row with a scrollable tool area', () =
   expect(bar.className).toContain('flex-nowrap')
   expect(bar.querySelector('.overflow-x-auto')).toBeInTheDocument()
   // Tool buttons keep a 40px touch target on mobile, 32px on desktop.
-  expect(screen.getByRole('button', { name: 'Attach' }).className).toContain(
-    'min-h-10'
-  )
+  expect(
+    screen.getByRole('button', { name: 'Attach files' }).className
+  ).toContain('min-h-10')
 })
 
 test('the composer uses a compact height on mobile and a larger one on desktop', () => {
@@ -265,13 +271,24 @@ function imageFile(name = 'cat.png') {
   return new File(['image-bytes'], name, { type: 'image/png' })
 }
 
-test('dropping an image attaches it and passes a data URL on submit', async () => {
+function pdfFile(name = 'report.pdf') {
+  return new File(['%PDF-1.7'], name, { type: 'application/pdf' })
+}
+
+function sizedFile(name: string, size: number) {
+  const file = new File(['x'], name, { type: 'application/pdf' })
+  Object.defineProperty(file, 'size', { value: size })
+  return file
+}
+
+test('dropping an image attaches it and submits the original file', async () => {
   const user = userEvent.setup()
   const { container, onSubmit } = renderInput()
   const form = container.querySelector('form')
   if (!form) throw new Error('composer form is missing')
+  const image = imageFile()
 
-  dropFiles(form, [imageFile()])
+  dropFiles(form, [image])
 
   await waitFor(() => expect(form.querySelector('img')).toBeInTheDocument())
   expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
@@ -282,33 +299,160 @@ test('dropping an image attaches it and passes a data URL on submit', async () =
   )
 
   await waitFor(() => expect(onSubmit).toHaveBeenCalled())
-  const [text, imageUrls] = onSubmit.mock.calls[0]
-  expect(text).toBe('what is this?')
-  expect(imageUrls).toHaveLength(1)
-  expect(imageUrls[0]).toMatch(/^data:image\/png;base64,/)
+  expect(onSubmit).toHaveBeenCalledWith('what is this?', [image])
 })
 
-test('an image can be submitted without typing any text', async () => {
+test('an attachment can be submitted without typing any text', async () => {
   const { container, onSubmit } = renderInput()
   const form = container.querySelector('form')
   if (!form) throw new Error('composer form is missing')
+  const pdf = pdfFile()
 
-  dropFiles(form, [imageFile()])
+  dropFiles(form, [pdf])
 
-  await waitFor(() => expect(form.querySelector('img')).toBeInTheDocument())
+  await waitFor(() =>
+    expect(screen.getByText('report.pdf')).toBeInTheDocument()
+  )
   fireEvent.submit(form)
 
-  await waitFor(() => expect(onSubmit).toHaveBeenCalled())
-  expect(onSubmit.mock.calls[0][0]).toBe('')
-  expect(onSubmit.mock.calls[0][1]).toHaveLength(1)
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('', [pdf]))
 })
 
-test('a non-image file is rejected', async () => {
+test('a file type outside PDF and images is rejected with a translated error', async () => {
+  const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 1)
   const { container } = renderInput()
   const form = container.querySelector('form')
   if (!form) throw new Error('composer form is missing')
 
   dropFiles(form, [new File(['text'], 'notes.txt', { type: 'text/plain' })])
 
-  await waitFor(() => expect(form.querySelector('img')).toBeNull())
+  await waitFor(() =>
+    expect(toastError).toHaveBeenCalledWith(
+      'Only PDF, PNG, JPEG, GIF, or WebP files are supported'
+    )
+  )
+  expect(screen.queryByText('notes.txt')).toBeNull()
+  toastError.mockRestore()
+})
+
+test('the paperclip opens the file picker from the keyboard', async () => {
+  const user = userEvent.setup()
+  renderInput()
+  const picker = screen.getByLabelText('Upload files')
+  const openPicker = vi.spyOn(picker, 'click')
+
+  screen.getByRole('button', { name: 'Attach files' }).focus()
+  await user.keyboard('{Enter}')
+
+  expect(openPicker).toHaveBeenCalledTimes(1)
+})
+
+test('a picked file is shown as an attachment and can be removed', async () => {
+  const user = userEvent.setup()
+  renderInput()
+
+  await user.upload(screen.getByLabelText('Upload files'), pdfFile())
+  expect(screen.getByText('report.pdf')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Remove attachment' }))
+  expect(screen.queryByText('report.pdf')).toBeNull()
+})
+
+test('more than four attachments are refused with a translated error', async () => {
+  const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 1)
+  const user = userEvent.setup()
+  renderInput()
+
+  await user.upload(
+    screen.getByLabelText('Upload files'),
+    ['a', 'b', 'c', 'd', 'e'].map((name) => imageFile(`${name}.png`))
+  )
+
+  expect(screen.getAllByRole('img')).toHaveLength(4)
+  expect(toastError).toHaveBeenCalledWith('You can attach up to 4 files')
+  toastError.mockRestore()
+})
+
+test('attachments above 20 MiB in total are refused with a translated error', async () => {
+  const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 1)
+  const user = userEvent.setup()
+  renderInput()
+  const files = ['a.pdf', 'b.pdf', 'c.pdf'].map((name) =>
+    sizedFile(name, 9 * 1024 * 1024)
+  )
+
+  await user.upload(screen.getByLabelText('Upload files'), files)
+
+  expect(screen.getByText('a.pdf')).toBeInTheDocument()
+  expect(screen.getByText('b.pdf')).toBeInTheDocument()
+  expect(screen.queryByText('c.pdf')).toBeNull()
+  expect(toastError).toHaveBeenCalledWith(
+    'Attachments must not exceed 20 MiB in total'
+  )
+  toastError.mockRestore()
+})
+
+test('a failed send with attachments keeps the text and files as a draft', async () => {
+  const user = userEvent.setup()
+  const onSubmit = vi.fn().mockRejectedValue(new Error('upload failed'))
+  renderInput({ onSubmit })
+
+  await user.upload(screen.getByLabelText('Upload files'), pdfFile())
+  const textarea = screen.getByPlaceholderText('Ask anything')
+  await user.type(textarea, 'summarize{Enter}')
+
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+  expect(textarea).toHaveValue('summarize')
+  expect(screen.getByText('report.pdf')).toBeInTheDocument()
+})
+
+test('an accepted send with attachments clears the text and files', async () => {
+  const user = userEvent.setup()
+  const onSubmit = vi.fn().mockResolvedValue(undefined)
+  renderInput({ onSubmit })
+
+  await user.upload(screen.getByLabelText('Upload files'), pdfFile())
+  const textarea = screen.getByPlaceholderText('Ask anything')
+  await user.type(textarea, 'summarize{Enter}')
+
+  await waitFor(() => expect(screen.queryByText('report.pdf')).toBeNull())
+  expect(textarea).toHaveValue('')
+})
+
+test('the web search toggle is off by default and turns on from the keyboard', async () => {
+  const user = userEvent.setup()
+  const onConfigChange = vi.fn()
+  renderInput({ onConfigChange })
+  const toggle = screen.getByRole('button', { name: 'Web search' })
+
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  toggle.focus()
+  await user.keyboard('{Enter}')
+
+  expect(onConfigChange).toHaveBeenCalledWith('web_search', true)
+})
+
+test('enabled web search shows the fee notice and the attachment hint', async () => {
+  const user = userEvent.setup()
+  renderInput({ config: { ...DEFAULT_CONFIG, web_search: true } })
+
+  expect(screen.getByRole('button', { name: 'Web search' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
+  expect(
+    screen.getByText(/may send your query to a search service/)
+  ).toBeInTheDocument()
+  expect(screen.queryByText(/Attached files are still sent/)).toBeNull()
+
+  await user.upload(screen.getByLabelText('Upload files'), pdfFile())
+  expect(screen.getByText(/Attached files are still sent/)).toBeInTheDocument()
+})
+
+test('disabled web search shows no search notice', () => {
+  renderInput()
+
+  expect(
+    screen.queryByText(/may send your query to a search service/)
+  ).toBeNull()
 })

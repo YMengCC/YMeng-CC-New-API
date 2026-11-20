@@ -61,6 +61,16 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 	}
 
+	// Playground attachments are dashboard-session uploads, not inference
+	// requests, so they skip the /pg media rewriting and text-masking chain.
+	playgroundFilesRouter := router.Group("/pg/files")
+	playgroundFilesRouter.Use(middleware.RouteTag("relay"))
+	playgroundFilesRouter.Use(middleware.SessionCookieOriginGuard(), middleware.UserAuth())
+	{
+		playgroundFilesRouter.POST("", middleware.UploadRateLimit(), controller.UploadPlaygroundFile)
+		playgroundFilesRouter.DELETE("/:id", controller.DeletePlaygroundFile)
+	}
+
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
@@ -70,7 +80,7 @@ func SetRelayRouter(router *gin.Engine) {
 	playgroundRouter.Use(middleware.UserAuth(), middleware.TextMasking())
 	playgroundRouter.Use(controller.PreparePlaygroundMedia, controller.RewritePlaygroundPath)
 	{
-		playgroundRouter.POST("/chat/completions", middleware.Distribute(), controller.Playground)
+		playgroundRouter.POST("/chat/completions", controller.PreparePlaygroundChatFiles, middleware.Distribute(), controller.Playground)
 
 		// Image generation mirrors the openai_image host-protocol chain, with
 		// UserAuth replacing TokenAuth. Unclaimed models fall back to the

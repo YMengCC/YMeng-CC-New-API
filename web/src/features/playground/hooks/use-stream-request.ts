@@ -29,22 +29,31 @@ import {
   parseStreamErrorDetails,
   parseStreamMessageUpdates,
 } from '../lib'
-import type { ChatCompletionRequest } from '../types'
+import type { ChatCompletionRequest, MessageSource } from '../types'
+
+type StreamEvent = Event & {
+  data?: string
+  readyState?: number
+  responseCode?: number
+}
 
 interface StreamEventSource {
   readyState?: number
   addEventListener: (
     type: string,
-    listener: (event: Event & { data?: string; readyState?: number }) => void
+    listener: (event: StreamEvent) => void
   ) => void
   close: () => void
   stream: () => void
 }
 
-interface StreamRequestCallbacks {
+export interface StreamRequestCallbacks {
   onUpdate: (type: 'reasoning' | 'content', chunk: string) => void
   onComplete: () => void
   onError: (error: string, errorCode?: string) => void
+  // The server accepted the request: a 2xx response started streaming.
+  onAccepted?: () => void
+  onSources?: (sources: MessageSource[]) => void
 }
 
 interface StreamRequestControllerRuntime {
@@ -99,9 +108,16 @@ export function createStreamRequestController(
     source = nextSource
     runtime.setStreaming(true)
     let completed = false
+    let accepted = false
 
     const isCurrent = () =>
       generation === requestGeneration && source === nextSource
+
+    const markAccepted = () => {
+      if (accepted) return
+      accepted = true
+      callbacks.onAccepted?.()
+    }
 
     const handleError = (errorMessage: string, errorCode?: string) => {
       if (!isCurrent() || completed) return
@@ -110,8 +126,17 @@ export function createStreamRequestController(
       closeActiveSource(nextSource)
     }
 
+    nextSource.addEventListener('open', (event) => {
+      if (!isCurrent() || completed) return
+      const status = event.responseCode
+      if (typeof status === 'number' && status >= 200 && status < 300) {
+        markAccepted()
+      }
+    })
+
     nextSource.addEventListener('message', (event) => {
       if (!isCurrent() || completed) return
+      markAccepted()
       const data = event.data ?? ''
       if (isStreamDoneMessage(data)) {
         completed = true
@@ -124,7 +149,11 @@ export function createStreamRequestController(
         const updates = parseStreamMessageUpdates(data)
 
         for (const update of updates) {
-          callbacks.onUpdate(update.type, update.chunk)
+          if (update.type === 'sources') {
+            callbacks.onSources?.(update.sources)
+          } else {
+            callbacks.onUpdate(update.type, update.chunk)
+          }
         }
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -202,17 +231,8 @@ export function useStreamRequest() {
   }
 
   const sendStreamRequest = useCallback(
-    (
-      payload: ChatCompletionRequest,
-      onUpdate: (type: 'reasoning' | 'content', chunk: string) => void,
-      onComplete: () => void,
-      onError: (error: string, errorCode?: string) => void
-    ) =>
-      controllerRef.current?.send(payload, {
-        onUpdate,
-        onComplete,
-        onError,
-      }),
+    (payload: ChatCompletionRequest, callbacks: StreamRequestCallbacks) =>
+      controllerRef.current?.send(payload, callbacks),
     []
   )
 

@@ -55,11 +55,12 @@ class FakeStreamSource {
     this.streamed = true
   }
 
-  emit(type: string, data?: string) {
+  emit(type: string, data?: string, responseCode?: number) {
     for (const listener of this.listeners.get(type) ?? []) {
-      listener({ data, readyState: this.readyState } as Event & {
+      listener({ data, readyState: this.readyState, responseCode } as Event & {
         data?: string
         readyState?: number
+        responseCode?: number
       })
     }
   }
@@ -195,5 +196,96 @@ describe('latest-wins stream request coordination', () => {
     )
 
     expect(updates).toEqual(['current'])
+  })
+
+  test('a 2xx stream open reports the request as accepted', async () => {
+    const sources: FakeStreamSource[] = []
+    const events: string[] = []
+    const controller = createStreamRequestController({
+      getHeaders: () => Promise.resolve({}),
+      createSource: () => {
+        const source = new FakeStreamSource()
+        sources.push(source)
+        return source
+      },
+      setStreaming: () => undefined,
+    })
+
+    await controller.send(payload, {
+      ...noopCallbacks,
+      onAccepted: () => events.push('accepted'),
+    })
+    sources[0]?.emit('open', undefined, 200)
+    sources[0]?.emit('message', JSON.stringify({ choices: [{ delta: {} }] }))
+
+    expect(events).toEqual(['accepted'])
+  })
+
+  test('an error status on open is not reported as accepted', async () => {
+    const sources: FakeStreamSource[] = []
+    const events: string[] = []
+    const controller = createStreamRequestController({
+      getHeaders: () => Promise.resolve({}),
+      createSource: () => {
+        const source = new FakeStreamSource()
+        sources.push(source)
+        return source
+      },
+      setStreaming: () => undefined,
+    })
+
+    await controller.send(payload, {
+      onUpdate: () => undefined,
+      onComplete: () => undefined,
+      onAccepted: () => events.push('accepted'),
+      onError: (_error, code) => events.push(`error:${code}`),
+    })
+    sources[0]?.emit('open', undefined, 400)
+    sources[0]?.emit(
+      'error',
+      JSON.stringify({
+        error: { message: 'expired', code: 'playground_file_unavailable' },
+      })
+    )
+
+    expect(events).toEqual(['error:playground_file_unavailable'])
+  })
+
+  test('streamed url citations are forwarded as sources', async () => {
+    const sources: FakeStreamSource[] = []
+    const received: unknown[] = []
+    const controller = createStreamRequestController({
+      getHeaders: () => Promise.resolve({}),
+      createSource: () => {
+        const source = new FakeStreamSource()
+        sources.push(source)
+        return source
+      },
+      setStreaming: () => undefined,
+    })
+
+    await controller.send(payload, {
+      ...noopCallbacks,
+      onSources: (items) => received.push(...items),
+    })
+    sources[0]?.emit(
+      'message',
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              annotations: [
+                {
+                  type: 'url_citation',
+                  url_citation: { url: 'https://example.com', title: 'Ex' },
+                },
+              ],
+            },
+          },
+        ],
+      })
+    )
+
+    expect(received).toEqual([{ href: 'https://example.com/', title: 'Ex' }])
   })
 })

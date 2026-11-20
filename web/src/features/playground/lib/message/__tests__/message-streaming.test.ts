@@ -79,6 +79,7 @@ describe('chat completion reasoning', () => {
     let message = createLoadingAssistantMessage(0)
 
     for (const update of updates) {
+      if (update.type === 'sources') continue
       message = applyStreamingChunk(message, update.type, update.chunk)
     }
     const completed = completeAssistantMessage(message)

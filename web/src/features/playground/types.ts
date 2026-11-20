@@ -45,6 +45,19 @@ export interface GeneratedMedia {
   duration?: number
 }
 
+// Display-only record of a file sent with a user message. It never carries
+// file content, data URLs or the single-use temporary upload id.
+export interface MessageAttachment {
+  name: string
+  mimeType: string
+  size: number
+}
+
+export interface MessageSource {
+  href: string
+  title: string
+}
+
 export interface Message {
   key: string
   from: MessageRole
@@ -56,7 +69,8 @@ export interface Message {
   media?: GeneratedMedia[]
   // Dropped/pasted images as data URLs. Session-only: never persisted.
   images?: string[]
-  sources?: { href: string; title: string }[]
+  attachments?: MessageAttachment[]
+  sources?: MessageSource[]
   reasoning?: {
     content: string
     duration: number
@@ -92,10 +106,14 @@ export interface ChatCompletionMessage {
 }
 
 export interface ContentPart {
-  type: 'text' | 'image_url'
+  type: 'text' | 'image_url' | 'playground_file'
   text?: string
   image_url?: {
     url: string
+  }
+  // Temporary upload reference; the server swaps it for the real file part.
+  playground_file?: {
+    id: string
   }
 }
 
@@ -110,6 +128,19 @@ export interface ChatCompletionRequest {
   frequency_penalty?: number
   presence_penalty?: number
   seed?: number
+  web_search_options?: Record<string, never>
+}
+
+// Result of dispatching a chat request: `accepted` once the server has taken
+// the request (stream opened or response received).
+export type ChatSendResult = 'accepted' | 'failed' | 'cancelled'
+
+export interface PlaygroundUploadedFile {
+  id: string
+  filename: string
+  mime_type: string
+  size: number
+  expires_at: number
 }
 
 export interface ChatCompletionChunk {
@@ -124,6 +155,7 @@ export interface ChatCompletionChunk {
       content?: string
       reasoning_content?: string | null
       reasoning?: string | null
+      annotations?: unknown
     }
     finish_reason: string | null
   }>
@@ -141,6 +173,7 @@ export interface ChatCompletionResponse {
       content: string
       reasoning_content?: string | null
       reasoning?: string | null
+      annotations?: unknown
     }
     finish_reason: string
   }>
@@ -216,6 +249,7 @@ export interface PlaygroundConfig {
   presence_penalty: number
   seed: number | null
   stream: boolean
+  web_search: boolean
 }
 
 export interface ParameterEnabled {

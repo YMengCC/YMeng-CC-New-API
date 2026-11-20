@@ -21,6 +21,7 @@ import { nanoid } from 'nanoid'
 import { MESSAGE_ROLES, MESSAGE_STATUS } from '../../constants'
 import type {
   Message,
+  MessageAttachment,
   MessageVersion,
   ChatCompletionMessage,
   ContentPart,
@@ -77,7 +78,8 @@ export function updateCurrentVersionContent(
 export function createUserMessage(
   content: string,
   createdAt: number = Date.now(),
-  images?: string[]
+  images?: string[],
+  attachments?: MessageAttachment[]
 ): Message {
   return {
     key: nanoid(),
@@ -85,6 +87,26 @@ export function createUserMessage(
     versions: [createMessageVersion(content)],
     createdAt,
     ...(images?.length ? { images } : {}),
+    ...(attachments?.length
+      ? { attachments: attachments.map(toMessageAttachment) }
+      : {}),
+  }
+}
+
+/**
+ * Keep only the display fields of an attached file. The result is what the
+ * conversation history stores; it never holds content or upload ids.
+ */
+export function toMessageAttachment(file: {
+  name: string
+  mimeType?: string
+  type?: string
+  size: number
+}): MessageAttachment {
+  return {
+    name: file.name,
+    mimeType: file.mimeType ?? file.type ?? '',
+    size: file.size,
   }
 }
 

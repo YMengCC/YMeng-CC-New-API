@@ -96,3 +96,25 @@ test('submitting after a drop forwards the file to onSubmit', async () => {
     'data:image/png;base64,AAAA'
   )
 })
+
+test('a long attachment name stays within the composer and truncates', async () => {
+  const { container } = renderComposer(vi.fn())
+  const form = container.querySelector('form')
+  if (!form) throw new Error('form is missing')
+
+  const name = 'a-very-long-quarterly-financial-report-name-2026.png'
+  const file = new File(['pixels'], name, { type: 'image/png' })
+  fireEvent.drop(form, {
+    dataTransfer: {
+      types: ['Files'],
+      files: [file],
+      items: [{ kind: 'file', getAsFile: () => file }],
+    },
+  })
+
+  const label = await screen.findByText(name)
+  const chip = label.parentElement
+  if (!chip) throw new Error('attachment chip is missing')
+  expect(label).toHaveClass('truncate', 'min-w-0')
+  expect(chip).toHaveClass('max-w-full', 'min-w-0')
+})

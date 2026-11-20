@@ -24,6 +24,7 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { sendChatCompletion } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import {
+  applyMessageSources,
   applyStreamingChunk,
   buildChatCompletionPayload,
   updateAssistantMessageWithError,
@@ -35,13 +36,24 @@ import {
   isAssistantMessageFinal,
   isAssistantMessagePending,
 } from '../lib'
-import type { Message, PlaygroundConfig, ParameterEnabled } from '../types'
+import type {
+  ChatSendResult,
+  Message,
+  MessageSource,
+  PlaygroundConfig,
+  ParameterEnabled,
+} from '../types'
 import { useStreamRequest } from './use-stream-request'
 
 interface UseChatHandlerOptions {
   config: PlaygroundConfig
   parameterEnabled: ParameterEnabled
   onMessageUpdate: (updater: (prev: Message[]) => Message[]) => void
+}
+
+type PendingSend = {
+  generation: number
+  resolve: (result: ChatSendResult) => void
 }
 
 const KNOWN_ERROR_MESSAGES = new Set<string>(Object.values(ERROR_MESSAGES))
@@ -83,6 +95,30 @@ export function useChatHandler({
     reasoning: '',
   })
   const streamFlushTimerRef = useRef<number | null>(null)
+  const pendingSendRef = useRef<PendingSend | null>(null)
+
+  // Resolve the caller's promise for a request exactly once.
+  const settleSend = useCallback(
+    (generation: number, result: ChatSendResult) => {
+      const pending = pendingSendRef.current
+      if (!pending || pending.generation !== generation) return
+      pendingSendRef.current = null
+      pending.resolve(result)
+    },
+    []
+  )
+
+  const beginSend = useCallback(
+    (generation: number): Promise<ChatSendResult> => {
+      const previous = pendingSendRef.current
+      pendingSendRef.current = null
+      previous?.resolve('cancelled')
+      return new Promise<ChatSendResult>((resolve) => {
+        pendingSendRef.current = { generation, resolve }
+      })
+    },
+    []
+  )
 
   const discardPendingStreamUpdates = useCallback((generation: number) => {
     if (streamFlushTimerRef.current !== null) {
@@ -165,6 +201,9 @@ export function useChatHandler({
       }
       abortControllerRef.current?.abort()
       abortControllerRef.current = null
+      const pending = pendingSendRef.current
+      pendingSendRef.current = null
+      pending?.resolve('cancelled')
     },
     []
   )
@@ -199,6 +238,20 @@ export function useChatHandler({
       scheduleStreamFlush(generation)
     },
     [scheduleStreamFlush]
+  )
+
+  // Citations are only shown when the upstream actually returned them.
+  const handleStreamSources = useCallback(
+    (generation: number, sources: MessageSource[]) => {
+      if (generation !== requestGenerationRef.current) return
+      onMessageUpdate((prev) => {
+        if (generation !== requestGenerationRef.current) return prev
+        return updateLastAssistantMessage(prev, (message) =>
+          applyMessageSources(message, sources)
+        )
+      })
+    },
+    [onMessageUpdate]
   )
 
   // Handle stream complete
@@ -243,31 +296,44 @@ export function useChatHandler({
 
   // Send streaming chat request
   const sendStreamingChat = useCallback(
-    (messages: Message[]) => {
+    (messages: Message[], fileIds?: string[]): Promise<ChatSendResult> => {
       const generation = requestGenerationRef.current + 1
       requestGenerationRef.current = generation
       abortControllerRef.current?.abort()
       abortControllerRef.current = null
       discardPendingStreamUpdates(generation)
+      const result = beginSend(generation)
       setIsRequesting(true)
       const payload = buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        fileIds
       )
-      void sendStreamRequest(
-        payload,
-        (type, chunk) => handleStreamUpdate(generation, type, chunk),
-        () => handleStreamComplete(generation),
-        (error, errorCode) => handleStreamError(generation, error, errorCode)
-      )
+      void sendStreamRequest(payload, {
+        onUpdate: (type, chunk) => handleStreamUpdate(generation, type, chunk),
+        onSources: (sources) => handleStreamSources(generation, sources),
+        onAccepted: () => settleSend(generation, 'accepted'),
+        onComplete: () => {
+          settleSend(generation, 'accepted')
+          handleStreamComplete(generation)
+        },
+        onError: (error, errorCode) => {
+          settleSend(generation, 'failed')
+          handleStreamError(generation, error, errorCode)
+        },
+      })
+      return result
     },
     [
       config,
       parameterEnabled,
       sendStreamRequest,
       discardPendingStreamUpdates,
+      beginSend,
+      settleSend,
       handleStreamUpdate,
+      handleStreamSources,
       handleStreamComplete,
       handleStreamError,
     ]
@@ -275,11 +341,12 @@ export function useChatHandler({
 
   // Send non-streaming chat request
   const sendNonStreamingChat = useCallback(
-    async (messages: Message[]) => {
+    (messages: Message[], fileIds?: string[]): Promise<ChatSendResult> => {
       const payload = buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        fileIds
       )
       const generation = requestGenerationRef.current + 1
       const abortController = new AbortController()
@@ -289,72 +356,83 @@ export function useChatHandler({
       discardPendingStreamUpdates(generation)
       abortControllerRef.current?.abort()
       abortControllerRef.current = abortController
+      const result = beginSend(generation)
+      setIsRequesting(true)
 
-      try {
-        setIsRequesting(true)
-        const response = await sendChatCompletion(
-          payload,
-          abortController.signal
-        )
-        if (
-          abortController.signal.aborted ||
-          requestGenerationRef.current !== generation
-        ) {
-          return
-        }
+      const request = async () => {
+        try {
+          const response = await sendChatCompletion(
+            payload,
+            abortController.signal
+          )
+          if (
+            abortController.signal.aborted ||
+            requestGenerationRef.current !== generation
+          ) {
+            return
+          }
+          settleSend(generation, 'accepted')
 
-        if (!hasChatCompletionChoice(response)) {
-          handleStreamError(generation, ERROR_MESSAGES.API_REQUEST_ERROR)
-          return
-        }
+          if (!hasChatCompletionChoice(response)) {
+            handleStreamError(generation, ERROR_MESSAGES.API_REQUEST_ERROR)
+            return
+          }
 
-        onMessageUpdate((prev) => {
-          if (requestGenerationRef.current !== generation) return prev
-          return updateLastAssistantMessage(prev, (message) => {
-            const updatedMessage = applyChatCompletionResponse(
-              message,
-              response
-            )
+          onMessageUpdate((prev) => {
+            if (requestGenerationRef.current !== generation) return prev
+            return updateLastAssistantMessage(prev, (message) => {
+              const updatedMessage = applyChatCompletionResponse(
+                message,
+                response
+              )
 
-            return updatedMessage ?? message
+              return updatedMessage ?? message
+            })
           })
-        })
-      } catch (error: unknown) {
-        if (
-          abortController.signal.aborted ||
-          requestGenerationRef.current !== generation
-        ) {
-          return
-        }
+        } catch (error: unknown) {
+          if (
+            abortController.signal.aborted ||
+            requestGenerationRef.current !== generation
+          ) {
+            return
+          }
 
-        const { errorCode, errorMessage } = parseRequestErrorDetails(error)
-        handleStreamError(generation, errorMessage, errorCode)
-      } finally {
-        if (requestGenerationRef.current === generation) {
-          abortControllerRef.current = null
-          setIsRequesting(false)
+          settleSend(generation, 'failed')
+          const { errorCode, errorMessage } = parseRequestErrorDetails(error)
+          handleStreamError(generation, errorMessage, errorCode)
+        } finally {
+          if (requestGenerationRef.current === generation) {
+            abortControllerRef.current = null
+            setIsRequesting(false)
+          }
         }
       }
+      void request()
+
+      return result
     },
     [
       config,
       parameterEnabled,
       stopStream,
       discardPendingStreamUpdates,
+      beginSend,
+      settleSend,
       onMessageUpdate,
       handleStreamError,
     ]
   )
 
-  // Send chat request (stream or non-stream based on config)
+  /**
+   * Send a chat request (stream or non-stream based on config). `fileIds`
+   * attach temporary uploads to the last user message. The promise resolves
+   * once the server accepted the request, it failed, or it was cancelled.
+   */
   const sendChat = useCallback(
-    (messages: Message[]) => {
-      if (config.stream) {
-        sendStreamingChat(messages)
-      } else {
-        sendNonStreamingChat(messages)
-      }
-    },
+    (messages: Message[], fileIds?: string[]): Promise<ChatSendResult> =>
+      config.stream
+        ? sendStreamingChat(messages, fileIds)
+        : sendNonStreamingChat(messages, fileIds),
     [config.stream, sendStreamingChat, sendNonStreamingChat]
   )
 
@@ -362,6 +440,7 @@ export function useChatHandler({
   const stopGeneration = useCallback(() => {
     const stoppedGeneration = requestGenerationRef.current
     flushStreamUpdates(stoppedGeneration)
+    settleSend(stoppedGeneration, 'cancelled')
     const idleGeneration = stoppedGeneration + 1
     requestGenerationRef.current = idleGeneration
     discardPendingStreamUpdates(idleGeneration)
@@ -380,6 +459,7 @@ export function useChatHandler({
   }, [
     stopStream,
     flushStreamUpdates,
+    settleSend,
     discardPendingStreamUpdates,
     onMessageUpdate,
   ])

@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import i18next from 'i18next'
+
 import { getPricing } from '@/features/pricing/api'
 import { getTaskArtifacts } from '@/features/usage-logs/api'
 import { api } from '@/lib/api'
@@ -29,6 +31,7 @@ import type {
   ImageGenerationResponse,
   ModelOption,
   GroupOption,
+  PlaygroundUploadedFile,
   VideoGenerationRequest,
   VideoTaskResponse,
 } from './types'
@@ -45,6 +48,40 @@ export async function sendChatCompletion(
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data
+}
+
+/**
+ * Upload one chat attachment to the temporary playground file store. The
+ * returned id is single-use: it is consumed by the next chat request.
+ */
+export async function uploadPlaygroundFile(
+  file: File,
+  signal?: AbortSignal
+): Promise<PlaygroundUploadedFile> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await api.post(API_ENDPOINTS.PLAYGROUND_FILES, form, {
+    signal,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  const data = requireServerSuccess(res.data) as {
+    data?: PlaygroundUploadedFile
+  }
+  if (!data?.data || typeof data.data.id !== 'string' || !data.data.id) {
+    throw new Error(i18next.t('Attachment upload failed'))
+  }
+  return data.data
+}
+
+/**
+ * Delete an uncommitted upload. The endpoint is idempotent.
+ */
+export async function deletePlaygroundFile(id: string): Promise<void> {
+  const res = await api.delete(
+    `${API_ENDPOINTS.PLAYGROUND_FILES}/${encodeURIComponent(id)}`,
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  requireServerSuccess(res.data)
 }
 
 /**

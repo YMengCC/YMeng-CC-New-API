@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
 import type { PlaygroundConfig, ParameterEnabled, Message } from '../../types'
+import { toSafeCitationUrl } from '../message/message-citations'
 import {
   finalizeMessage,
   isAssistantMessagePending,
@@ -249,9 +250,16 @@ export function normalizeStoredMessageForLoad(message: Message): Message {
   if (images && images.length !== message.images?.length) {
     changed = true
   }
+  // Citations are rendered as links; drop anything that is not http(s).
+  const sources = message.sources?.filter((source) =>
+    Boolean(toSafeCitationUrl(source.href))
+  )
+  if (sources && sources.length !== message.sources?.length) {
+    changed = true
+  }
 
   const normalized = changed
-    ? { ...message, versions, reasoning, media, images }
+    ? { ...message, versions, reasoning, media, images, sources }
     : message
 
   if (!isAssistantMessagePending(normalized)) {

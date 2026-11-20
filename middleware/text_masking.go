@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -66,15 +65,7 @@ func TextMasking() gin.HandlerFunc {
 			return
 		}
 		// Every parser and passthrough/retry reader must replay the masked body.
-		common.CleanupBodyStorage(c)
-		c.Set(common.KeyRequestBody, masked)
-		c.Set(gin.BodyBytesKey, masked)
-		c.Request.Body = io.NopCloser(bytes.NewReader(masked))
-		c.Request.ContentLength = int64(len(masked))
-		c.Request.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(masked)), nil
-		}
-		c.Request.Header.Set("Content-Length", fmt.Sprint(len(masked)))
+		common.ReplaceRequestBody(c, masked)
 		writer := &textMaskResponseWriter{
 			ResponseWriter: c.Writer,
 			session:        session,

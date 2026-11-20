@@ -171,6 +171,8 @@ func TestPlaygroundMediaRoutesAreRegistered(t *testing.T) {
 		"POST /pg/videos",
 		"GET /pg/videos/:task_id",
 		"GET /pg/videos/:task_id/content",
+		"POST /pg/files",
+		"DELETE /pg/files/:id",
 	} {
 		require.True(t, registered[key], "playground route %s is not registered", key)
 	}

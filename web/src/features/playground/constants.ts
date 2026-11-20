@@ -35,6 +35,7 @@ export const MESSAGE_STATUS = {
 // API endpoints
 export const API_ENDPOINTS = {
   CHAT_COMPLETIONS: '/pg/chat/completions',
+  PLAYGROUND_FILES: '/pg/files',
   IMAGE_GENERATIONS: '/pg/images/generations',
   VIDEO_GENERATIONS: '/pg/videos',
   VIDEO_TASK: '/pg/videos',
@@ -55,6 +56,14 @@ export const MAX_ATTACHED_IMAGES = 4
 export const MAX_ATTACHED_IMAGE_BYTES = 10 * 1024 * 1024
 export const IMAGE_ACCEPT = 'image/*'
 
+// Chat attachments are uploaded to the temporary /pg/files store. These limits
+// mirror the server-side checks, which remain authoritative.
+export const CHAT_ATTACHMENT_ACCEPT =
+  'application/pdf,image/png,image/jpeg,image/gif,image/webp'
+export const MAX_CHAT_ATTACHMENTS = 4
+export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
+export const MAX_CHAT_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024
+
 // Default group — uses 'default' as the safe fallback; auto-group is
 // only selected when the backend confirms it is available for the user.
 export const DEFAULT_GROUP = 'default' as const
@@ -70,6 +79,7 @@ export const DEFAULT_CONFIG: PlaygroundConfig = {
   presence_penalty: 0,
   seed: null,
   stream: true,
+  web_search: false,
 }
 
 export const DEFAULT_PARAMETER_ENABLED: ParameterEnabled = {

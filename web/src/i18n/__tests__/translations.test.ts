@@ -48,6 +48,32 @@ it.each(Object.entries(resources))(
   }
 )
 
+it.each(Object.entries(resources))(
+  'translates the playground attachment upload server messages in %s',
+  async (language, resource) => {
+    const i18n = createInstance()
+    await i18n.init({
+      lng: language,
+      fallbackLng: 'en',
+      resources: { [language]: resource, en },
+    })
+
+    for (const key of [
+      'Only PDF, PNG, JPEG, GIF, or WebP files are supported',
+      'Each file must not exceed 10 MiB',
+      'Too many pending attachments; send or remove some first',
+      'Attachment storage is busy; try again later',
+      'Attachments are unavailable while text masking is enabled',
+      'Attachment upload failed',
+      'Playground attachments require a browser session',
+      'Attachment not found or already used',
+    ]) {
+      expect(i18n.exists(key, { lng: language })).toBe(true)
+      if (language !== 'en') expect(i18n.t(key)).not.toBe(key)
+    }
+  }
+)
+
 it('uses the requested Chinese translations', async () => {
   const i18n = createInstance()
   await i18n.init({ lng: 'zhCN', fallbackLng: 'en', resources })

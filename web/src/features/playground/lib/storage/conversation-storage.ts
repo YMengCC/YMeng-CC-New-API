@@ -29,7 +29,10 @@ import type {
   PlaygroundConversation,
   PlaygroundHistory,
 } from '../../types'
-import { getMessageContent } from '../message/message-utils'
+import {
+  getMessageContent,
+  toMessageAttachment,
+} from '../message/message-utils'
 import {
   getUserStorageKey,
   loadMessages,
@@ -88,13 +91,17 @@ function stripSessionOnlyMedia(message: Message): Message {
   const mediaChanged = media && media.length !== (message.media?.length ?? 0)
   const imagesChanged =
     images && images.length !== (message.images?.length ?? 0)
+  // History writes skip schema parsing, so rebuild attachments from their
+  // display fields to guarantee no content, data URL or upload id is stored.
+  const attachments = message.attachments?.map(toMessageAttachment)
 
-  if (!mediaChanged && !imagesChanged) return message
+  if (!mediaChanged && !imagesChanged && !attachments) return message
 
   return {
     ...message,
     ...(mediaChanged ? { media } : {}),
     ...(imagesChanged ? { images } : {}),
+    ...(attachments ? { attachments } : {}),
   }
 }
 

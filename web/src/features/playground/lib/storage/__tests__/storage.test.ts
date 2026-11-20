@@ -259,3 +259,56 @@ test('pruneHistory strips session-only images but keeps remote media URLs', () =
   expect(message.images).toEqual(['https://example.com/remote.png'])
   expect(message.media?.[0].url).toBe('https://example.com/cat.png')
 })
+
+test('attachments persist only display info, never file content, data URLs or upload ids', () => {
+  useAuthStore.getState().auth.setUser({ id: 6, username: 'A', role: 1 })
+  const leakyAttachment = {
+    name: 'report.pdf',
+    mimeType: 'application/pdf',
+    size: 2048,
+    id: 'tmp-upload-id',
+    url: 'data:application/pdf;base64,JVBERi0=',
+    file: { content: 'secret-bytes' },
+  }
+  const conversation = createConversation([
+    {
+      key: 'with-attachment',
+      from: 'user',
+      versions: [{ id: 'v1', content: 'summarize' }],
+      attachments: [leakyAttachment],
+    },
+  ])
+  saveHistory({ activeId: conversation.id, conversations: [conversation] })
+
+  const raw =
+    localStorage.getItem(getUserStorageKey(STORAGE_KEYS.HISTORY) ?? '') ?? ''
+  expect(raw).toContain('report.pdf')
+  expect(raw).not.toContain('tmp-upload-id')
+  expect(raw).not.toContain('data:application/pdf')
+  expect(raw).not.toContain('secret-bytes')
+
+  expect(loadHistory().conversations[0].messages[0].attachments).toEqual([
+    { name: 'report.pdf', mimeType: 'application/pdf', size: 2048 },
+  ])
+})
+
+test('stored citations that are not http(s) links are dropped on load', () => {
+  useAuthStore.getState().auth.setUser({ id: 8, username: 'A', role: 1 })
+  const conversation = createConversation([
+    {
+      key: 'cited',
+      from: 'assistant',
+      versions: [{ id: 'v1', content: 'answer' }],
+      status: 'complete',
+      sources: [
+        { href: 'https://example.com/a', title: 'A' },
+        { href: 'javascript:alert(1)', title: 'bad' },
+      ],
+    },
+  ])
+  saveHistory({ activeId: conversation.id, conversations: [conversation] })
+
+  expect(loadHistory().conversations[0].messages[0].sources).toEqual([
+    { href: 'https://example.com/a', title: 'A' },
+  ])
+})

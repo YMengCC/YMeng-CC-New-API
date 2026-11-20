@@ -1016,4 +1016,13 @@ export const STATIC_I18N_KEYS = [
   'Endpoints, parameters, and examples for every supported protocol.',
   'Step-by-step setup guides for popular AI clients.',
   'Troubleshooting errors and answers about accounts, keys, and billing.',
+  // Playground attachment upload errors returned as server message keys.
+  'Only PDF, PNG, JPEG, GIF, or WebP files are supported',
+  'Each file must not exceed 10 MiB',
+  'Too many pending attachments; send or remove some first',
+  'Attachment storage is busy; try again later',
+  'Attachments are unavailable while text masking is enabled',
+  'Attachment upload failed',
+  'Playground attachments require a browser session',
+  'Attachment not found or already used',
 ] as const

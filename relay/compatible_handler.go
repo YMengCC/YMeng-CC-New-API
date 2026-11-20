@@ -102,7 +102,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
-		if common.DebugEnabled {
+		if common.DebugEnabled && !service.PlaygroundRequestCarriesFiles(c) {
 			if debugBytes, bErr := storage.Bytes(); bErr == nil {
 				logger.LogDebug(c, "requestBody: %s", debugBytes)
 			}
@@ -138,7 +138,12 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			}
 		}
 
-		logger.LogDebug(c, "text request body: %s", jsonData)
+		if apiErr := service.VerifyPlaygroundDelivery(c, jsonData); apiErr != nil {
+			return apiErr
+		}
+		if !service.PlaygroundRequestCarriesFiles(c) {
+			logger.LogDebug(c, "text request body: %s", jsonData)
+		}
 
 		body, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 		if err != nil {

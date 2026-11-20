@@ -95,8 +95,12 @@ import { cn } from '@/lib/utils'
 // Provider Context & Types
 // ============================================================================
 
+// The original File is kept beside the preview so callers that upload raw
+// files (see `submitRawFiles`) never need to re-read a blob URL.
+export type PromptInputFile = FileUIPart & { id: string; file?: File }
+
 export type AttachmentsContext = {
-  files: (FileUIPart & { id: string })[]
+  files: PromptInputFile[]
   add: (files: File[] | FileList) => void
   remove: (id: string) => void
   clear: () => void
@@ -170,9 +174,7 @@ export function PromptInputProvider({
   const clearInput = useCallback(() => setTextInput(''), [])
 
   // ----- attachments state (global when wrapped)
-  const [attachements, setAttachements] = useState<
-    (FileUIPart & { id: string })[]
-  >([])
+  const [attachements, setAttachements] = useState<PromptInputFile[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const openRef = useRef<() => void>(() => {})
 
@@ -188,6 +190,7 @@ export function PromptInputProvider({
         url: URL.createObjectURL(file),
         mediaType: file.type,
         filename: file.name,
+        file,
       })),
     ])
   }, [])
@@ -273,7 +276,7 @@ export const usePromptInputAttachments = () => {
 }
 
 export type PromptInputAttachmentProps = HTMLAttributes<HTMLDivElement> & {
-  data: FileUIPart & { id: string }
+  data: PromptInputFile
   className?: string
 }
 
@@ -299,7 +302,7 @@ export function PromptInputAttachment({
         render={
           <div
             className={cn(
-              'group border-border hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 relative flex h-8 cursor-default items-center gap-1.5 rounded-md border px-1.5 text-sm font-medium transition-all select-none',
+              'group border-border hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 relative flex h-8 max-w-full min-w-0 cursor-default items-center gap-1.5 rounded-md border px-1.5 text-sm font-medium transition-all select-none',
               className
             )}
             key={data.id}
@@ -325,7 +328,7 @@ export function PromptInputAttachment({
           </div>
           <Button
             aria-label={t('Remove attachment')}
-            className='absolute inset-0 size-5 cursor-pointer rounded p-0 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 [&>svg]:size-2.5'
+            className='absolute inset-0 size-5 cursor-pointer rounded p-0 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100 [&>svg]:size-2.5'
             onClick={(e) => {
               e.stopPropagation()
               attachments.remove(data.id)
@@ -338,7 +341,7 @@ export function PromptInputAttachment({
           </Button>
         </div>
 
-        <span className='flex-1 truncate'>{attachmentLabel}</span>
+        <span className='min-w-0 flex-1 truncate'>{attachmentLabel}</span>
       </PromptInputHoverCardTrigger>
       <PromptInputHoverCardContent className='w-auto p-2'>
         <div className='w-auto space-y-3'>
@@ -375,7 +378,7 @@ export type PromptInputAttachmentsProps = Omit<
   HTMLAttributes<HTMLDivElement>,
   'children'
 > & {
-  children: (attachment: FileUIPart & { id: string }) => ReactNode
+  children: (attachment: PromptInputFile) => ReactNode
 }
 
 export function PromptInputAttachments({
@@ -422,13 +425,23 @@ export const PromptInputActionAddAttachments = ({
 export type PromptInputMessage = {
   text?: string
   files?: FileUIPart[]
+  /** Original files, provided only when `submitRawFiles` is enabled. */
+  rawFiles?: File[]
 }
+
+export type PromptInputErrorCode =
+  | 'max_files'
+  | 'max_file_size'
+  | 'max_total_size'
+  | 'accept'
 
 export type PromptInputProps = Omit<
   HTMLAttributes<HTMLFormElement>,
   'onSubmit' | 'onError'
 > & {
-  accept?: string // e.g., "image/*" or leave undefined for any
+  // A comma-separated list of MIME types, `type/*` wildcards or `.ext`
+  // suffixes, e.g. "image/*" or "application/pdf,image/png".
+  accept?: string
   multiple?: boolean
   // When true, accepts drops anywhere on document. Default false (opt-in).
   globalDrop?: boolean
@@ -437,10 +450,16 @@ export type PromptInputProps = Omit<
   // Minimal constraints
   maxFiles?: number
   maxFileSize?: number // bytes
-  onError?: (err: {
-    code: 'max_files' | 'max_file_size' | 'accept'
-    message: string
-  }) => void
+  // Combined size of all attached files (bytes). Local attachments only.
+  maxTotalFileSize?: number
+  onError?: (err: { code: PromptInputErrorCode; message: string }) => void
+  /**
+   * When true, onSubmit receives the original files in `rawFiles` instead of
+   * data URLs, and the form is not reset so the caller decides when the text
+   * is cleared. Return a rejected promise to keep text and attachments as a
+   * retryable draft. Default false.
+   */
+  submitRawFiles?: boolean
   onSubmit: (
     message: PromptInputMessage,
     event: FormEvent<HTMLFormElement>
@@ -452,6 +471,22 @@ export type PromptInputProps = Omit<
   groupClassName?: string
 }
 
+function fileMatchesAccept(file: File, accept?: string): boolean {
+  const tokens = (accept ?? '')
+    .split(',')
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean)
+  if (tokens.length === 0) return true
+
+  const type = file.type.toLowerCase()
+  const name = file.name.toLowerCase()
+  return tokens.some((token) => {
+    if (token.startsWith('.')) return name.endsWith(token)
+    if (token.endsWith('/*')) return type.startsWith(token.slice(0, -1))
+    return type === token
+  })
+}
+
 export const PromptInput = ({
   className,
   groupClassName,
@@ -461,7 +496,9 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  maxTotalFileSize,
   onError,
+  submitRawFiles = false,
   onSubmit,
   children,
   ...props
@@ -476,31 +513,22 @@ export const PromptInput = ({
   const formRef = useRef<HTMLFormElement | null>(null)
 
   // ----- Local attachments (only used when no provider)
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([])
+  const [items, setItems] = useState<PromptInputFile[]>([])
   const files = usingProvider ? controller.attachments.files : items
+  const localItemsRef = useRef(items)
+
+  useEffect(() => {
+    localItemsRef.current = items
+  }, [items])
 
   const openFileDialogLocal = useCallback(() => {
     inputRef.current?.click()
   }, [])
 
-  const matchesAccept = useCallback(
-    (f: File) => {
-      if (!accept || accept.trim() === '') {
-        return true
-      }
-      if (accept.includes('image/*')) {
-        return f.type.startsWith('image/')
-      }
-      // NOTE: keep simple; expand as needed
-      return true
-    },
-    [accept]
-  )
-
   const addLocal = useCallback(
     (fileList: File[] | FileList) => {
       const incoming = [...fileList]
-      const accepted = incoming.filter((f) => matchesAccept(f))
+      const accepted = incoming.filter((f) => fileMatchesAccept(f, accept))
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: 'accept',
@@ -532,20 +560,36 @@ export const PromptInput = ({
             message: t('Too many files. Some were not added.'),
           })
         }
-        const next: (FileUIPart & { id: string })[] = []
+        let totalSize = prev.reduce(
+          (total, item) => total + (item.file?.size ?? 0),
+          0
+        )
+        const next: PromptInputFile[] = []
         for (const file of capped) {
+          if (
+            typeof maxTotalFileSize === 'number' &&
+            totalSize + file.size > maxTotalFileSize
+          ) {
+            onError?.({
+              code: 'max_total_size',
+              message: t('All files exceed the maximum size.'),
+            })
+            break
+          }
+          totalSize += file.size
           next.push({
             id: nanoid(),
             type: 'file',
             url: URL.createObjectURL(file),
             mediaType: file.type,
             filename: file.name,
+            file,
           })
         }
         return [...prev, ...next]
       })
     },
-    [matchesAccept, maxFiles, maxFileSize, onError, t]
+    [accept, maxFiles, maxFileSize, maxTotalFileSize, onError, t]
   )
 
   const add = useMemo(
@@ -659,15 +703,17 @@ export const PromptInput = ({
     }
   }, [add, globalDrop])
 
+  // Revoke preview URLs that are still held when the input unmounts. remove()
+  // and clear() revoke their own URLs, so attachments that remain on screen
+  // keep a valid preview while others are added.
   useEffect(
     () => () => {
-      if (!usingProvider) {
-        for (const f of files) {
-          if (f.url) URL.revokeObjectURL(f.url)
-        }
+      if (usingProvider) return
+      for (const f of localItemsRef.current) {
+        if (f.url) URL.revokeObjectURL(f.url)
       }
     },
-    [usingProvider, files]
+    [usingProvider]
   )
 
   const handleChange: ChangeEventHandler<HTMLInputElement> = (event) => {
@@ -710,6 +756,49 @@ export const PromptInput = ({
           return (formData.get('message') as string) || ''
         })()
 
+    const finishSubmit = (convertedFiles: FileUIPart[], rawFiles?: File[]) => {
+      try {
+        const result = onSubmit(
+          rawFiles
+            ? { text, files: convertedFiles, rawFiles }
+            : { text, files: convertedFiles },
+          event
+        )
+
+        // Handle both sync and async onSubmit
+        if (result instanceof Promise) {
+          result
+            .then(() => {
+              clear()
+              if (usingProvider) {
+                controller.textInput.clear()
+              }
+            })
+            .catch(() => {
+              // Don't clear on error - user may want to retry
+            })
+        } else {
+          // Sync function completed without throwing, clear attachments
+          clear()
+          if (usingProvider) {
+            controller.textInput.clear()
+          }
+        }
+      } catch {
+        // Don't clear on error - user may want to retry
+      }
+    }
+
+    if (submitRawFiles) {
+      // The caller owns the text and uploads the original files; keep the
+      // form untouched so a failed submit leaves the draft in place.
+      finishSubmit(
+        files.map(({ id: _id, file: _file, ...item }) => item),
+        files.flatMap((item) => (item.file ? [item.file] : []))
+      )
+      return
+    }
+
     // Reset form immediately after capturing text to avoid race condition
     // where user input during async blob conversion would be lost
     if (!usingProvider) {
@@ -718,7 +807,7 @@ export const PromptInput = ({
 
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
-      files.map(async ({ id, ...item }) => {
+      files.map(async ({ id: _id, file: _file, ...item }) => {
         if (item.url && item.url.startsWith('blob:')) {
           return {
             ...item,
@@ -728,33 +817,7 @@ export const PromptInput = ({
         return item
       })
     )
-      .then((convertedFiles: FileUIPart[]) => {
-        try {
-          const result = onSubmit({ text, files: convertedFiles }, event)
-
-          // Handle both sync and async onSubmit
-          if (result instanceof Promise) {
-            result
-              .then(() => {
-                clear()
-                if (usingProvider) {
-                  controller.textInput.clear()
-                }
-              })
-              .catch(() => {
-                // Don't clear on error - user may want to retry
-              })
-          } else {
-            // Sync function completed without throwing, clear attachments
-            clear()
-            if (usingProvider) {
-              controller.textInput.clear()
-            }
-          }
-        } catch {
-          // Don't clear on error - user may want to retry
-        }
-      })
+      .then((convertedFiles: FileUIPart[]) => finishSubmit(convertedFiles))
       .catch(() => {
         // Blob conversion failed; keep the attachments so the user can retry.
       })

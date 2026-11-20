@@ -24,16 +24,11 @@ import { toast } from 'sonner'
 import {
   PromptInputButton,
   PromptInputTools,
+  usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
+import { Toggle } from '@/components/ui/toggle'
 import {
   Tooltip,
   TooltipContent,
@@ -41,11 +36,6 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import {
-  ATTACHMENT_ACTIONS,
-  getAttachmentActionNotice,
-  getSearchActionNotice,
-} from '../../lib'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
 import { PLAYGROUND_TOOL_BUTTON_CLASS } from './input-tool-styles'
 import { PlaygroundParameterPanel } from './playground-parameter-panel'
@@ -76,19 +66,8 @@ export function PlaygroundInputTools({
   parameterEnabled,
 }: PlaygroundInputToolsProps) {
   const { t } = useTranslation()
+  const attachments = usePromptInputAttachments()
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
-
-  const handleFileAction = (action: string) => {
-    const notice = getAttachmentActionNotice(action)
-    toast.info(t(notice.title), {
-      description: notice.description,
-    })
-  }
-
-  const handleSearchAction = () => {
-    const notice = getSearchActionNotice()
-    toast.info(t(notice.title))
-  }
 
   const handleClearMessages = () => {
     onClearMessages?.()
@@ -100,58 +79,51 @@ export function PlaygroundInputTools({
     <>
       <PromptInputTools className='border-border/60 bg-background rounded-xl border p-0.5 shadow-xs md:p-1'>
         <Tooltip>
-          <DropdownMenu>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={
-                    <PromptInputButton
-                      aria-label={t('Attach')}
-                      className={PLAYGROUND_TOOL_BUTTON_CLASS}
-                      disabled={disabled}
-                      variant='ghost'
-                    />
-                  }
-                >
-                  <PaperclipIcon aria-hidden='true' />
-                </DropdownMenuTrigger>
-              }
-            />
-            <TooltipContent>
-              <p>{t('Attach')}</p>
-            </TooltipContent>
-            <DropdownMenuContent align='start'>
-              <DropdownMenuGroup>
-                {ATTACHMENT_ACTIONS.map(({ action, icon: Icon, label }) => (
-                  <DropdownMenuItem
-                    key={action}
-                    onClick={() => handleFileAction(action)}
-                  >
-                    <Icon aria-hidden='true' />
-                    {t(label)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <TooltipTrigger
+            render={
+              <PromptInputButton
+                aria-label={t('Attach files')}
+                className={PLAYGROUND_TOOL_BUTTON_CLASS}
+                disabled={disabled}
+                onClick={attachments.openFileDialog}
+                variant='ghost'
+              >
+                <PaperclipIcon aria-hidden='true' />
+              </PromptInputButton>
+            }
+          />
+          <TooltipContent>
+            <p>{t('Attach PDF or image files')}</p>
+          </TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger
             render={
-              <PromptInputButton
-                aria-label={t('Search')}
-                className={PLAYGROUND_TOOL_BUTTON_CLASS}
+              <Toggle
+                aria-label={t('Web search')}
+                className={cn(
+                  PLAYGROUND_TOOL_BUTTON_CLASS,
+                  'aria-pressed:bg-primary/10 aria-pressed:text-primary'
+                )}
                 disabled={disabled}
-                onClick={handleSearchAction}
-                variant='ghost'
+                onPressedChange={(pressed) =>
+                  onConfigChange('web_search', pressed)
+                }
+                pressed={config.web_search}
               >
                 <GlobeIcon aria-hidden='true' />
-              </PromptInputButton>
+              </Toggle>
             }
           />
-          <TooltipContent>
-            <p>{t('Search')}</p>
+          <TooltipContent className='max-w-64'>
+            <p>
+              {config.web_search
+                ? t(
+                    'Web search is on. The selected upstream may send your query to a search service and may charge tool fees.'
+                  )
+                : t('Web search')}
+            </p>
           </TooltipContent>
         </Tooltip>
 

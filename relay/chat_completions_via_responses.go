@@ -143,6 +143,9 @@ func relayResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, adaptor 
 			return nil, newAPIErrorFromParamOverride(err)
 		}
 	}
+	if apiErr := service.VerifyPlaygroundDelivery(c, jsonData); apiErr != nil {
+		return nil, apiErr
+	}
 
 	body, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 	if err != nil {

@@ -33,15 +33,12 @@ import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
 
 import {
-  IMAGE_ACCEPT,
-  MAX_ATTACHED_IMAGE_BYTES,
-  MAX_ATTACHED_IMAGES,
+  CHAT_ATTACHMENT_ACCEPT,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  MAX_CHAT_ATTACHMENTS_TOTAL_BYTES,
 } from '../../constants'
-import {
-  canSubmitInput,
-  getSubmittableImageUrls,
-  getSubmittableInputText,
-} from '../../lib'
+import { canSubmitInput, getSubmittableInputText } from '../../lib'
 import type {
   ModelOption,
   GroupOption,
@@ -49,11 +46,16 @@ import type {
   PlaygroundConfig,
 } from '../../types'
 import { PlaygroundInputControls } from './playground-input-controls'
+import { PlaygroundInputNotices } from './playground-input-notices'
 import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
   config: PlaygroundConfig
-  onSubmit: (text: string, imageUrls?: string[]) => void
+  /**
+   * Called with the message text and the original attached files. With
+   * files, a rejected promise keeps the text and files as a retryable draft.
+   */
+  onSubmit: (text: string, files?: File[]) => Promise<void> | void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -100,23 +102,37 @@ export function PlaygroundInput({
   const [text, setText] = useState('')
   const [isDragActive, setIsDragActive] = useState(false)
 
-  const handleSubmit = (message: PromptInputMessage) => {
-    if (disabled || isGenerating) return
-    const imageUrls = getSubmittableImageUrls(message)
-    if (!canSubmitInput(message, imageUrls.length > 0)) return
+  const handleSubmit = async (message: PromptInputMessage) => {
+    const files = message.rawFiles ?? []
+    if (
+      disabled ||
+      isGenerating ||
+      !canSubmitInput(message, files.length > 0)
+    ) {
+      // Rejecting keeps any attached files in the composer.
+      throw new Error('The composer cannot submit right now')
+    }
 
     const submittableText = getSubmittableInputText(message, disabled) ?? ''
-    onSubmit(submittableText, imageUrls.length > 0 ? imageUrls : undefined)
+    if (files.length === 0) {
+      void onSubmit(submittableText)
+      setText('')
+      return
+    }
+
+    await onSubmit(submittableText, files)
     setText('')
   }
 
   const handleError = (error: { code: string; message: string }) => {
     if (error.code === 'accept') {
-      toast.error(t('Only image files are supported'))
+      toast.error(t('Only PDF, PNG, JPEG, GIF, or WebP files are supported'))
     } else if (error.code === 'max_file_size') {
-      toast.error(t('Image must not exceed 10 MiB'))
+      toast.error(t('Each file must not exceed 10 MiB'))
+    } else if (error.code === 'max_total_size') {
+      toast.error(t('Attachments must not exceed 20 MiB in total'))
     } else {
-      toast.error(t('You can attach up to 4 images'))
+      toast.error(t('You can attach up to 4 files'))
     }
   }
 
@@ -134,21 +150,25 @@ export function PlaygroundInput({
       onDrop={() => setIsDragActive(false)}
     >
       <PromptInput
-        accept={IMAGE_ACCEPT}
+        accept={CHAT_ATTACHMENT_ACCEPT}
         className='relative'
         groupClassName={cn(
           'bg-background border-border shadow-sm ring-1 ring-border/40 rounded-2xl overflow-hidden transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-md',
           isDragActive && 'border-primary bg-primary/5 ring-primary/30'
         )}
-        maxFiles={MAX_ATTACHED_IMAGES}
-        maxFileSize={MAX_ATTACHED_IMAGE_BYTES}
+        maxFiles={MAX_CHAT_ATTACHMENTS}
+        maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
+        maxTotalFileSize={MAX_CHAT_ATTACHMENTS_TOTAL_BYTES}
+        multiple
         onError={handleError}
         onSubmit={handleSubmit}
+        submitRawFiles
       >
         <PromptInputBody>
           <PromptInputAttachments>
             {(file) => <PromptInputAttachment data={file} />}
           </PromptInputAttachments>
+          <PlaygroundInputNotices webSearch={config.web_search} />
         </PromptInputBody>
         <PromptInputTextarea
           autoComplete='off'
@@ -197,7 +217,7 @@ export function PlaygroundInput({
         <Kbd>Shift + Enter</Kbd>
         <span>{t('for a new line')}</span>
         <span aria-hidden='true'>·</span>
-        <span>{t('Drop images here or paste')}</span>
+        <span>{t('Drop PDF or image files here or paste')}</span>
       </p>
     </div>
   )

@@ -24,6 +24,7 @@ type RequestErrorLike = {
     data?: {
       error?: {
         code?: string
+        message?: string
       }
       message?: string
     }
@@ -37,11 +38,15 @@ export type RequestErrorDetails = {
 
 export function parseRequestErrorDetails(error: unknown): RequestErrorDetails {
   const requestError = error as RequestErrorLike
+  const data = requestError?.response?.data
 
   return {
-    errorCode: requestError?.response?.data?.error?.code || undefined,
+    errorCode: data?.error?.code || undefined,
+    // OpenAI-shaped relay errors carry the (already localized) reason in
+    // `error.message`; prefer it over the generic Axios status text.
     errorMessage:
-      requestError?.response?.data?.message ||
+      data?.error?.message ||
+      data?.message ||
       requestError?.message ||
       ERROR_MESSAGES.API_REQUEST_ERROR,
   }

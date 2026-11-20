@@ -117,6 +117,20 @@ func CleanupBodyStorage(c *gin.Context) {
 	}
 }
 
+// ReplaceRequestBody swaps the request body for a rewritten one. Every later
+// parser and every pass-through or retry reader replays the new body.
+func ReplaceRequestBody(c *gin.Context, body []byte) {
+	CleanupBodyStorage(c)
+	c.Set(KeyRequestBody, body)
+	c.Set(gin.BodyBytesKey, body)
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+	c.Request.ContentLength = int64(len(body))
+	c.Request.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(body)), nil
+	}
+	c.Request.Header.Set("Content-Length", fmt.Sprint(len(body)))
+}
+
 func UnmarshalBodyReusable(c *gin.Context, v any) error {
 	storage, err := GetBodyStorage(c)
 	if err != nil {

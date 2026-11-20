@@ -79,14 +79,11 @@ export function Playground() {
 
   const modelMode =
     models.find((model) => model.value === config.model)?.mode ?? 'chat'
-  const combinedGenerating = isGenerating || isMediaGenerating
-  const stopAll = () => {
-    stopGeneration()
-    stopMediaGeneration()
-  }
 
   const {
     editingMessageKey,
+    isUploading,
+    cancelPendingSend,
     handleSendMessage,
     handleRegenerateMessage,
     handleEditMessage,
@@ -98,6 +95,14 @@ export function Playground() {
     updateMessages,
     sendChat,
   })
+
+  const isChatBusy = isGenerating || isUploading
+  const combinedGenerating = isChatBusy || isMediaGenerating
+  const stopAll = () => {
+    cancelPendingSend()
+    stopGeneration()
+    stopMediaGeneration()
+  }
 
   const startNewConversation = () => {
     stopAll()
@@ -133,7 +138,7 @@ export function Playground() {
 
   const sidebarProps = {
     history,
-    isGenerating,
+    isGenerating: isChatBusy,
     onNewConversation: startNewConversation,
     onRenameConversation: renameConversation,
     onSelectConversation: selectConversation,
@@ -181,7 +186,7 @@ export function Playground() {
           <Button
             aria-label={t('New chat')}
             className='gap-2'
-            disabled={isGenerating}
+            disabled={isChatBusy}
             onClick={startNewConversation}
             size='sm'
             variant='outline'
@@ -200,7 +205,9 @@ export function Playground() {
             onEditMessage={handleEditMessage}
             onDeleteMessage={handleDeleteMessage}
             onSelectPrompt={
-              modelMode === 'chat' ? handleSendMessage : undefined
+              modelMode === 'chat'
+                ? (prompt) => void handleSendMessage(prompt)
+                : undefined
             }
             isGenerating={combinedGenerating}
             editingKey={editingMessageKey}

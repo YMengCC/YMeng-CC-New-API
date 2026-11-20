@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { FileTextIcon, ImageIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -34,6 +35,7 @@ import {
   SourcesContent,
   SourcesTrigger,
 } from '@/components/ai-elements/sources'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 import { MESSAGE_STATUS } from '../../constants'
@@ -181,6 +183,33 @@ export function PlaygroundMessageContent({
             />
           ))}
         </div>
+      )}
+
+      {message.attachments && message.attachments.length > 0 && (
+        <ul
+          aria-label={t('Attachments')}
+          className='mb-1 flex flex-wrap gap-1.5'
+        >
+          {message.attachments.map((attachment) => {
+            const Icon = attachment.mimeType.startsWith('image/')
+              ? ImageIcon
+              : FileTextIcon
+            return (
+              <li
+                key={`${attachment.name}-${attachment.size}-${attachment.mimeType}`}
+              >
+                <Badge
+                  className='h-6 max-w-60'
+                  title={`${attachment.name} (${attachment.mimeType})`}
+                  variant='outline'
+                >
+                  <Icon aria-hidden='true' />
+                  <span className='truncate'>{attachment.name}</span>
+                </Badge>
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       {message.media && message.media.length > 0 && (

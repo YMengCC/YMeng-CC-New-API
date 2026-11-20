@@ -375,6 +375,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /pg/videos":                 accessTokenSessionRule,
 	"GET /pg/videos/:task_id":         accessTokenSessionRule,
 	"GET /pg/videos/:task_id/content": accessTokenSessionRule,
+	"POST /pg/files":                  accessTokenSessionRule,
+	"DELETE /pg/files/:id":            accessTokenSessionRule,
 }
 
 var (

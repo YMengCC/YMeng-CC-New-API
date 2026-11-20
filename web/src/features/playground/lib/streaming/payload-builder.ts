@@ -16,9 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { MAX_IMAGE_N, MAX_VIDEO_DURATION_SECONDS } from '../../constants'
+import {
+  MAX_IMAGE_N,
+  MAX_VIDEO_DURATION_SECONDS,
+  MESSAGE_ROLES,
+} from '../../constants'
 import type {
   ChatCompletionRequest,
+  ContentPart,
   ImageGenerationOptions,
   ImageGenerationRequest,
   Message,
@@ -83,23 +88,47 @@ export function buildVideoGenerationPayload(
 }
 
 /**
- * Build API request payload from messages and config
+ * Build API request payload from messages and config.
+ *
+ * `fileIds` are single-use temporary uploads for the message being sent now.
+ * They are attached to the last message only, and only when it is a user
+ * message; earlier turns are always sent without their attachments.
  */
 export function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
-  parameterEnabled: ParameterEnabled
+  parameterEnabled: ParameterEnabled,
+  fileIds: string[] = []
 ): ChatCompletionRequest {
   // Filter and format valid messages
   const processedMessages = messages
     .filter(isValidMessage)
     .map(formatMessageForAPI)
 
+  const lastMessage = processedMessages.at(-1)
+  if (fileIds.length > 0 && lastMessage?.role === MESSAGE_ROLES.USER) {
+    const parts: ContentPart[] =
+      typeof lastMessage.content === 'string'
+        ? [{ type: 'text', text: lastMessage.content }]
+        : [...lastMessage.content]
+    for (const id of fileIds) {
+      parts.push({ type: 'playground_file', playground_file: { id } })
+    }
+    processedMessages[processedMessages.length - 1] = {
+      ...lastMessage,
+      content: parts,
+    }
+  }
+
   const payload: ChatCompletionRequest = {
     model: config.model,
     group: config.group,
     messages: processedMessages,
     stream: config.stream,
+  }
+
+  if (config.web_search) {
+    payload.web_search_options = {}
   }
 
   if (parameterEnabled.temperature) {

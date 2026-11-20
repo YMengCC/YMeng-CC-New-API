@@ -38,6 +38,7 @@ export const playgroundConfigSchema = z.object({
   presence_penalty: z.number().optional(),
   seed: z.number().nullable().optional(),
   stream: z.boolean().optional(),
+  web_search: z.boolean().optional(),
 })
 
 export const parameterEnabledSchema = z.object({
@@ -88,6 +89,14 @@ const generatedMediaSchema = z.object({
   duration: z.number().optional(),
 })
 
+// Attachments keep display metadata only. Zod strips unknown keys, so file
+// content, data URLs or upload ids can never reach storage through this field.
+const attachmentSchema = z.object({
+  name: z.string().max(255),
+  mimeType: z.string().max(128),
+  size: z.number().nonnegative(),
+})
+
 const messageSchema = z.object({
   key: z.string(),
   from: messageRoleSchema,
@@ -97,6 +106,7 @@ const messageSchema = z.object({
   completedAt: z.number().optional(),
   durationMs: z.number().optional(),
   media: z.array(generatedMediaSchema).max(16).optional(),
+  attachments: z.array(attachmentSchema).max(16).optional(),
   sources: z.array(sourceSchema).optional(),
   reasoning: reasoningSchema.optional(),
   isReasoningStreaming: z.boolean().optional(),

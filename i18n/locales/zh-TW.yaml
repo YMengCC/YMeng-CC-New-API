@@ -43,6 +43,10 @@ relay.group_upstream_saturated: "目前分組上游負載已飽和，請稍後�
 relay.retry_get_channel_failed: "獲取分組 {{.Group}} 下模型 {{.Model}} 的可用管道失敗（retry）：{{.Error}}"
 relay.retry_no_available_channel: "分組 {{.Group}} 下模型 {{.Model}} 的可用管道不存在（retry）"
 relay.access_token_unsupported: "暫不支援使用 access token"
+playground.file_unavailable: "附件已過期、已被使用或不在目前伺服器上，請重新上傳。"
+playground.file_invalid: "附件引用無效。僅最新一則使用者訊息可附帶最多 4 個、合計不超過 20 MiB 的檔案。"
+playground.attachment_unsupported: "所選管道無法接收該 PDF 附件，請求未傳送。請更換模型或分組。"
+playground.web_search_unsupported: "所選管道不支援該模型的聯網搜尋。請關閉聯網搜尋，或更換模型或分組。"
 
 # Emails and the name of the token created at registration
 user.default_token_name: "{{.Username}}的初始令牌"
