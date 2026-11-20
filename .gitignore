@@ -45,3 +45,7 @@ relaykit/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
 go.work.sum
+
+# 萌萌的安全小屋 downloads are built by safehouse/cmd/pack
+/safehousebundle/artifacts/*
+!/safehousebundle/artifacts/.gitkeep

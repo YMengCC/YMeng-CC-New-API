@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -821,4 +824,58 @@ func TestSearchUsersFiltersByUserIdQuery(t *testing.T) {
 		assert.False(t, body.Success, query)
 		assert.Equal(t, "Invalid user ID", body.MessageKey, query)
 	}
+}
+
+func TestSafehouseDownloadsOfferOnlyNamedBuilds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	build := []byte("windows build")
+	sum := sha256.Sum256(build)
+	serve := func(downloads *safehouseDownloads, name string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/user/safehouse/downloads/"+name, nil)
+		if name == "" {
+			downloads.list(c)
+			return recorder
+		}
+		c.Params = gin.Params{{Key: "name", Value: name}}
+		downloads.download(c)
+		return recorder
+	}
+	downloads := newSafehouseDownloads(fstest.MapFS{
+		".gitkeep":                             {Data: []byte{}},
+		"mengmeng-safehouse-windows-amd64.exe": {Data: build},
+		"notes.txt":                            {Data: []byte("not offered")},
+	})
+
+	t.Run("listing reports exact size and sha256", func(t *testing.T) {
+		recorder := serve(downloads, "")
+		require.Equal(t, http.StatusOK, recorder.Code)
+		var response struct {
+			Success bool                  `json:"success"`
+			Data    safehouseDownloadList `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		assert.True(t, response.Success)
+		assert.Equal(t, []safehouseArtifact{{
+			Platform: "windows", Arch: "amd64", FileName: "mengmeng-safehouse-windows-amd64.exe",
+			Size: int64(len(build)), SHA256: hex.EncodeToString(sum[:]),
+		}}, response.Data.Items)
+	})
+	t.Run("download serves the file as an attachment", func(t *testing.T) {
+		recorder := serve(downloads, "mengmeng-safehouse-windows-amd64.exe")
+		require.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, build, recorder.Body.Bytes())
+		assert.Equal(t, "application/octet-stream", recorder.Header().Get("Content-Type"))
+		assert.Contains(t, recorder.Header().Get("Content-Disposition"), "attachment")
+	})
+	t.Run("unlisted names are not found", func(t *testing.T) {
+		for _, name := range []string{"notes.txt", ".gitkeep", "../go.mod", "mengmeng-safehouse-linux-amd64.tar.gz"} {
+			assert.Equal(t, http.StatusNotFound, serve(downloads, name).Code, name)
+		}
+	})
+	t.Run("a build without artifacts lists none", func(t *testing.T) {
+		recorder := serve(newSafehouseDownloads(fstest.MapFS{".gitkeep": {Data: []byte{}}}), "")
+		assert.Contains(t, recorder.Body.String(), `"items":[]`)
+	})
 }

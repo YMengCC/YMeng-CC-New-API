@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="safehouse-token" content="{{SAFEHOUSE_TOKEN}}">
+  <meta name="referrer" content="no-referrer">
+  <title>萌萌的安全小屋</title>
+  <link rel="icon" href="/icon.png">
+  <link rel="stylesheet" href="/panel.css">
+  <script src="/panel.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <img class="logo" src="/icon.png" alt="" width="64" height="64">
+      <div class="hero-text">
+        <h1 data-i18n="title">萌萌的安全小屋</h1>
+        <p class="subtitle" data-i18n="subtitle">识别出的敏感内容在本机替换，站点只收到处理后的文本。</p>
+      </div>
+      <span class="pill" id="status" role="status" aria-live="polite"></span>
+    </header>
+
+    <main class="grid">
+      <section class="card" aria-labelledby="site-title">
+        <h2 id="site-title" data-i18n="siteTitle">连接的站点</h2>
+        <p class="site" id="site-current"></p>
+        <form id="site-form" class="row" autocomplete="off">
+          <label class="sr-only" for="site-input" data-i18n="siteLabel">站点地址</label>
+          <input id="site-input" type="url" inputmode="url" placeholder="https://example.com" required>
+          <button type="submit" class="btn primary" data-i18n="connect">连接</button>
+        </form>
+        <p class="hint" data-i18n="siteHint">在站点「安全与访问 → 隐私」里点「连接本站」可自动填写。只支持 https 地址。</p>
+      </section>
+
+      <section class="card" aria-labelledby="client-title">
+        <h2 id="client-title" data-i18n="clientTitle">在客户端里填写这些地址</h2>
+        <ul class="endpoints" id="endpoints"></ul>
+        <p class="hint" data-i18n="clientHint">API Key 不用改，照常填写站点发给你的 Key。</p>
+      </section>
+
+      <section class="card" aria-labelledby="stats-title">
+        <h2 id="stats-title" data-i18n="statsTitle">本次运行</h2>
+        <dl class="stats">
+          <div><dt data-i18n="statRequests">已保护请求</dt><dd id="stat-requests">0</dd></div>
+          <div><dt data-i18n="statMasked">已替换敏感信息</dt><dd id="stat-masked">0</dd></div>
+          <div><dt data-i18n="statRejected">已在本机拦截</dt><dd id="stat-rejected">0</dd></div>
+          <div><dt data-i18n="statFailed">还原失败</dt><dd id="stat-failed">0</dd></div>
+        </dl>
+        <p class="hint" data-i18n="statsHint">只统计次数，不记录任何内容。</p>
+      </section>
+
+      <section class="card" aria-labelledby="try-title">
+        <h2 id="try-title" data-i18n="tryTitle">试一试</h2>
+        <label class="sr-only" for="try-input" data-i18n="tryLabel">要检测的文本</label>
+        <textarea spellcheck="false" autocomplete="off" id="try-input" rows="3"></textarea>
+        <div class="row end">
+          <button type="button" class="btn" id="try-button" data-i18n="tryButton">看看站点会收到什么</button>
+        </div>
+        <pre class="output" id="try-output" hidden></pre>
+        <p class="hint" data-i18n="tryHint">在本机检测，文本不会发出这台电脑。</p>
+      </section>
+
+      <section class="card wide" aria-labelledby="settings-title">
+        <h2 id="settings-title" data-i18n="settingsTitle">设置</h2>
+        <div class="settings">
+          <label class="switch" id="autostart-row" hidden>
+            <input type="checkbox" id="autostart">
+            <span class="track" aria-hidden="true"></span>
+            <span data-i18n="autostart">开机时自动启动</span>
+          </label>
+          <button type="button" class="btn danger" id="quit" data-i18n="quit">退出安全小屋</button>
+        </div>
+        <ul class="limits">
+          <li data-i18n="limitProtocols">支持纯文本的 Chat Completions、Completions、Responses、Claude Messages 与 Gemini 请求。</li>
+          <li data-i18n="limitTools">带工具调用、图片音频或服务端会话状态的请求会在本机拦截，不会发给站点。</li>
+          <li data-i18n="limitDetector">检测邮箱、中国大陆手机号、身份证号、IPv4、常见 API 密钥和私钥；可能漏检，不是保密保证。</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span data-i18n="footer">萌萌的安全小屋</span>
+      <span id="version"></span>
+    </footer>
+  </div>
+
+  <dialog id="confirm" aria-labelledby="confirm-title">
+    <form method="dialog" class="dialog">
+      <h2 id="confirm-title" data-i18n="confirmTitle">连接到这个站点？</h2>
+      <p class="confirm-origin" id="confirm-origin"></p>
+      <p data-i18n="confirmBody">之后经过安全小屋的请求（包括你的 API Key）都会发送到这个站点。只连接你信任的站点。</p>
+      <p class="warning" id="confirm-replace" hidden></p>
+      <div class="row end">
+        <button value="cancel" class="btn" data-i18n="cancel">取消</button>
+        <button value="ok" class="btn primary" data-i18n="confirm">连接</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

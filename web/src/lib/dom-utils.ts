@@ -32,3 +32,15 @@ export function applyFaviconToDom(url: string) {
     // Ignore malformed URLs
   }
 }
+
+/** Save a fetched file through a temporary object URL. */
+export function saveBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}

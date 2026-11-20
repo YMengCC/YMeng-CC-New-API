@@ -21,6 +21,8 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - The Go gateway handles management APIs, upstream relay, billing, and background tasks across `router/`, `middleware/`, `controller/`, `service/`, `model/`, and `relay/`.
 - `relaykit/` is an independent Go module for protocol DTOs and conversions; transport, authentication, database access, and billing stay in the host.
 - `tokenkit/` is an independent Go module for text and image token counting and estimation; request parsing, file loading, and billing stay in the host.
+- `textmask/` is an independent, standard-library-only Go module for reversible text masking (萌萌的安全小屋), shared by the gateway middleware and the local program.
+- `safehouse/` is an independent Go module for the 萌萌的安全小屋 local program (`mengmeng-safehouse`); `safehouse/cmd/pack` cross-compiles its downloads into `safehousebundle/artifacts/`, which the gateway embeds.
 - JavaScript task plugins live in `plugins/tasks/`, run through `pkg/jsplugin/`, and integrate with host task polling and settlement.
 - `web/` is the React frontend (see `web/AGENTS.md`); `electron/` is the desktop wrapper.
 
@@ -77,10 +79,10 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - Remove ineffective `omitempty` tags on non-pointer struct fields only after confirming the active JSON encoder preserves the same output. Do not change field types or omission behavior as part of a style cleanup; optional relay scalar fields must still follow the pointer rules below.
 - Format modified Go files with `gofmt` and remove unused imports after these changes.
 
-**relaykit and tokenkit module independence:** The `relaykit/` and `tokenkit/` Go modules MUST remain independently buildable.
+**Independent module rules:** The `relaykit/`, `tokenkit/`, `textmask/`, and `safehouse/` Go modules MUST remain independently buildable.
 
-- Code under `relaykit/` or `tokenkit/` MUST NOT import or depend on packages from the root `new-api` module, or rely on root-only configuration, generated files, or workspace wiring. `tokenkit/` also MUST NOT depend on `relaykit/`.
-- Any change affecting `relaykit/`, `tokenkit/`, or their public APIs MUST be verified with `GOWORK=off go build ./...` inside that module; a successful root-module build is not sufficient.
+- Code under `relaykit/`, `tokenkit/`, `textmask/`, or `safehouse/` MUST NOT import or depend on packages from the root `new-api` module, or rely on root-only configuration, generated files, or workspace wiring. `tokenkit/` also MUST NOT depend on `relaykit/`. `textmask/` MUST depend only on the Go standard library (tests may use testify), and `safehouse/` may depend only on `textmask/` and CGO-free libraries so every platform cross-compiles with `CGO_ENABLED=0`.
+- Any change affecting `relaykit/`, `tokenkit/`, `textmask/`, `safehouse/`, or their public APIs MUST be verified with `GOWORK=off go build ./...` inside that module; a successful root-module build is not sufficient. Changes to `safehouse/` MUST also pass `go run ./cmd/pack -out <temp dir>` so every target still cross-compiles.
 
 **JSON package:** In the root Go module, all JSON marshal/unmarshal operations MUST use the wrapper functions in `common/json.go`:
 

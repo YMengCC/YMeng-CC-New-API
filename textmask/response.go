@@ -2,10 +2,9 @@ package textmask
 
 import (
 	"bytes"
+	"encoding/json"
 	"strconv"
 	"strings"
-
-	"github.com/QuantumNous/new-api/common"
 )
 
 func streamIndex(value object, field string, fallback int) (string, error) {
@@ -78,7 +77,7 @@ func (s *Session) restoreContent(value object, field, key string, stream, final 
 		if err != nil {
 			return err
 		}
-		parts[i], err = common.Marshal(part)
+		parts[i], err = json.Marshal(part)
 		if err != nil {
 			return ErrUnsupported
 		}
@@ -153,7 +152,7 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 					if e = s.restoreMessage(message, key, stream && field == "delta", final); e != nil {
 						return e
 					}
-					choice[field], _ = common.Marshal(message)
+					choice[field], _ = json.Marshal(message)
 				}
 			}
 			if err = s.restoreField(choice, "text", key+"/text", stream, final); err != nil {
@@ -169,7 +168,7 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 			if err = noToolResponse(choice); err != nil {
 				return err
 			}
-			choices[i], _ = common.Marshal(choice)
+			choices[i], _ = json.Marshal(choice)
 		}
 		if err = setJSON(value, "choices", choices); err != nil {
 			return err
@@ -217,10 +216,10 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 					if e = s.restoreField(part, "text", lane, stream, final); e != nil {
 						return e
 					}
-					parts[j], _ = common.Marshal(part)
+					parts[j], _ = json.Marshal(part)
 				}
-				content["parts"], _ = common.Marshal(parts)
-				candidate["content"], _ = common.Marshal(content)
+				content["parts"], _ = json.Marshal(parts)
+				candidate["content"], _ = json.Marshal(content)
 			}
 			if stream && final {
 				prefix := "gemini/" + index + "/"
@@ -230,7 +229,7 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 					}
 				}
 			}
-			candidates[i], _ = common.Marshal(candidate)
+			candidates[i], _ = json.Marshal(candidate)
 		}
 		if err = setJSON(value, "candidates", candidates); err != nil {
 			return err
@@ -266,14 +265,14 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 						if e = s.restoreField(text, "text", "", false, true); e != nil {
 							return e
 						}
-						summary[j], _ = common.Marshal(text)
+						summary[j], _ = json.Marshal(text)
 					}
-					part["summary"], _ = common.Marshal(summary)
+					part["summary"], _ = json.Marshal(summary)
 				}
 			default:
 				return ErrUnsupported
 			}
-			output[i], _ = common.Marshal(part)
+			output[i], _ = json.Marshal(part)
 		}
 		if err = setJSON(value, "output", output); err != nil {
 			return err
@@ -293,7 +292,7 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 		if err = s.restoreField(detail, "message", "", false, true); err != nil {
 			return err
 		}
-		value["error"], _ = common.Marshal(detail)
+		value["error"], _ = json.Marshal(detail)
 	}
 	return nil
 }
@@ -315,7 +314,7 @@ func (s *Session) RestoreJSON(body []byte) ([]byte, error) {
 	if s.incomplete {
 		return nil, ErrIncomplete
 	}
-	result, err := common.Marshal(value)
+	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
 	}
@@ -409,7 +408,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		value["delta"], _ = common.Marshal(delta)
+		value["delta"], _ = json.Marshal(delta)
 	case "content_block_start":
 		index, e := streamIndex(value, "index", 0)
 		if e != nil {
@@ -432,7 +431,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		value["content_block"], _ = common.Marshal(block)
+		value["content_block"], _ = json.Marshal(block)
 	case "content_block_stop":
 		index, e := streamIndex(value, "index", 0)
 		if e != nil {
@@ -485,7 +484,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		if e = s.restoreField(part, "refusal", "", false, true); e != nil {
 			return nil, e
 		}
-		value["part"], _ = common.Marshal(part)
+		value["part"], _ = json.Marshal(part)
 	case "", "message", "message_start", "message_delta", "ping", "error", "response.created", "response.in_progress", "response.queued":
 	default:
 		return nil, ErrUnsupported
@@ -498,7 +497,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		if e = s.restoreResponse(response, false); e != nil {
 			return nil, e
 		}
-		value["response"], _ = common.Marshal(response)
+		value["response"], _ = json.Marshal(response)
 	}
 	if raw, ok := value["message"]; ok && kind == "message_start" {
 		message, e := decodeObject(raw)
@@ -508,7 +507,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		if e = s.restoreResponse(message, false); e != nil {
 			return nil, e
 		}
-		value["message"], _ = common.Marshal(message)
+		value["message"], _ = json.Marshal(message)
 	}
 	if err = s.restoreResponse(value, true); err != nil {
 		return nil, err
@@ -516,7 +515,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 	if s.incomplete {
 		return nil, ErrIncomplete
 	}
-	result, err := common.Marshal(value)
+	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
 	}

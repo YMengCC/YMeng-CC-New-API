@@ -40,6 +40,8 @@ jobs:
             go.sum
             relaykit/go.sum
             tokenkit/go.sum
+            textmask/go.sum
+            safehouse/go.sum
 
       - name: Create frontend embed placeholder
         run: |
@@ -57,6 +59,14 @@ jobs:
         working-directory: tokenkit
         run: go vet ./...
 
+      - name: Vet textmask independently
+        working-directory: textmask
+        run: go vet ./...
+
+      - name: Vet safehouse independently
+        working-directory: safehouse
+        run: go vet ./...
+
       - name: Build root module
         run: go build ./...
 
@@ -68,7 +78,15 @@ jobs:
         working-directory: tokenkit
         run: go build ./...
 
-      - name: Test root, relaykit, and tokenkit modules
+      - name: Build textmask independently
+        working-directory: textmask
+        run: go build ./...
+
+      - name: Pack safehouse for every platform
+        working-directory: safehouse
+        run: go run ./cmd/pack -out "$RUNNER_TEMP/safehouse" -version ci
+
+      - name: Test root and independent modules
         run: make test
 
   frontend:

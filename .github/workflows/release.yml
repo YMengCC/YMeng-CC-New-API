@@ -102,6 +102,9 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+      - name: Pack Mengmeng's Safe House downloads
+        working-directory: safehouse
+        run: go run ./cmd/pack -out ../safehousebundle/artifacts -version "$VERSION"
       - name: Build Backend (amd64)
         run: |
           go mod download
@@ -195,6 +198,9 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+      - name: Pack Mengmeng's Safe House downloads
+        working-directory: safehouse
+        run: go run ./cmd/pack -out ../safehousebundle/artifacts -version "$VERSION"
       - name: Build Backend
         run: |
           go mod download
@@ -285,6 +291,9 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+      - name: Pack Mengmeng's Safe House downloads
+        working-directory: safehouse
+        run: go run ./cmd/pack -out ../safehousebundle/artifacts -version "$VERSION"
       - name: Build Backend
         run: |
           go mod download

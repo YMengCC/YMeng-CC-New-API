@@ -1,10 +1,10 @@
 package textmask
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func TestMaskingContracts(t *testing.T) {
 		assert.Contains(t, string(masked), "1234567890123456")
 		assert.Contains(t, string(masked), "550e8400-e29b-41d4-a716-446655440000")
 		var maskedRequest object
-		require.NoError(t, common.Unmarshal(masked, &maskedRequest))
+		require.NoError(t, json.Unmarshal(masked, &maskedRequest))
 		maskedMessages, err := decodeArray(maskedRequest["messages"])
 		require.NoError(t, err)
 		maskedMessage, err := decodeObject(maskedMessages[0])
@@ -43,7 +43,7 @@ func TestMaskingContracts(t *testing.T) {
 		require.NoError(t, err)
 		defer s.Close()
 		original := "邮箱alice@example.com，电话13800138000，联系bob@example.com."
-		body, err := common.Marshal(map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": original}}})
+		body, err := json.Marshal(map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": original}}})
 		require.NoError(t, err)
 		masked, err := s.MaskJSON(body, "chat")
 		require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestMaskingContracts(t *testing.T) {
 		s, err := New()
 		require.NoError(t, err)
 		defer s.Close()
-		cases := []struct{ protocol, body string }{{"chat", `{"model":"m","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://x"}}]}]}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function"}]}`}, {"responses", `{"model":"m","input":"x","previous_response_id":"r_1"}`}, {"responses", `{"model":"m","input":"x","background":true}`}, {"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"x"}],"tools":[{}]}`}, {"gemini", `{"model":"m","contents":[{"role":"user","parts":[{"inlineData":{"data":"secret"}}]}]}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"future":{"secret":"opaque"}}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"` + tokenMarker + `spoof]]"}]}`}}
+		cases := []struct{ protocol, body string }{{"chat", `{"model":"m","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://x"}}]}]}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function"}]}`}, {"responses", `{"model":"m","input":"x","previous_response_id":"r_1"}`}, {"responses", `{"model":"m","input":"x","background":true}`}, {"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"x"}],"tools":[{}]}`}, {"gemini", `{"model":"m","contents":[{"role":"user","parts":[{"inlineData":{"data":"secret"}}]}]}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"future":{"secret":"opaque"}}`}, {"chat", `{"model":"m","messages":[{"role":"user","content":"` + string(GatewayMarker) + `spoof]]"}]}`}}
 		for _, tc := range cases {
 			_, err = s.MaskJSON([]byte(tc.body), tc.protocol)
 			assert.ErrorIs(t, err, ErrUnsupported)
@@ -100,7 +100,7 @@ func TestMaskingContracts(t *testing.T) {
 				result, err := s.RestoreJSON([]byte(strings.ReplaceAll(tc.response, "TOKEN", token)))
 				require.NoError(t, err)
 				assert.Contains(t, string(result), "alice@example.com")
-				assert.NotContains(t, string(result), tokenMarker)
+				assert.NotContains(t, string(result), string(GatewayMarker))
 			})
 		}
 	})
@@ -110,7 +110,7 @@ func TestMaskingContracts(t *testing.T) {
 		defer s.Close()
 		_, err = s.MaskJSON([]byte(`{"contents":[{"role":{"secret":"alice@example.com"},"parts":[{"text":"hello"}]}]}`), "gemini")
 		require.ErrorIs(t, err, ErrUnsupported)
-		body, err := common.Marshal(map[string]any{"model": "m", "input": "-----BEGIN RSA PRIVATE KEY-----\nfixture\n-----END EC PRIVATE KEY-----"})
+		body, err := json.Marshal(map[string]any{"model": "m", "input": "-----BEGIN RSA PRIVATE KEY-----\nfixture\n-----END EC PRIVATE KEY-----"})
 		require.NoError(t, err)
 		_, err = s.MaskJSON(body, "responses")
 		require.ErrorIs(t, err, ErrUnsupported)
@@ -135,7 +135,7 @@ func TestMaskingContracts(t *testing.T) {
 		masked, err := s.MaskJSON([]byte(`{"model":"m","messages":[{"role":"user","content":"x@example.com"}],"stream":true}`), "chat")
 		require.NoError(t, err)
 		var value object
-		require.NoError(t, common.Unmarshal(masked, &value))
+		require.NoError(t, json.Unmarshal(masked, &value))
 		messages, _ := decodeArray(value["messages"])
 		msg, _ := decodeObject(messages[0])
 		token, err := stringValue(msg["content"])
@@ -201,5 +201,89 @@ func TestMaskingContracts(t *testing.T) {
 		out := s.RestoreDelta("lane", prefix, false)
 		assert.Empty(t, out)
 		require.ErrorIs(t, s.Finish(), ErrIncomplete)
+	})
+	t.Run("local layer composes with gateway layer", func(t *testing.T) {
+		local, err := NewWithMarker(LocalMarker)
+		require.NoError(t, err)
+		defer local.Close()
+		gateway, err := New()
+		require.NoError(t, err)
+		defer gateway.Close()
+		original := "mail alice@example.com or call 13800138000"
+		body, err := json.Marshal(map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": original}}})
+		require.NoError(t, err)
+
+		locallyMasked, err := local.MaskJSON(body, "chat")
+		require.NoError(t, err)
+		assert.Contains(t, string(locallyMasked), string(LocalMarker))
+		assert.NotContains(t, string(locallyMasked), "alice@example.com")
+		assert.Equal(t, 2, local.MaskedCount())
+
+		// The gateway sees only local tokens: nothing to mask, nothing rejected.
+		gatewayMasked, err := gateway.MaskJSON(locallyMasked, "chat")
+		require.NoError(t, err)
+		assert.Equal(t, 0, gateway.MaskedCount())
+		assert.JSONEq(t, string(locallyMasked), string(gatewayMasked))
+
+		reply := []byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":"` + local.forward["alice@example.com"] + `"}}]}`)
+		viaGateway, err := gateway.RestoreJSON(reply)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(reply), string(viaGateway))
+		restored, err := local.RestoreJSON(viaGateway)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+	})
+	t.Run("a layer rejects input carrying its own marker", func(t *testing.T) {
+		local, err := NewWithMarker(LocalMarker)
+		require.NoError(t, err)
+		defer local.Close()
+		_, err = local.MaskText("spoof " + string(LocalMarker) + "x]]")
+		require.ErrorIs(t, err, ErrUnsupported)
+		_, err = NewWithMarker("[[XX:")
+		require.Error(t, err)
+	})
+	t.Run("route table", func(t *testing.T) {
+		cases := []struct {
+			method, path, protocol string
+			ok                     bool
+		}{
+			{"POST", "/v1/chat/completions", "chat", true},
+			{"POST", "/v1/responses", "responses", true},
+			{"POST", "/v1/messages", "claude", true},
+			{"POST", "/v1beta/models/gemini-pro:streamGenerateContent", "gemini", true},
+			{"POST", "/v1/embeddings", "", false},
+			{"GET", "/v1/responses", "", false},
+		}
+		for _, tc := range cases {
+			protocol, ok := ProtocolForRoute(tc.method, tc.path)
+			assert.Equal(t, tc.protocol, protocol, tc.path)
+			assert.Equal(t, tc.ok, ok, tc.path)
+		}
+	})
+	t.Run("stream restorer reframes split chunks", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		_, err = s.MaskJSON([]byte(`{"model":"m","messages":[{"role":"user","content":"a@example.com"}],"stream":true}`), "chat")
+		require.NoError(t, err)
+		token := s.forward["a@example.com"]
+		stream := "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi " + token + "\"}}]}\r\n\r\ndata: [DONE]\n\n"
+		restorer := s.NewStreamRestorer(MaxEventBytes)
+		var out strings.Builder
+		emit := func(event []byte) error { out.Write(event); return nil }
+		for chunk := range strings.SplitSeq(stream[:40]+"|"+stream[40:70]+"|"+stream[70:], "|") {
+			require.NoError(t, restorer.Write([]byte(chunk), emit))
+		}
+		require.NoError(t, restorer.Close())
+		assert.Contains(t, out.String(), "hi a@example.com")
+		assert.Contains(t, out.String(), "data: [DONE]")
+	})
+	t.Run("stream restorer fails on a trailing partial event", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		restorer := s.NewStreamRestorer(MaxEventBytes)
+		require.NoError(t, restorer.Write([]byte("data: {\"choices\":[]}"), func([]byte) error { return nil }))
+		require.ErrorIs(t, restorer.Close(), ErrIncomplete)
 	})
 }

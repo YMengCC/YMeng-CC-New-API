@@ -17,7 +17,9 @@ import (
 func SetApiRouter(router *gin.Engine) {
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
-	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
+	// Safe house downloads are already compressed or are executables; the
+	// trailing slash keeps the JSON listing itself compressed.
+	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/user/safehouse/downloads/"})))
 	apiRouter.Use(middleware.AccessTokenAudit())
 	apiRouter.Use(middleware.BodyStorageCleanup()) // 清理请求体存储
 	apiRouter.Use(middleware.GlobalAPIRateLimit())
@@ -146,6 +148,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 				selfRoute.PUT("/privacy-settings", controller.UpdateUserPrivacySettings)
+				selfRoute.GET("/safehouse/downloads", controller.GetSafehouseDownloads)
+				selfRoute.GET("/safehouse/downloads/:name", middleware.DisableCache(), controller.DownloadSafehouseArtifact)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)

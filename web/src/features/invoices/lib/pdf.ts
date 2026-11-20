@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { saveBlob } from '@/lib/dom-utils'
 
 export class InvoicePDFUnavailableError extends Error {}
 
@@ -44,12 +45,5 @@ export async function ensureInvoicePDFBlob(blob: Blob): Promise<Blob> {
 }
 
 export function saveInvoicePDF(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  document.body.append(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
+  saveBlob(blob, fileName)
 }

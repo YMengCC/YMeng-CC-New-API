@@ -3,6 +3,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 COPY relaykit/go.mod relaykit/go.sum ./relaykit/
 COPY tokenkit/go.mod tokenkit/go.sum ./tokenkit/
+COPY textmask/go.mod textmask/go.sum ./textmask/
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /update-controller ./cmd/update-controller

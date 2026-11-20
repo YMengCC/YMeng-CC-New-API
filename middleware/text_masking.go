@@ -1,24 +1,17 @@
 package middleware
 
 import (
-	"bytes"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/common/textmask"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	pluginruntime "github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/textmask"
 	"github.com/gin-gonic/gin"
-)
-
-const (
-	maxTextMaskRequestBytes  = 8 << 20
-	maxTextMaskResponseBytes = 16 << 20
-	maxTextMaskEventBytes    = 1 << 20
 )
 
 func TextMasking() gin.HandlerFunc {
@@ -38,7 +31,7 @@ func TextMasking() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		protocol, supported := textMaskProtocol(c.Request.Method, c.Request.URL.Path)
+		protocol, supported := textmask.ProtocolForRoute(c.Request.Method, c.Request.URL.Path)
 		if !supported || !strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "application/json") {
 			abortTextMaskRequest(c)
 			return
@@ -47,9 +40,9 @@ func TextMasking() gin.HandlerFunc {
 			abortTextMaskRequest(c)
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxTextMaskRequestBytes+1))
+		body, err := io.ReadAll(io.LimitReader(c.Request.Body, textmask.MaxRequestBytes+1))
 		_ = c.Request.Body.Close()
-		if err != nil || len(body) > maxTextMaskRequestBytes {
+		if err != nil || len(body) > textmask.MaxRequestBytes {
 			abortTextMaskRequest(c)
 			return
 		}
@@ -69,6 +62,7 @@ func TextMasking() gin.HandlerFunc {
 		writer := &textMaskResponseWriter{
 			ResponseWriter: c.Writer,
 			session:        session,
+			restorer:       session.NewStreamRestorer(textmask.MaxEventBytes),
 			failureMessage: i18n.T(c, i18n.MsgPrivacyResponseFailed),
 		}
 		c.Writer = writer
@@ -94,29 +88,6 @@ func TextMaskingTaskGuard() gin.HandlerFunc {
 	}
 }
 
-func textMaskProtocol(method, path string) (string, bool) {
-	if method != http.MethodPost {
-		return "", false
-	}
-	switch path {
-	case "/v1/chat/completions":
-		return "chat", true
-	case "/pg/chat/completions":
-		return "playground", true
-	case "/v1/completions":
-		return "completions", true
-	case "/v1/responses":
-		return "responses", true
-	case "/v1/messages":
-		return "claude", true
-	}
-	if strings.HasPrefix(path, "/v1beta/models/") &&
-		(strings.HasSuffix(path, ":generateContent") || strings.HasSuffix(path, ":streamGenerateContent")) {
-		return "gemini", true
-	}
-	return "", false
-}
-
 func abortTextMaskRequest(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 		"error": gin.H{
@@ -130,6 +101,7 @@ func abortTextMaskRequest(c *gin.Context) {
 type textMaskResponseWriter struct {
 	gin.ResponseWriter
 	session        *textmask.Session
+	restorer       *textmask.StreamRestorer
 	failureMessage string
 	status         int
 	size           int
@@ -137,7 +109,6 @@ type textMaskResponseWriter struct {
 	streamStarted  bool
 	failed         bool
 	buffer         []byte
-	streamBuffer   []byte
 	writeErr       error
 }
 
@@ -176,7 +147,7 @@ func (w *textMaskResponseWriter) Write(data []byte) (int, error) {
 	if w.isEventStream() {
 		return w.writeEventStream(data)
 	}
-	if len(w.buffer)+len(data) > maxTextMaskResponseBytes {
+	if len(w.buffer)+len(data) > textmask.MaxResponseBytes {
 		w.failed = true
 		w.writeErr = textmask.ErrUnsupported
 		return 0, w.writeErr
@@ -229,80 +200,18 @@ func (w *textMaskResponseWriter) statusOrOK() int {
 }
 
 func (w *textMaskResponseWriter) writeEventStream(data []byte) (int, error) {
-	w.streamBuffer = append(w.streamBuffer, data...)
 	w.startStream()
-	for {
-		boundary, width := sseBoundary(w.streamBuffer)
-		if boundary < 0 {
-			break
-		}
-		if boundary > maxTextMaskEventBytes {
-			w.failed = true
-			w.writeErr = textmask.ErrUnsupported
-			return 0, w.writeErr
-		}
-		event := w.streamBuffer[:boundary]
-		w.streamBuffer = w.streamBuffer[boundary+width:]
-		restored, err := w.restoreSSEEvent(event)
-		if err != nil {
-			w.failed = true
-			w.writeErr = err
-			return 0, err
-		}
-		if _, err = w.ResponseWriter.Write(restored); err != nil {
-			w.failed = true
-			w.writeErr = err
-			return 0, err
-		}
-		w.size += len(restored)
-	}
-	if len(w.streamBuffer) > maxTextMaskEventBytes {
+	err := w.restorer.Write(data, func(event []byte) error {
+		n, err := w.ResponseWriter.Write(event)
+		w.size += n
+		return err
+	})
+	if err != nil {
 		w.failed = true
-		w.writeErr = textmask.ErrUnsupported
-		return 0, w.writeErr
+		w.writeErr = err
+		return 0, err
 	}
 	return len(data), nil
-}
-
-func sseBoundary(data []byte) (int, int) {
-	lf := bytes.Index(data, []byte("\n\n"))
-	crlf := bytes.Index(data, []byte("\r\n\r\n"))
-	if crlf >= 0 && (lf < 0 || crlf < lf) {
-		return crlf, 4
-	}
-	if lf >= 0 {
-		return lf, 2
-	}
-	return -1, 0
-}
-
-func (w *textMaskResponseWriter) restoreSSEEvent(event []byte) ([]byte, error) {
-	lines := bytes.Split(event, []byte("\n"))
-	dataLines := make([]string, 0, 1)
-	output := make([]string, 0, len(lines)+1)
-	for _, rawLine := range lines {
-		line := strings.TrimSuffix(string(rawLine), "\r")
-		if strings.HasPrefix(line, "data:") {
-			value := strings.TrimPrefix(line, "data:")
-			value = strings.TrimPrefix(value, " ")
-			dataLines = append(dataLines, value)
-			continue
-		}
-		output = append(output, line)
-	}
-	if len(dataLines) == 0 {
-		return []byte(strings.Join(output, "\n") + "\n\n"), nil
-	}
-	data := strings.Join(dataLines, "\n")
-	if strings.TrimSpace(data) == "" {
-		return []byte(strings.Join(output, "\n") + "\ndata:\n\n"), nil
-	}
-	restored, err := w.session.RestoreEvent([]byte(data))
-	if err != nil {
-		return nil, err
-	}
-	output = append(output, "data: "+string(restored))
-	return []byte(strings.Join(output, "\n") + "\n\n"), nil
 }
 
 func (w *textMaskResponseWriter) complete() error {
@@ -310,7 +219,7 @@ func (w *textMaskResponseWriter) complete() error {
 		return w.failClosed()
 	}
 	if w.isEventStream() {
-		if len(w.streamBuffer) != 0 || w.session.Finish() != nil {
+		if w.restorer.Close() != nil {
 			return w.failClosed()
 		}
 		if !w.streamStarted {
@@ -338,7 +247,6 @@ func (w *textMaskResponseWriter) complete() error {
 func (w *textMaskResponseWriter) failClosed() error {
 	w.failed = true
 	w.buffer = nil
-	w.streamBuffer = nil
 	body, _ := common.Marshal(gin.H{
 		"type": "error",
 		"error": gin.H{

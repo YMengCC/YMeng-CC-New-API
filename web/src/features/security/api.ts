@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { t } from 'i18next'
+
 import type { TwoFAStatus } from '@/features/profile/types'
 import type { PermissionResourceDef } from '@/lib/admin-permissions'
 import { api } from '@/lib/api'
@@ -24,6 +26,7 @@ import {
   authRequestOptions,
   authResult,
 } from '@/lib/secure-verification'
+import { createServerError } from '@/lib/server-error-message'
 
 export interface AccessTokenItem {
   id: number
@@ -216,4 +219,37 @@ export function enable2FA(
       }
     )
   )
+}
+
+export type SafehousePlatform = 'windows' | 'macos' | 'linux'
+
+export interface SafehouseArtifact {
+  platform: SafehousePlatform
+  arch: 'amd64' | 'arm64'
+  file_name: string
+  size: number
+  sha256: string
+}
+
+export interface SafehouseDownloadList {
+  version: string
+  items: SafehouseArtifact[]
+}
+
+/** Builds of the local Safe House program embedded in this gateway. */
+export async function getSafehouseDownloads(): Promise<SafehouseDownloadList> {
+  const res = await api.get('/api/user/safehouse/downloads')
+  if (!res.data?.success) {
+    throw createServerError(res.data, t('Failed to load downloads'))
+  }
+  return res.data.data as SafehouseDownloadList
+}
+
+/** Fetch one build as a Blob; the console API authenticates by header. */
+export async function downloadSafehouseArtifact(fileName: string) {
+  const res = await api.get(
+    `/api/user/safehouse/downloads/${encodeURIComponent(fileName)}`,
+    { responseType: 'blob' }
+  )
+  return res.data as Blob
 }

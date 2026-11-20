@@ -2,26 +2,25 @@ package textmask
 
 import (
 	"bytes"
+	"encoding/json"
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/QuantumNous/new-api/common"
 )
 
-type object map[string]common.RawMessage
+type object map[string]json.RawMessage
 
 func decodeObject(raw []byte) (object, error) {
 	var value object
-	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' || common.Unmarshal(raw, &value) != nil || value == nil {
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' || json.Unmarshal(raw, &value) != nil || value == nil {
 		return nil, ErrUnsupported
 	}
 	return value, nil
 }
 
-func decodeArray(raw []byte) ([]common.RawMessage, error) {
-	var value []common.RawMessage
-	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '[' || common.Unmarshal(raw, &value) != nil {
+func decodeArray(raw []byte) ([]json.RawMessage, error) {
+	var value []json.RawMessage
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '[' || json.Unmarshal(raw, &value) != nil {
 		return nil, ErrUnsupported
 	}
 	return value, nil
@@ -29,7 +28,7 @@ func decodeArray(raw []byte) ([]common.RawMessage, error) {
 
 func stringValue(raw []byte) (string, error) {
 	var value string
-	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '"' || common.Unmarshal(raw, &value) != nil {
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '"' || json.Unmarshal(raw, &value) != nil {
 		return "", ErrUnsupported
 	}
 	return value, nil
@@ -55,7 +54,7 @@ func whitelist(value object, fields string) error {
 }
 
 func setJSON(value object, key string, data any) error {
-	raw, err := common.Marshal(data)
+	raw, err := json.Marshal(data)
 	if err != nil {
 		return ErrUnsupported
 	}
@@ -92,7 +91,7 @@ func (s *Session) maskStrings(raw []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return common.Marshal(text)
+		return json.Marshal(text)
 	}
 	items, err := decodeArray(raw)
 	if err != nil {
@@ -107,12 +106,12 @@ func (s *Session) maskStrings(raw []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		items[i], err = common.Marshal(text)
+		items[i], err = json.Marshal(text)
 		if err != nil {
 			return nil, ErrUnsupported
 		}
 	}
-	return common.Marshal(items)
+	return json.Marshal(items)
 }
 
 func numericSettings(value object, fields string) error {
@@ -183,12 +182,12 @@ func (s *Session) maskParts(raw []byte, protocol string) ([]byte, error) {
 		if err = s.maskString(value, "text", true); err != nil {
 			return nil, err
 		}
-		parts[i], err = common.Marshal(value)
+		parts[i], err = json.Marshal(value)
 		if err != nil {
 			return nil, ErrUnsupported
 		}
 	}
-	return common.Marshal(parts)
+	return json.Marshal(parts)
 }
 
 func (s *Session) maskMessages(raw []byte, protocol string) ([]byte, error) {
@@ -243,12 +242,12 @@ func (s *Session) maskMessages(raw []byte, protocol string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		messages[i], err = common.Marshal(value)
+		messages[i], err = json.Marshal(value)
 		if err != nil {
 			return nil, ErrUnsupported
 		}
 	}
-	return common.Marshal(messages)
+	return json.Marshal(messages)
 }
 
 // MaskJSON validates and masks a single text-only request. Tools, media,
@@ -322,7 +321,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			if e != nil || whitelist(format, "type") != nil || enumSetting(format, "type", "text json_object") != nil {
 				return nil, ErrUnsupported
 			}
-			value["response_format"], _ = common.Marshal(format)
+			value["response_format"], _ = json.Marshal(format)
 		}
 		// Arbitrary bias keys are token IDs, but values must be numeric.
 		if raw, ok := value["logit_bias"]; ok {
@@ -349,7 +348,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 		if string(value["store"]) == "true" || string(value["background"]) == "true" {
 			return nil, ErrUnsupported
 		}
-		value["store"] = common.RawMessage("false")
+		value["store"] = json.RawMessage("false")
 		if err = numericSettings(value, "max_output_tokens top_logprobs temperature top_p frequency_penalty presence_penalty"); err != nil {
 			return nil, err
 		}
@@ -370,7 +369,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			if e != nil || whitelist(settings, "effort summary") != nil || enumSetting(settings, "effort", "none minimal low medium high xhigh") != nil || enumSetting(settings, "summary", "auto concise detailed") != nil {
 				return nil, ErrUnsupported
 			}
-			value["reasoning"], _ = common.Marshal(settings)
+			value["reasoning"], _ = json.Marshal(settings)
 		}
 		if raw, ok := value["text"]; ok {
 			settings, e := decodeObject(raw)
@@ -382,9 +381,9 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 				if e != nil || whitelist(f, "type") != nil || enumSetting(f, "type", "text json_object") != nil {
 					return nil, ErrUnsupported
 				}
-				settings["format"], _ = common.Marshal(f)
+				settings["format"], _ = json.Marshal(f)
 			}
-			value["text"], _ = common.Marshal(settings)
+			value["text"], _ = json.Marshal(settings)
 		}
 		if enumSetting(value, "truncation", "auto disabled") != nil || enumSetting(value, "service_tier", "auto default flex priority") != nil {
 			return nil, ErrUnsupported
@@ -414,7 +413,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			if e != nil || whitelist(settings, "type budget_tokens display") != nil || enumSetting(settings, "type", "enabled disabled adaptive") != nil || enumSetting(settings, "display", "summarized omitted") != nil || numericSettings(settings, "budget_tokens") != nil {
 				return nil, ErrUnsupported
 			}
-			value["thinking"], _ = common.Marshal(settings)
+			value["thinking"], _ = json.Marshal(settings)
 		}
 		if enumSetting(value, "service_tier", "auto standard_only") != nil {
 			return nil, ErrUnsupported
@@ -437,7 +436,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 				if err != nil {
 					return nil, err
 				}
-				value[field], _ = common.Marshal(item)
+				value[field], _ = json.Marshal(item)
 			}
 		}
 		if raw, ok := value["generationConfig"]; ok {
@@ -456,9 +455,9 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 				if e != nil || whitelist(t, "includeThoughts thinkingBudget thinkingLevel") != nil || boolSettings(t, "includeThoughts") != nil || numericSettings(t, "thinkingBudget") != nil || enumSetting(t, "thinkingLevel", "minimal low medium high") != nil {
 					return nil, ErrUnsupported
 				}
-				settings["thinkingConfig"], _ = common.Marshal(t)
+				settings["thinkingConfig"], _ = json.Marshal(t)
 			}
-			value["generationConfig"], _ = common.Marshal(settings)
+			value["generationConfig"], _ = json.Marshal(settings)
 		}
 		if raw, ok := value["safetySettings"]; ok {
 			settings, e := decodeArray(raw)
@@ -470,16 +469,16 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 				if e != nil || whitelist(setting, "category threshold") != nil || enumSetting(setting, "category", "HARM_CATEGORY_HARASSMENT HARM_CATEGORY_HATE_SPEECH HARM_CATEGORY_SEXUALLY_EXPLICIT HARM_CATEGORY_DANGEROUS_CONTENT HARM_CATEGORY_CIVIC_INTEGRITY") != nil || enumSetting(setting, "threshold", "BLOCK_NONE BLOCK_ONLY_HIGH BLOCK_MEDIUM_AND_ABOVE BLOCK_LOW_AND_ABOVE OFF HARM_BLOCK_THRESHOLD_UNSPECIFIED") != nil {
 					return nil, ErrUnsupported
 				}
-				settings[i], _ = common.Marshal(setting)
+				settings[i], _ = json.Marshal(setting)
 			}
-			value["safetySettings"], _ = common.Marshal(settings)
+			value["safetySettings"], _ = json.Marshal(settings)
 		}
 	default:
 		return nil, ErrUnsupported
 	}
 	if raw, ok := value["model"]; ok {
 		model, e := stringValue(raw)
-		if e != nil || model == "" || strings.Contains(model, tokenMarker) {
+		if e != nil || model == "" || strings.Contains(model, s.marker) {
 			return nil, ErrUnsupported
 		}
 	} else if protocol != "gemini" {
@@ -498,9 +497,9 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 		if e != nil || whitelist(settings, "include_usage include_obfuscation") != nil || boolSettings(settings, "include_usage include_obfuscation") != nil {
 			return nil, ErrUnsupported
 		}
-		value["stream_options"], _ = common.Marshal(settings)
+		value["stream_options"], _ = json.Marshal(settings)
 	}
-	result, err := common.Marshal(value)
+	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
 	}

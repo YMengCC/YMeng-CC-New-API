@@ -23,8 +23,25 @@ var (
 	entityPattern  = regexp.MustCompile("(?s:-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----)|(?:sk-[A-Za-z0-9_-]{16,}|(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,})|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+|[1-9][0-9]{16}[0-9Xx]|1[3-9][0-9]{9}|(?:[0-9]{1,3}\\.){3}[0-9]{1,3}")
 )
 
+// Marker starts every placeholder of one masking layer. The gateway and the
+// local safe house use different markers, so a request masked on the user's
+// machine can still pass through gateway masking without being mistaken for a
+// forged placeholder, and each layer restores only its own tokens.
+type Marker string
+
 const (
-	tokenMarker            = "[[TM:"
+	GatewayMarker Marker = "[[TM:"
+	LocalMarker   Marker = "[[TL:"
+)
+
+// Transport limits shared by the gateway middleware and the local proxy.
+const (
+	MaxRequestBytes  = 8 << 20
+	MaxResponseBytes = 16 << 20
+	MaxEventBytes    = 1 << 20
+)
+
+const (
 	maxMaskedEntities      = 4096
 	maxSensitiveValueBytes = 64 << 10
 	maxRestoredTextBytes   = 16 << 20
@@ -34,6 +51,7 @@ const (
 // Methods are safe for concurrent use; Close releases its sensitive mappings.
 type Session struct {
 	mu            sync.Mutex
+	marker        string
 	prefix        string
 	forward       map[string]string
 	reverse       map[string]string
@@ -43,16 +61,39 @@ type Session struct {
 	restoreBudget int
 }
 
-func New() (*Session, error) {
+// New starts a gateway-layer session.
+func New() (*Session, error) { return NewWithMarker(GatewayMarker) }
+
+func NewWithMarker(marker Marker) (*Session, error) {
+	if marker != GatewayMarker && marker != LocalMarker {
+		return nil, errors.New("text masking: unknown marker")
+	}
 	var namespace [16]byte
 	if _, err := rand.Read(namespace[:]); err != nil {
 		return nil, errors.New("text masking: namespace generation failed")
 	}
-	return &Session{prefix: tokenMarker + hex.EncodeToString(namespace[:]) + ":", forward: make(map[string]string), reverse: make(map[string]string), pending: make(map[string]string)}, nil
+	return &Session{marker: string(marker), prefix: string(marker) + hex.EncodeToString(namespace[:]) + ":", forward: make(map[string]string), reverse: make(map[string]string), pending: make(map[string]string)}, nil
+}
+
+// MaskText masks free text with the same detector used for request bodies.
+func (s *Session) MaskText(text string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return "", ErrClosed
+	}
+	return s.maskText(text)
+}
+
+// MaskedCount reports how many distinct values this session replaced.
+func (s *Session) MaskedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.forward)
 }
 
 func (s *Session) maskText(text string) (string, error) {
-	if strings.Contains(text, tokenMarker) {
+	if strings.Contains(text, s.marker) {
 		return "", ErrUnsupported
 	}
 	// Incomplete PEM blocks must not evade masking or be forwarded in fragments.
@@ -238,7 +279,7 @@ func (s *Session) restoreDelta(key, text string, final bool) string {
 		}
 		suffix := text[hold:]
 		if final {
-			if strings.HasPrefix(suffix, tokenMarker) || strings.HasPrefix(suffix, s.prefix) {
+			if strings.HasPrefix(suffix, s.marker) || strings.HasPrefix(suffix, s.prefix) {
 				s.incomplete = true
 				s.pending[key] = suffix
 			} else {

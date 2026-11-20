@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { createInstance } from 'i18next'
 import { expect, it } from 'vitest'
 
@@ -71,6 +89,34 @@ it.each(Object.entries(resources))(
       expect(i18n.exists(key, { lng: language })).toBe(true)
       if (language !== 'en') expect(i18n.t(key)).not.toBe(key)
     }
+  }
+)
+
+it.each(Object.entries(resources))(
+  "translates Mengmeng's Safe House in %s",
+  async (language, resource) => {
+    const i18n = createInstance()
+    await i18n.init({
+      lng: language,
+      fallbackLng: 'en',
+      resources: { [language]: resource, en },
+    })
+
+    for (const key of [
+      "Mengmeng's Safe House",
+      "Enable Mengmeng's Safe House text masking",
+      "How Mengmeng's Safe House works",
+      'Mask on this site',
+      'Mask on my computer',
+      'Detected sensitive text is masked on your computer',
+      'Connect this site',
+      'The local program is not included in this build.',
+      'Use it as the OpenAI-compatible base URL. Claude and Gemini clients use {{origin}}. Keep your API key unchanged.',
+    ]) {
+      expect(i18n.exists(key, { lng: language })).toBe(true)
+      if (language !== 'en') expect(i18n.t(key)).not.toBe(key)
+    }
+    expect(i18n.exists('Mengmeng', { lng: language })).toBe(false)
   }
 )
 
