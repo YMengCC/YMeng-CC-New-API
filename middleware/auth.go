@@ -708,11 +708,12 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
 	groups := token.GetGroups()
-	crossGroupRetry := token.CrossGroupRetry
-	if len(groups) > 1 {
+	crossGroupRetry := false
+	switch {
+	case len(groups) > 1:
 		crossGroupRetry = true
-	} else if len(groups) <= 1 {
-		crossGroupRetry = false
+	case len(groups) == 0 && token.Group == "auto":
+		crossGroupRetry = token.CrossGroupRetry
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, crossGroupRetry)
 	if token.AutoGroups != "" {

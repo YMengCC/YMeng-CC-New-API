@@ -62,6 +62,7 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 	}
 	maskedToken := *token
 	maskedToken.Key = token.GetMaskedKey()
+	maskedToken.Groups = token.GetGroups()
 	autoGroups, err := token.GetAutoGroups()
 	if err != nil {
 		common.SysError(common.LogText("failed to parse auto groups for token %d: %v", token.Id, err))
@@ -103,8 +104,9 @@ func validateTokenGroups(userGroup string, groups []string) error {
 		return fmt.Errorf("分组序列至少需要 2 个分组")
 	}
 	seen := make(map[string]struct{}, len(groups))
-	for _, group := range groups {
-		group = strings.TrimSpace(group)
+	for index := range groups {
+		group := strings.TrimSpace(groups[index])
+		groups[index] = group
 		if group == "" {
 			return fmt.Errorf("分组不能为空")
 		}

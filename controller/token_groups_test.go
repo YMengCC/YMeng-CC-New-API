@@ -39,11 +39,17 @@ func TestNormalizeTokenRouting(t *testing.T) {
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"a":"A","b":"B"}`))
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"a":1,"b":2}`))
 
-	multi := &model.Token{Group: "a", Groups: []string{"b", "a"}, CrossGroupRetry: false}
+	multi := &model.Token{Group: "a", Groups: []string{" b ", " a "}, CrossGroupRetry: false}
 	require.NoError(t, normalizeTokenRouting("default", multi))
+	assert.Equal(t, []string{"b", "a"}, multi.Groups)
 	assert.Equal(t, "b", multi.Group)
 	assert.JSONEq(t, `["b","a"]`, multi.GroupSequence)
 	assert.True(t, multi.CrossGroupRetry)
+
+	response := buildMaskedTokenResponse(&model.Token{Group: "b", GroupSequence: `["b","a"]`, Key: "secret-key"})
+	require.NotNil(t, response)
+	assert.Equal(t, []string{"b", "a"}, response.Groups)
+	assert.Equal(t, model.MaskTokenKey("secret-key"), response.Key)
 
 	single := &model.Token{Group: "a", Groups: []string{}, GroupSequence: `["a","b"]`, CrossGroupRetry: true}
 	require.NoError(t, normalizeTokenRouting("default", single))

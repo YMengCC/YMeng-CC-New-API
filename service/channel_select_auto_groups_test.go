@@ -133,6 +133,43 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
 
+func TestTokenGroupsRouteModelsUniqueToEachGroup(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	createChannelSelectAutoGroupsChannel(t, db, 2111, "vip", "vip-only-model")
+	createChannelSelectAutoGroupsChannel(t, db, 2112, "default", "default-only-model")
+	model.InitChannelCache()
+
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		modelName string
+		wantGroup string
+		wantID    int
+	}{
+		{modelName: "vip-only-model", wantGroup: "vip", wantID: 2111},
+		{modelName: "default-only-model", wantGroup: "default", wantID: 2112},
+	} {
+		t.Run(test.modelName, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+			common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []string{"vip", "default"})
+			common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, true)
+			param := &RetryParam{
+				Ctx:         ctx,
+				TokenGroup:  "vip",
+				ModelName:   test.modelName,
+				RequestPath: "/v1/chat/completions",
+				Retry:       common.GetPointer(0),
+			}
+
+			channel, group, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, channel)
+			assert.Equal(t, test.wantID, channel.Id)
+			assert.Equal(t, test.wantGroup, group)
+		})
+	}
+}
+
 // A multi-group token must fall back to its next group after the current
 // group's retries are exhausted, including when RetryTimes is 0.
 func TestRetryParamFallsBackThroughTokenGroupSequence(t *testing.T) {

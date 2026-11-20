@@ -28,6 +28,16 @@ func TestSetupContextForTokenForcesRetryByRoutingMode(t *testing.T) {
 			token:         &model.Token{Group: "a", GroupSequence: `["a","b"]`, CrossGroupRetry: false},
 			expectedRetry: true,
 		},
+		{
+			name:          "auto groups preserve enabled retry",
+			token:         &model.Token{Group: "auto", AutoGroups: `["a","b"]`, CrossGroupRetry: true},
+			expectedRetry: true,
+		},
+		{
+			name:          "auto groups preserve disabled retry",
+			token:         &model.Token{Group: "auto", AutoGroups: `["a","b"]`, CrossGroupRetry: false},
+			expectedRetry: false,
+		},
 	}
 
 	for _, test := range tests {
