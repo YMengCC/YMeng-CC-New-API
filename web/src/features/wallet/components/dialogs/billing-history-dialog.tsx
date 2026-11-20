@@ -20,6 +20,7 @@ import { Search, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import {
@@ -45,7 +46,6 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { formatCurrencyFromUSD, formatQuotaWithCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 
 import { useBillingHistory } from '../../hooks/use-billing-history'
@@ -255,15 +255,21 @@ export function BillingHistoryDialog({
                             {t('Amount')}
                           </Label>
                           <div className='text-sm font-semibold'>
-                            {(quotaAmountProviders.has(
-                              record.payment_provider ?? ''
-                            )
-                              ? formatQuotaWithCurrency
-                              : formatCurrencyFromUSD)(record.amount, {
-                              digitsLarge: 2,
-                              digitsSmall: 2,
-                              abbreviate: false,
-                            })}
+                            <CurrencyAmount
+                              amount={record.amount}
+                              mode={
+                                quotaAmountProviders.has(
+                                  record.payment_provider ?? ''
+                                )
+                                  ? 'quota'
+                                  : 'usd'
+                              }
+                              options={{
+                                digitsLarge: 2,
+                                digitsSmall: 2,
+                                abbreviate: false,
+                              }}
+                            />
                           </div>
                         </div>
                         <div className='space-y-1'>

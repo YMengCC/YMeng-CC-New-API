@@ -21,6 +21,7 @@ import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyFormattedText } from '@/components/currency-display'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -89,6 +90,7 @@ import {
 
 interface DetailSegment {
   text: string
+  formattedCurrency?: boolean
   muted?: boolean
   danger?: boolean
 }
@@ -231,6 +233,7 @@ function buildTypeDetailSegments(
         const tierLabel = tieredSummary.tier.label || t('Default')
         segments.push({
           text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
+          formattedCurrency: true,
         })
       }
 
@@ -287,7 +290,8 @@ function buildTypeDetailSegments(
     const isPerCall = isPerCallBilling(modelPrice)
     if (isPerCall && modelPrice != null) {
       segments.push({
-        text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(modelPrice, priceOpts)}`,
+        text: `${t('Per-call')} · ${formatPriceCompact(modelPrice)}`,
+        formattedCurrency: true,
       })
     } else if (other.model_ratio != null) {
       const inputPriceUSD = other.model_ratio * 2.0
@@ -299,6 +303,7 @@ function buildTypeDetailSegments(
       }
       segments.push({
         text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
+        formattedCurrency: true,
       })
 
       if (hasAnyCacheTokens(other)) {
@@ -921,7 +926,14 @@ export function useCommonLogsColumns(
                   primaryTextClass
                 )}
               >
-                {primary.text}
+                {primary.formattedCurrency ? (
+                  <CurrencyFormattedText
+                    value={primary.text}
+                    className='flex-nowrap'
+                  />
+                ) : (
+                  primary.text
+                )}
                 {hasMore && (
                   <span className='text-muted-foreground/40 ml-0.5'>
                     +{segments.length - 1}

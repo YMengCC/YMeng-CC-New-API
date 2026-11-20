@@ -52,7 +52,10 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { CurrencyAmount } from '@/components/currency-display'
+import {
+  CurrencyAmount,
+  CurrencyFormattedText,
+} from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -67,6 +70,7 @@ import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatTokens, formatUseTime } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { AuditDetailFields } from '../../audit/components/audit-detail-fields'
 import type { UsageLog } from '../../data/schema'
@@ -180,9 +184,15 @@ function BillingBreakdown(props: {
   const isTieredExpr = other.billing_mode === 'tiered_expr'
   const tieredSummary = getTieredBillingSummary(other)
 
-  const rows: Array<{ label: string; value: string }> = []
+  const currency = useSystemConfigStore((state) => state.config.currency)
+  const rows: Array<{ label: string; value: React.ReactNode }> = []
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
-  const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
+  const fmtPrice = (usd: number, suffix = '', prefix = '') => (
+    <CurrencyFormattedText
+      value={`${prefix}${formatBillingCurrencyFromUSD(usd, priceOpts, currency)}${suffix}`}
+      snapshot={currency}
+    />
+  )
   const baseInputUSD = other.model_ratio != null ? other.model_ratio * 2.0 : 0
 
   if (isTieredExpr) {
@@ -200,7 +210,7 @@ function BillingBreakdown(props: {
       for (const entry of tieredSummary.priceEntries) {
         rows.push({
           label: t(entry.shortLabel),
-          value: `${fmtPrice(entry.price)}/${entry.unit ? t(entry.unit) : 'M'}`,
+          value: fmtPrice(entry.price, `/${entry.unit ? t(entry.unit) : 'M'}`),
         })
       }
     } else {
@@ -222,13 +232,13 @@ function BillingBreakdown(props: {
     if (other.model_ratio != null) {
       rows.push({
         label: t('Input'),
-        value: `${fmtPrice(baseInputUSD)}/M`,
+        value: fmtPrice(baseInputUSD, '/M'),
       })
     }
     if (other.completion_ratio != null && other.model_ratio != null) {
       rows.push({
         label: t('Output'),
-        value: `${fmtPrice(baseInputUSD * other.completion_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.completion_ratio, '/M'),
       })
     }
   }
@@ -251,7 +261,7 @@ function BillingBreakdown(props: {
     if (other.cache_ratio != null && other.cache_ratio !== 1) {
       rows.push({
         label: t('Cache Read'),
-        value: `${fmtPrice(baseInputUSD * other.cache_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.cache_ratio, '/M'),
       })
     }
     if (
@@ -262,7 +272,7 @@ function BillingBreakdown(props: {
         label: hasCacheWrite12h
           ? t('Cache Creation (30m)')
           : t('Cache Creation'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.cache_creation_ratio, '/M'),
       })
     }
     if (
@@ -271,7 +281,7 @@ function BillingBreakdown(props: {
     ) {
       rows.push({
         label: t('Cache Creation (5m)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_5m)}/M`,
+        value: fmtPrice(baseInputUSD * other.cache_creation_ratio_5m, '/M'),
       })
     }
     if (
@@ -280,7 +290,7 @@ function BillingBreakdown(props: {
     ) {
       rows.push({
         label: t('Cache Creation (1h)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
+        value: fmtPrice(baseInputUSD * other.cache_creation_ratio_1h, '/M'),
       })
     }
     if (
@@ -289,7 +299,7 @@ function BillingBreakdown(props: {
     ) {
       rows.push({
         label: t('Cache Creation (12h)'),
-        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
+        value: fmtPrice(baseInputUSD * other.cache_creation_ratio_12h, '/M'),
       })
     }
   }
@@ -298,7 +308,7 @@ function BillingBreakdown(props: {
     if (other.audio_ratio != null && other.audio_ratio !== 1) {
       rows.push({
         label: t('Audio input'),
-        value: `${fmtPrice(baseInputUSD * other.audio_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.audio_ratio, '/M'),
       })
     }
 
@@ -308,29 +318,35 @@ function BillingBreakdown(props: {
     ) {
       rows.push({
         label: t('Audio output'),
-        value: `${fmtPrice(baseInputUSD * other.audio_completion_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.audio_completion_ratio, '/M'),
       })
     }
 
     if (other.image_ratio != null && other.image_ratio !== 1) {
       rows.push({
         label: t('Image input'),
-        value: `${fmtPrice(baseInputUSD * other.image_ratio)}/M`,
+        value: fmtPrice(baseInputUSD * other.image_ratio, '/M'),
       })
     }
   }
 
   if (other.web_search && other.web_search_call_count) {
+    const calls = `${other.web_search_call_count}x`
     rows.push({
       label: t('Web Search'),
-      value: `${other.web_search_call_count}x${other.web_search_price ? ` (${fmtPrice(other.web_search_price)})` : ''}`,
+      value: other.web_search_price
+        ? fmtPrice(other.web_search_price, ')', `${calls} (`)
+        : calls,
     })
   }
 
   if (other.file_search && other.file_search_call_count) {
+    const calls = `${other.file_search_call_count}x`
     rows.push({
       label: t('File Search'),
-      value: `${other.file_search_call_count}x${other.file_search_price ? ` (${fmtPrice(other.file_search_price)})` : ''}`,
+      value: other.file_search_price
+        ? fmtPrice(other.file_search_price, ')', `${calls} (`)
+        : calls,
     })
   }
 

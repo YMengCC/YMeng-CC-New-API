@@ -30,6 +30,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createJSONStorage } from 'zustand/middleware'
 
 import { api } from '@/lib/api'
+import { mapStatusDataToConfig } from '@/lib/status-query'
 import {
   DEFAULT_CURRENCY_CONFIG,
   useSystemConfigStore,
@@ -81,9 +82,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   queryClient.clear()
-  useSystemConfigStore
-    .getState()
-    .setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG } })
+  useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
   vi.useRealTimers()
   vi.unstubAllGlobals()
   useSystemConfigStore.persist.setOptions({ storage: originalStorage })
@@ -91,19 +90,26 @@ afterEach(() => {
 
 describe('model cards', () => {
   it('shows the configured currency image instead of the generic mark on model cards', () => {
-    useSystemConfigStore.getState().setConfig({
-      currency: {
-        ...DEFAULT_CURRENCY_CONFIG,
-        quotaDisplayType: 'CUSTOM',
-        customCurrencySymbol: CURRENCY_IMAGE_URL,
-      },
-    })
-
     render(
       <ModelCard model={pricingModel({ cache_ratio: 0.5 })} onClick={vi.fn()} />
     )
+    expect(screen.queryByRole('img', { name: '¤' })).not.toBeInTheDocument()
 
-    expect(screen.getAllByRole('img', { name: '¤' })).toHaveLength(3)
+    act(() => {
+      useSystemConfigStore.getState().setConfig(
+        mapStatusDataToConfig({
+          quota_display_type: 'CUSTOM',
+          custom_currency_symbol: '¤',
+          custom_currency_image_url: CURRENCY_IMAGE_URL,
+        })
+      )
+    })
+
+    const images = screen.getAllByRole('img', { name: '¤' })
+    expect(images).toHaveLength(3)
+    for (const image of images) {
+      expect(image).toHaveAttribute('src', CURRENCY_IMAGE_URL)
+    }
     expect(screen.queryAllByText(/¤/)).toHaveLength(0)
   })
 

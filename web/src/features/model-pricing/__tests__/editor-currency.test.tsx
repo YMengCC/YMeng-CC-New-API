@@ -69,9 +69,7 @@ afterEach(() => {
   cleanup()
   clients.splice(0).forEach((client) => client.clear())
   usePricingPreferencesStore.setState({ currency: 'USD' })
-  useSystemConfigStore
-    .getState()
-    .setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG } })
+  useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
   localStorage.clear()
 })
 
@@ -144,6 +142,25 @@ async function commit(
   })
   return result as ModelRatioData | null
 }
+
+it('keeps the site currency image visible after selecting it in the pricing editor', async () => {
+  const imageUrl = 'https://assets.example.com/coin.svg'
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '¤',
+      customCurrencyImageUrl: imageUrl,
+    },
+  })
+  renderEditor()
+
+  await selectCurrency('Site currency (¤)')
+
+  const selector = screen.getByRole('combobox', { name: 'Pricing currency' })
+  expect(within(selector).getByRole('img')).toHaveAttribute('src', imageUrl)
+  expect(selector).not.toHaveTextContent(imageUrl)
+})
 
 it('previews legacy conversion in the selected currency and applies only after confirmation', async () => {
   const expression = 'tier("base", p * 2 + c * 4 + cr * 0)'

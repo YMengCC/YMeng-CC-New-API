@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -36,7 +37,6 @@ import {
 import { getMyWithdrawals, type Withdrawal } from '@/features/withdrawals/api'
 import { CollectionQrPreview } from '@/features/withdrawals/components/collection-qr-preview'
 import { toIntlLocale } from '@/i18n/languages'
-import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatTimestamp } from '@/lib/format'
 
 const PAGE_SIZE = 10
@@ -134,16 +134,16 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
                       {formatTimestamp(item.created_at)}
                     </TableCell>
                     <TableCell className='text-right text-xs font-medium tabular-nums'>
-                      {formatQuotaWithCurrency(
-                        item.quota,
-                        {
+                      <CurrencyAmount
+                        amount={item.quota}
+                        options={{
                           abbreviate: false,
                           digitsLarge: 8,
                           digitsSmall: 12,
                           locale,
-                        },
-                        item.currency_snapshot
-                      )}
+                        }}
+                        snapshot={item.currency_snapshot}
+                      />
                     </TableCell>
                     <TableCell>
                       <StatusBadge

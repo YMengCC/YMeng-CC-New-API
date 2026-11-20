@@ -132,6 +132,51 @@ function renderPreview(other: LogOtherData, isAdmin = true, type?: number) {
   return screen.getByRole('button', { name: /./ })
 }
 
+test('renders the currency image in the per-call usage preview', () => {
+  const imageUrl = 'https://assets.example.com/coin.svg'
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '¤',
+      customCurrencyImageUrl: imageUrl,
+      customCurrencyExchangeRate: 2,
+    },
+  })
+
+  const preview = renderPreview({ model_price: 0.25 })
+
+  const image = within(preview).getByRole('img', { name: '¤' })
+  expect(image).toHaveAttribute('src', imageUrl)
+  expect(preview).toHaveTextContent('Per-call · 0.5')
+  fireEvent.error(image)
+  expect(within(preview).queryByRole('img')).not.toBeInTheDocument()
+  expect(preview).toHaveTextContent('Per-call · ¤ 0.5')
+})
+
+test('renders the currency image on the per-call model price in usage details', async () => {
+  const imageUrl = 'https://assets.example.com/coin.svg'
+  useSystemConfigStore.getState().setConfig({
+    currency: {
+      ...DEFAULT_CURRENCY_CONFIG,
+      quotaDisplayType: 'CUSTOM',
+      customCurrencySymbol: '¤',
+      customCurrencyImageUrl: imageUrl,
+      customCurrencyExchangeRate: 2,
+    },
+  })
+  const preview = renderPreview({ model_price: 0.25 })
+
+  fireEvent.click(preview)
+
+  const dialog = await screen.findByRole('dialog')
+  const price = within(dialog).getByText('0.5')
+  expect(price.parentElement?.querySelector('img')).toHaveAttribute(
+    'src',
+    imageUrl
+  )
+})
+
 test('keeps log details open when the parent refreshes with unchanged data', async () => {
   const other = { model_price: 0.25 }
   const wrapper = ({ children }: { children: React.ReactNode }) => (

@@ -7,6 +7,7 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { mapStatusDataToConfig } from '@/lib/status-query'
 import {
   DEFAULT_CURRENCY_CONFIG,
   useSystemConfigStore,
@@ -754,6 +755,31 @@ function mockCatfkHistory(redemption: unknown) {
     }
   })
 }
+
+it('renders the currency image on both quota-based and USD-based order amounts', async () => {
+  const imageUrl = 'https://assets.example.com/coin.svg'
+  useSystemConfigStore.getState().setConfig(
+    mapStatusDataToConfig({
+      quota_display_type: 'CUSTOM',
+      quota_per_unit: 500000,
+      custom_currency_symbol: '¤',
+      custom_currency_image_url: imageUrl,
+      custom_currency_exchange_rate: 2,
+    })
+  )
+  mockCatfkHistory({ success: true, data: {} })
+  render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
+
+  const dialog = await screen.findByRole('dialog')
+  await within(dialog).findByText('catfk-order')
+  const symbols = within(dialog).getAllByRole('img', { name: '¤' })
+  expect(symbols).toHaveLength(3)
+  for (const symbol of symbols) {
+    expect(symbol).toHaveAttribute('src', imageUrl)
+  }
+  expect(within(dialog).getAllByText('20')).toHaveLength(3)
+  expect(dialog).not.toHaveTextContent(imageUrl)
+})
 
 it('offers a redemption code button on every Catfk history order and no status query', async () => {
   useSystemConfigStore.getState().setConfig({

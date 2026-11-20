@@ -519,6 +519,33 @@ function completedWithdrawal(
   }
 }
 
+it('uses the historical currency image for the withdrawal amount', async () => {
+  const imageUrl = 'https://assets.example.com/historical-coin.svg'
+  const liveCurrency = {
+    ...useSystemConfigStore.getState().config.currency,
+    quotaDisplayType: 'CUSTOM' as const,
+    customCurrencySymbol: '¤',
+    customCurrencyImageUrl: 'https://assets.example.com/current-coin.svg',
+    customCurrencyExchangeRate: 3,
+  }
+  useSystemConfigStore.getState().setConfig({ currency: liveCurrency })
+  const { dialog } = await openWithdrawalRecords([
+    [
+      completedWithdrawal(7, {
+        currency_snapshot: {
+          ...liveCurrency,
+          customCurrencySymbol: imageUrl,
+          customCurrencyImageUrl: undefined,
+          customCurrencyExchangeRate: 2,
+        },
+      }),
+    ],
+  ])
+  const amount = await within(dialog).findByRole('cell', { name: /^¤\s*20$/ })
+  expect(within(amount).getByRole('img')).toHaveAttribute('src', imageUrl)
+  expect(amount).toHaveTextContent(/^20$/)
+})
+
 it('shows proof only for completed records with files and hides the reason column when none are rejected', async () => {
   const { user, get, dialog } = await openWithdrawalRecords([
     [

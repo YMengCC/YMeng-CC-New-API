@@ -58,6 +58,17 @@ export function PricingCurrencySelector(props: {
     })
   }
 
+  const siteImageLabel = props.siteCurrency?.imageUrl ? (
+    <span className='inline-flex items-center gap-1'>
+      {t('Site currency')} (
+      <CurrencySymbol
+        value={props.siteCurrency.symbol}
+        imageUrlOverride={props.siteCurrency.imageUrl}
+      />
+      )
+    </span>
+  ) : undefined
+
   return (
     <Field className='mb-4 gap-2'>
       <div className='flex items-center gap-1'>
@@ -108,7 +119,9 @@ export function PricingCurrencySelector(props: {
             props.siteCurrency && !available ? `${id}-error` : undefined
           }
         >
-          <SelectValue />
+          <SelectValue>
+            {value === 'site' ? siteImageLabel : undefined}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
           {items.map((item) => (
@@ -117,20 +130,9 @@ export function PricingCurrencySelector(props: {
               value={item.value}
               disabled={item.value === 'site' && !available}
             >
-              {item.value === 'site' &&
-              props.siteCurrency &&
-              props.siteCurrency.imageUrl ? (
-                <span className='inline-flex items-center gap-1'>
-                  {t('Site currency')} (
-                  <CurrencySymbol
-                    value={props.siteCurrency.symbol}
-                    imageUrlOverride={props.siteCurrency.imageUrl}
-                  />
-                  )
-                </span>
-              ) : (
-                item.label
-              )}
+              {item.value === 'site'
+                ? (siteImageLabel ?? item.label)
+                : item.label}
             </SelectItem>
           ))}
         </SelectContent>
