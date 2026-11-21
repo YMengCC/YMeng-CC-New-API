@@ -132,7 +132,7 @@ describe('TodayTopUpAmount', () => {
       }).format(12.34)
       expect(
         await screen.findByRole('status', {
-          name: `Today's total recharge: ¥${formatted}`,
+          name: `${i18n.t("Today's total recharge")}: ¥${formatted}`,
         })
       ).toBeInTheDocument()
     }
@@ -149,7 +149,7 @@ describe('TodayTopUpAmount', () => {
     await act(() => i18n.changeLanguage('fr'))
     expect(
       screen.getByRole('status', {
-        name: "Today's total recharge: ¥1 234,50",
+        name: `${i18n.t("Today's total recharge")}: ¥1 234,50`,
       })
     ).toBeInTheDocument()
   })

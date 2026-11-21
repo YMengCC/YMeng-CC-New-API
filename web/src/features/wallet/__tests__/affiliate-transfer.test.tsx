@@ -36,6 +36,7 @@ import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import type { AffiliateSummary } from '@/features/affiliate/api'
 import type { Withdrawal } from '@/features/withdrawals/api'
 import { api } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
@@ -43,6 +44,10 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { WithdrawalRecordsDialog } from '../components/dialogs/withdrawal-records-dialog'
 import { Wallet } from '../index'
+
+type ResponseEnvelope<T> =
+  | { success: true; data: T }
+  | { success: false; message: string }
 
 const clients: QueryClient[] = []
 
@@ -69,6 +74,11 @@ async function renderWallet(
     profileError?: boolean
     withdrawalError?: boolean
     summaryError?: boolean
+    summary?: Partial<AffiliateSummary>
+    summaryResponse?: (
+      data: AffiliateSummary
+    ) => Promise<ResponseEnvelope<AffiliateSummary>>
+    linkResponse?: () => Promise<ResponseEnvelope<string>>
     minimumQuota?: number
   } = {}
 ) {
@@ -100,9 +110,9 @@ async function renderWallet(
         break
       case '/api/withdrawal/profile/qr':
         return { data: new Blob(['png'], { type: 'image/png' }) }
-      case '/api/user/affiliate/summary':
+      case '/api/user/affiliate/summary': {
         if (options.summaryError) throw new Error('summary failed')
-        data = {
+        const summary: AffiliateSummary = {
           available_quota: remainingQuota,
           total_quota: availableQuota,
           invitee_count: 1,
@@ -111,9 +121,16 @@ async function renderWallet(
           rate_percent: 10,
           enabled: true,
           aff_code: 'referral',
+          ...options.summary,
         }
+        if (options.summaryResponse) {
+          return { data: await options.summaryResponse(summary) }
+        }
+        data = summary
         break
+      }
       case '/api/user/aff':
+        if (options.linkResponse) return { data: await options.linkResponse() }
         data = 'referral'
         break
       case '/api/user/topup/info':
@@ -180,6 +197,122 @@ async function renderWallet(
   await screen.findByRole('button', { name: 'Transfer to Balance' })
   return { get, post, client }
 }
+
+it('keeps existing rewards accessible when the referral program is disabled', async () => {
+  await renderWallet(5000000, true, {
+    summary: { enabled: false, rate_percent: 12.5 },
+  })
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  expect(await card.findByText('Disabled')).toBeVisible()
+  expect(card.getByText('Commission rate: 12.5%')).toBeVisible()
+  expect(card.getByText(/Existing balances are kept/)).toBeVisible()
+  expect(
+    card.getByRole('button', { name: 'Transfer to Balance' })
+  ).toBeEnabled()
+  expect(card.getByRole('button', { name: 'Withdraw' })).toBeEnabled()
+  for (const name of [
+    'Commission records',
+    'Invited users',
+    'Withdrawal records',
+  ]) {
+    expect(card.getByRole('button', { name })).toBeEnabled()
+  }
+})
+
+it('distinguishes pending and unavailable record counts from a confirmed zero after a summary retry', async () => {
+  const user = userEvent.setup()
+  let failSummary!: () => void
+  const firstResponse = new Promise<ResponseEnvelope<AffiliateSummary>>(
+    (resolve) => {
+      failSummary = () =>
+        resolve({ success: false, message: 'Summary unavailable' })
+    }
+  )
+  let retry = false
+  await renderWallet(0, true, {
+    summary: { commission_count: 0, invitee_count: 4 },
+    summaryResponse: async (summary) =>
+      retry ? { success: true, data: summary } : firstResponse,
+  })
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  const records = card.getByText('Records', { selector: 'dt' })
+  const stats = records.closest('dl')
+  expect(stats).toHaveAttribute('aria-busy', 'true')
+  expect(card.getByRole('status')).toHaveTextContent('Loading...')
+  expect(records.nextElementSibling).not.toHaveTextContent('0')
+  expect(
+    await card.findByRole('button', { name: 'Copy referral link' })
+  ).toBeEnabled()
+
+  await act(async () => failSummary())
+  const retryButton = await card.findByRole('button', { name: 'Retry' })
+  expect(records.nextElementSibling).toHaveTextContent('—')
+  expect(card.getByRole('button', { name: 'Copy referral link' })).toBeEnabled()
+  retry = true
+  await user.click(retryButton)
+  await card.findByText('Enabled')
+  expect(stats).toHaveAttribute('aria-busy', 'false')
+  expect(records.nextElementSibling).toHaveTextContent(/^0$/)
+  expect(
+    card.getByText('Invites', { selector: 'dt' }).nextElementSibling
+  ).toHaveTextContent(/^4$/)
+})
+
+it('copies the resolved signup URL after retrying a link failure while the rewards stay available', async () => {
+  const user = userEvent.setup()
+  let failLink!: () => void
+  const firstResponse = new Promise<ResponseEnvelope<string>>((resolve) => {
+    failLink = () => resolve({ success: false, message: 'Link unavailable' })
+  })
+  let retry = false
+  await renderWallet(5000000, true, {
+    linkResponse: async () =>
+      retry ? { success: true, data: 'ref +1' } : firstResponse,
+  })
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  const link = within(card.getByRole('group', { name: 'Your referral link' }))
+  expect(await card.findByText('Enabled')).toBeVisible()
+  expect(link.getByText('Loading...')).toBeVisible()
+  expect(card.getByRole('button', { name: 'Withdraw' })).toBeEnabled()
+  expect(link.queryByRole('button', { name: 'Copy referral link' })).toBeNull()
+
+  await act(async () => failLink())
+  expect(await link.findByText('Failed to load')).toBeVisible()
+  expect(card.getByRole('button', { name: 'Withdraw' })).toBeEnabled()
+  expect(link.queryByRole('button', { name: 'Copy referral link' })).toBeNull()
+  retry = true
+  await user.click(link.getByRole('button', { name: 'Retry' }))
+  const expected = `${window.location.origin}/sign-up?aff=ref%20%2B1`
+  expect(
+    await link.findByRole('textbox', { name: 'Your referral link' })
+  ).toHaveValue(expected)
+  await user.click(link.getByRole('button', { name: 'Copy referral link' }))
+  expect(await navigator.clipboard.readText()).toBe(expected)
+})
+
+it('shows the empty link state without offering to copy an empty registration URL', async () => {
+  await renderWallet(0, true, {
+    linkResponse: async () => ({ success: true, data: '' }),
+  })
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  const link = within(card.getByRole('group', { name: 'Your referral link' }))
+  expect(await link.findByText('No Data')).toBeVisible()
+  expect(link.queryByRole('textbox')).toBeNull()
+  expect(link.queryByRole('button', { name: 'Copy referral link' })).toBeNull()
+})
+
+it('lays out the four referral metrics in two mobile columns and four wider columns', async () => {
+  await renderWallet(5000000)
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  const terms = card.getAllByRole('term')
+  expect(terms.map((term) => term.textContent)).toEqual([
+    'Available',
+    'Total Earned',
+    'Invites',
+    'Records',
+  ])
+  expect(terms[0].closest('dl')).toHaveClass('grid-cols-2', 'sm:grid-cols-4')
+})
 
 it('uses the commission summary in the transfer dialog when self has no invite quota', async () => {
   const user = userEvent.setup()

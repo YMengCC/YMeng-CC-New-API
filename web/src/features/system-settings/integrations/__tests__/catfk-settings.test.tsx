@@ -208,6 +208,44 @@ test('adds an available Catfk Alipay method with its upstream channel binding', 
   )
 })
 
+test('keeps long payment identifiers visible in the selection popup', async () => {
+  const user = userEvent.setup()
+  render(
+    <PaymentMethodDialog
+      open
+      onOpenChange={vi.fn()}
+      onSave={vi.fn()}
+      catfkChannels={[
+        {
+          id: 'long-channel-id',
+          name: 'A payment channel with a deliberately long display name',
+          icon: '',
+          payment_type: 'alipay',
+        },
+      ]}
+    />
+  )
+
+  await user.click(screen.getByRole('combobox', { name: 'Payment type key' }))
+  const listbox = await screen.findByRole('listbox')
+  const popup = listbox.closest<HTMLElement>('[data-slot="select-content"]')
+  const option = within(listbox).getByRole('option', {
+    name: /A payment channel with a deliberately long display name.*Catfk: catfk_alipay/,
+  })
+
+  expect(popup).toBeInTheDocument()
+  if (!popup) throw new Error('Payment type popup was not rendered')
+  expect(popup).toHaveClass(
+    'w-[min(28rem,calc(100vw-2rem))]',
+    'max-w-[calc(100vw-2rem)]'
+  )
+  expect(option).toHaveClass(
+    '[&_[data-slot=select-item-text]]:break-words',
+    '[&_[data-slot=select-item-text]]:whitespace-normal'
+  )
+  expect(option).toBeVisible()
+})
+
 test('only offers Catfk payment identifiers returned by channel discovery', async () => {
   const user = userEvent.setup()
   render(

@@ -16,17 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getSelf } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import {
   getServerMessage,
   requireServerSuccess,
 } from '@/lib/server-error-message'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getAffiliateCode, transferAffiliateQuota } from '../api'
 import { generateAffiliateLink } from '../lib'
@@ -36,34 +37,17 @@ import { generateAffiliateLink } from '../lib'
 // ============================================================================
 
 export function useAffiliate() {
-  const [affiliateCode, setAffiliateCode] = useState<string>('')
-  const [affiliateLink, setAffiliateLink] = useState<string>('')
-  const [loading, setLoading] = useState(true)
   const [transferring, setTransferring] = useState(false)
-  const { copyToClipboard } = useCopyToClipboard()
-
-  // Fetch affiliate code
-  const fetchAffiliateCode = useCallback(async () => {
-    try {
-      setLoading(true)
+  const accountId = useAuthStore((state) => state.auth.user?.id)
+  const linkQuery = useQuery({
+    queryKey: ['affiliate', 'link', accountId],
+    queryFn: async () => {
       const response = requireServerSuccess(await getAffiliateCode())
-
-      if (response.success && response.data) {
-        setAffiliateCode(response.data)
-        const link = generateAffiliateLink(response.data)
-        setAffiliateLink(link)
-      }
-    } catch (error) {
-      handleServerError(error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Copy affiliate link
-  const copyAffiliateLink = useCallback(() => {
-    copyToClipboard(affiliateLink)
-  }, [affiliateLink, copyToClipboard])
+      return generateAffiliateLink(response.data ?? '')
+    },
+    retry: false,
+    meta: { errorToast: false, redirectOnServerError: false },
+  })
 
   // Transfer affiliate quota to balance
   const transferQuota = useCallback(async (quota: number): Promise<boolean> => {
@@ -89,17 +73,5 @@ export function useAffiliate() {
     }
   }, [])
 
-  useEffect(() => {
-    fetchAffiliateCode()
-  }, [fetchAffiliateCode])
-
-  return {
-    affiliateCode,
-    affiliateLink,
-    loading,
-    transferring,
-    copyAffiliateLink,
-    transferQuota,
-    refetch: fetchAffiliateCode,
-  }
+  return { linkQuery, transferring, transferQuota }
 }

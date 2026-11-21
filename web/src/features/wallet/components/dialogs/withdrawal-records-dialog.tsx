@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CircleCheck, CircleX, Clock, Loader } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -25,9 +25,7 @@ import { CurrencyAmount } from '@/components/currency-display'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -35,20 +33,28 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getMyWithdrawals, type Withdrawal } from '@/features/withdrawals/api'
+import { useWithdrawalStatusLabels } from '@/features/withdrawals/components/admin-withdrawal-columns'
 import { CollectionQrPreview } from '@/features/withdrawals/components/collection-qr-preview'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestamp } from '@/lib/format'
 
-const PAGE_SIZE = 10
+import {
+  WalletRecordsDialog,
+  type WalletRecordsDialogControl,
+} from './wallet-records-dialog'
 
-interface WithdrawalRecordsDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+const PAGE_SIZE = 10
+const statusIcons = {
+  pending: Clock,
+  processing: Loader,
+  completed: CircleCheck,
+  rejected: CircleX,
 }
 
-export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
+export function WithdrawalRecordsDialog(props: WalletRecordsDialogControl) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const statusLabel = useWithdrawalStatusLabels()
   const [page, setPage] = useState(1)
   const [proof, setProof] = useState<Withdrawal | null>(null)
   if (!props.open && proof) setProof(null)
@@ -57,189 +63,109 @@ export function WithdrawalRecordsDialog(props: WithdrawalRecordsDialogProps) {
     queryFn: ({ signal }) => getMyWithdrawals(page, PAGE_SIZE, signal),
     enabled: props.open,
     placeholderData: (previous) => previous,
-    meta: { errorToast: false },
+    meta: { errorToast: false, redirectOnServerError: false },
   })
   const items = records.data?.items ?? []
   const showRejectReason = items.some((item) => item.status === 'rejected')
-  const total = records.data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const statusLabel = (status: Withdrawal['status']) => {
-    const labels = {
-      pending: t('Awaiting withdrawal'),
-      processing: t('Processing'),
-      completed: t('Withdrawal completed'),
-      rejected: t('Rejected'),
-    }
-    return labels[status]
-  }
-  const statusVariant = (status: Withdrawal['status']) => {
-    if (status === 'completed') return 'success' as const
-    if (status === 'rejected') return 'danger' as const
-    if (status === 'processing') return 'info' as const
-    return 'warning' as const
-  }
-
-  let body: React.ReactNode
-  if (records.isLoading) {
-    body = (
-      <div className='space-y-2'>
-        <Skeleton className='h-10 w-full' />
-        <Skeleton className='h-10 w-full' />
-        <Skeleton className='h-10 w-full' />
-      </div>
-    )
-  } else if (items.length === 0) {
-    body = (
-      <p className='text-muted-foreground py-10 text-center text-sm'>
-        {t('No withdrawal records yet')}
-      </p>
-    )
-  } else {
-    body = null
-  }
 
   return (
-    <Dialog
+    <WalletRecordsDialog
       open={props.open}
       onOpenChange={(open) => {
         if (!open) setProof(null)
         props.onOpenChange(open)
       }}
       title={t('Withdrawal records')}
-      contentClassName='flex max-h-(--dialog-available-height) flex-col max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-3xl'
-      contentHeight='auto'
-      bodyClassName='space-y-3'
+      emptyTitle={t('No withdrawal records yet')}
+      records={records}
+      page={page}
+      pageSize={PAGE_SIZE}
+      onPageChange={setPage}
+      contentClassName='sm:max-w-3xl'
+      tableClassName='min-w-128'
+      detail={
+        props.open && proof ? (
+          <Dialog
+            open
+            title={t('Withdrawal proof')}
+            contentClassName='sm:max-w-lg'
+            onOpenChange={(open) => {
+              if (!open) setProof(null)
+            }}
+            footer={
+              <Button variant='outline' onClick={() => setProof(null)}>
+                {t('Close')}
+              </Button>
+            }
+          >
+            <CollectionQrPreview
+              key={proof.id}
+              path={`/api/withdrawal/self/${proof.id}/proof`}
+              revision={proof.id}
+              errorTitle='Failed to load withdrawal proof'
+              imageAlt={t('Withdrawal proof')}
+              loadingLabel={t('Loading...')}
+            />
+          </Dialog>
+        ) : null
+      }
     >
-      <div className='min-h-0 space-y-3'>
-        {body ?? (
-          <div className='overflow-x-auto rounded-lg border'>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('Applied at')}</TableHead>
-                  <TableHead className='text-right'>
-                    {t('Withdrawal amount')}
-                  </TableHead>
-                  <TableHead>{t('Status')}</TableHead>
-                  {showRejectReason ? (
-                    <TableHead>{t('Rejection reason')}</TableHead>
-                  ) : null}
-                  <TableHead>{t('Actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className='text-xs whitespace-nowrap'>
-                      {formatTimestamp(item.created_at)}
-                    </TableCell>
-                    <TableCell className='text-right text-xs font-medium tabular-nums'>
-                      <CurrencyAmount
-                        amount={item.quota}
-                        options={{
-                          abbreviate: false,
-                          digitsLarge: 8,
-                          digitsSmall: 12,
-                          locale,
-                        }}
-                        snapshot={item.currency_snapshot}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        copyable={false}
-                        variant={statusVariant(item.status)}
-                        label={statusLabel(item.status)}
-                      />
-                    </TableCell>
-                    {showRejectReason ? (
-                      <TableCell className='text-muted-foreground max-w-64 text-xs wrap-anywhere whitespace-pre-wrap'>
-                        {item.status === 'rejected' && item.reject_reason
-                          ? item.reject_reason
-                          : '-'}
-                      </TableCell>
-                    ) : null}
-                    <TableCell>
-                      {item.status === 'completed' &&
-                      (item.proof_size ?? 0) > 0 ? (
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={() => setProof(item)}
-                        >
-                          {t('View proof')}
-                        </Button>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-        {items.length > 0 ? (
-          <div className='flex flex-col items-center gap-3 border-t pt-4 sm:flex-row sm:justify-between'>
-            <div className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Showing')} {(page - 1) * PAGE_SIZE + 1}-
-              {Math.min(page * PAGE_SIZE, total)} {t('of')} {total}
-            </div>
-            <div className='flex items-center gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                className='h-8 w-8 p-0'
-                aria-label={t('Previous page')}
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                <ChevronLeft className='h-4 w-4' />
-              </Button>
-              <div className='text-muted-foreground flex items-center gap-1 text-sm'>
-                <span className='font-medium'>{page}</span>
-                <span>/</span>
-                <span>{totalPages}</span>
-              </div>
-              <Button
-                variant='outline'
-                size='sm'
-                className='h-8 w-8 p-0'
-                aria-label={t('Next page')}
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                <ChevronRight className='h-4 w-4' />
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-      {props.open && proof ? (
-        <Dialog
-          open
-          title={t('Withdrawal proof')}
-          contentHeight='auto'
-          contentClassName='sm:max-w-lg'
-          onOpenChange={(open) => {
-            if (!open) setProof(null)
-          }}
-          footer={
-            <Button variant='outline' onClick={() => setProof(null)}>
-              {t('Close')}
-            </Button>
-          }
-        >
-          <CollectionQrPreview
-            key={proof.id}
-            path={`/api/withdrawal/self/${proof.id}/proof`}
-            revision={proof.id}
-            errorTitle='Failed to load withdrawal proof'
-            imageAlt={t('Withdrawal proof')}
-            loadingLabel={t('Loading...')}
-          />
-        </Dialog>
-      ) : null}
-    </Dialog>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{t('Applied at')}</TableHead>
+          <TableHead className='text-right'>{t('Withdrawal amount')}</TableHead>
+          <TableHead>{t('Status')}</TableHead>
+          {showRejectReason && <TableHead>{t('Rejection reason')}</TableHead>}
+          <TableHead className='text-right'>{t('Actions')}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items.map((item) => (
+          <TableRow key={item.id}>
+            <TableCell>{formatTimestamp(item.created_at)}</TableCell>
+            <TableCell className='text-right'>
+              <CurrencyAmount
+                amount={item.quota}
+                options={{
+                  abbreviate: false,
+                  digitsLarge: 8,
+                  digitsSmall: 12,
+                  locale,
+                }}
+                snapshot={item.currency_snapshot}
+              />
+            </TableCell>
+            <TableCell>
+              <StatusBadge
+                copyable={false}
+                className='bg-muted text-foreground'
+                icon={statusIcons[item.status]}
+                label={statusLabel(item.status)}
+              />
+            </TableCell>
+            {showRejectReason && (
+              <TableCell className='text-muted-foreground max-w-64 wrap-anywhere whitespace-pre-wrap'>
+                {item.status === 'rejected' && item.reject_reason
+                  ? item.reject_reason
+                  : '-'}
+              </TableCell>
+            )}
+            <TableCell className='text-right'>
+              {item.status === 'completed' && (item.proof_size ?? 0) > 0 ? (
+                <Button
+                  variant='outline'
+                  size='sm'
+                  onClick={() => setProof(item)}
+                >
+                  {t('View proof')}
+                </Button>
+              ) : (
+                '-'
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </WalletRecordsDialog>
   )
 }
