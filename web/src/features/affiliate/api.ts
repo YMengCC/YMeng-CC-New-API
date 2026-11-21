@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import { requireServerSuccess } from '@/lib/server-error-message'
 
 export type AffiliateSummary = {
   invitee_count: number
@@ -69,7 +70,7 @@ export async function getAffiliateSummary(): Promise<AffiliateSummary> {
   const { data } = await api.get<ApiEnvelope<AffiliateSummary>>(
     '/api/user/affiliate/summary'
   )
-  return data.data
+  return requireServerSuccess(data).data
 }
 
 export async function getAffiliateCommissions(
@@ -80,7 +81,7 @@ export async function getAffiliateCommissions(
     '/api/user/affiliate/commissions',
     { params: { page, page_size: pageSize } }
   )
-  return data.data
+  return requireServerSuccess(data).data
 }
 
 export async function getAffiliateInvitees(
@@ -91,5 +92,5 @@ export async function getAffiliateInvitees(
     '/api/user/affiliate/invitees',
     { params: { page, page_size: pageSize } }
   )
-  return data.data
+  return requireServerSuccess(data).data
 }

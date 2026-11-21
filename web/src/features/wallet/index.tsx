@@ -72,10 +72,13 @@ interface WalletProps {
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { data: affiliateSummary, isError: affiliateSummaryError } = useQuery({
+  const summaryQuery = useQuery({
     queryKey: ['affiliate', 'summary'],
     queryFn: getAffiliateSummary,
+    meta: { errorToast: false, redirectOnServerError: false },
   })
+  const { data: affiliateSummary, isError: affiliateSummaryError } =
+    summaryQuery
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
@@ -98,10 +101,7 @@ export function Wallet(props: WalletProps) {
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
 
   const availableQuota =
-    affiliateSummary?.available_quota ??
-    user?.invite_quota ??
-    user?.aff_quota ??
-    0
+    affiliateSummary?.available_quota ?? user?.invite_quota ?? user?.aff_quota
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -123,12 +123,7 @@ export function Wallet(props: WalletProps) {
     calculatePaymentAmount,
     processPayment,
   } = usePayment()
-  const {
-    affiliateLink,
-    loading: affiliateLoading,
-    transferQuota,
-    transferring,
-  } = useAffiliate()
+  const { linkQuery, transferQuota, transferring } = useAffiliate()
   const { redeeming, redeemCode } = useRedemption()
   const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
   const { processing: waffoProcessing, processWaffoPayment } = useWaffoPayment()
@@ -396,9 +391,9 @@ export function Wallet(props: WalletProps) {
 
             <AffiliateRewardsCard
               user={user}
-              summary={affiliateSummary}
+              summaryQuery={summaryQuery}
               availableQuota={availableQuota}
-              affiliateLink={affiliateLink}
+              linkQuery={linkQuery}
               onTransfer={() => setTransferDialogOpen(true)}
               onWithdraw={() => setWithdrawalDialogOpen(true)}
               withdrawalAvailable={
@@ -408,7 +403,6 @@ export function Wallet(props: WalletProps) {
               complianceConfirmed={
                 topupInfo?.payment_compliance_confirmed !== false
               }
-              loading={affiliateLoading}
             />
           </div>
         </SectionPageLayout.Content>
@@ -469,7 +463,7 @@ export function Wallet(props: WalletProps) {
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
         onConfirm={handleTransfer}
-        availableQuota={availableQuota}
+        availableQuota={availableQuota ?? 0}
         transferring={transferring}
       />
 

@@ -16,19 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowRight, Share2 } from 'lucide-react'
-import { useState } from 'react'
+import type { UseQueryResult } from '@tanstack/react-query'
+import { ChevronRight } from 'lucide-react'
+import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { CurrencyAmount } from '@/components/currency-display'
-import { Badge } from '@/components/ui/badge'
+import { ErrorState } from '@/components/error-state'
+import { LoadingState } from '@/components/loading-state'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { TitledCard } from '@/components/ui/titled-card'
 import type { AffiliateSummary } from '@/features/affiliate/api'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 
 import type { UserWalletData } from '../types'
 import { AffiliateCommissionsDialog } from './dialogs/affiliate-commissions-dialog'
@@ -37,211 +41,245 @@ import { WithdrawalRecordsDialog } from './dialogs/withdrawal-records-dialog'
 
 interface AffiliateRewardsCardProps {
   user: UserWalletData | null
-  summary?: AffiliateSummary
-  availableQuota: number
-  affiliateLink: string
+  summaryQuery: UseQueryResult<AffiliateSummary>
+  availableQuota?: number
+  linkQuery: UseQueryResult<string>
   onTransfer: () => void
   onWithdraw: () => void
-  withdrawalAvailable?: boolean
-  complianceConfirmed?: boolean
-  loading?: boolean
+  withdrawalAvailable: boolean
+  complianceConfirmed: boolean
 }
 
-export function AffiliateRewardsCard({
-  user,
-  summary,
-  availableQuota,
-  affiliateLink,
-  onTransfer,
-  onWithdraw,
-  withdrawalAvailable = false,
-  complianceConfirmed = true,
-  loading,
-}: AffiliateRewardsCardProps) {
-  const { t } = useTranslation()
+export function AffiliateRewardsCard(props: AffiliateRewardsCardProps) {
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const linkId = useId()
   const [commissionsDialogOpen, setCommissionsDialogOpen] = useState(false)
   const [inviteesDialogOpen, setInviteesDialogOpen] = useState(false)
   const [withdrawalRecordsOpen, setWithdrawalRecordsOpen] = useState(false)
+  const summary = props.summaryQuery.data
+  const totalEarned = summary?.total_quota ?? props.user?.aff_history_quota
+  const inviteeCount = summary?.invitee_count ?? props.user?.aff_count
+  const hasRewards = (props.availableQuota ?? 0) > 0
+  const stats = [
+    {
+      label: t('Available'),
+      value: props.availableQuota != null && (
+        <CurrencyAmount amount={props.availableQuota} />
+      ),
+    },
+    {
+      label: t('Total Earned'),
+      value: totalEarned != null && <CurrencyAmount amount={totalEarned} />,
+    },
+    {
+      label: t('Invites'),
+      value: inviteeCount != null && formatNumber(inviteeCount, locale),
+    },
+    {
+      label: t('Records'),
+      value: summary != null && formatNumber(summary.commission_count, locale),
+    },
+  ]
+  const rules = [
+    t(
+      'Earn commission when your invited users spend wallet balance. Transfer commission to your balance or request a withdrawal.'
+    ),
+    summary &&
+      !summary.enabled &&
+      t(
+        'The affiliate program is currently disabled. Existing balances are kept, but no new commission is settled.'
+      ),
+    props.availableQuota === 0 &&
+      !props.summaryQuery.isPending &&
+      t('No referral rewards available to transfer or withdraw'),
+    hasRewards &&
+      !props.withdrawalAvailable &&
+      t(
+        'Withdrawal is unavailable until your referral rewards balance is loaded'
+      ),
+    !props.complianceConfirmed &&
+      t(
+        'Referral reward transfers and withdrawals are disabled until the administrator confirms compliance terms.'
+      ),
+  ].filter((rule): rule is string => typeof rule === 'string')
 
-  if (loading) {
-    return (
-      <Card data-card-hover='false' className='bg-muted/20 py-0'>
-        <CardContent className='grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.72fr)_minmax(320px,1.15fr)] lg:items-center'>
-          <div>
-            <Skeleton className='h-5 w-32' />
-            <Skeleton className='mt-2 h-4 w-48' />
-          </div>
-          <Skeleton className='h-14 rounded-lg' />
-          <Skeleton className='h-10 rounded-lg' />
-        </CardContent>
-      </Card>
+  let linkContent: ReactNode
+  if (props.linkQuery.isPending) {
+    linkContent = <LoadingState inline size='sm' message={t('Loading...')} />
+  } else if (props.linkQuery.isError) {
+    linkContent = (
+      <ErrorState
+        className='min-h-0 p-3'
+        title={t('Failed to load')}
+        onRetry={() => void props.linkQuery.refetch()}
+      />
+    )
+  } else if (props.linkQuery.data) {
+    linkContent = (
+      <div className='flex min-w-0 items-center gap-2'>
+        <Input
+          aria-labelledby={linkId}
+          value={props.linkQuery.data}
+          readOnly
+          className='min-w-0 flex-1 font-mono text-xs'
+        />
+        <CopyButton
+          value={props.linkQuery.data}
+          variant='outline'
+          tooltip={t('Copy referral link')}
+        />
+      </div>
+    )
+  } else {
+    linkContent = (
+      <p className='text-muted-foreground text-sm'>{t('No Data')}</p>
     )
   }
 
-  const totalEarned = summary?.total_quota ?? user?.aff_history_quota ?? 0
-  const inviteeCount = summary?.invitee_count ?? user?.aff_count ?? 0
-  const commissionCount = summary?.commission_count ?? 0
-  const hasRewards = availableQuota > 0
-
   return (
     <>
-      <Card data-card-hover='false' className='bg-muted/20 py-0'>
-        <CardContent className='grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(200px,1fr)_minmax(180px,0.65fr)_minmax(280px,1fr)] lg:items-center'>
-          <div className='flex min-w-0 items-center gap-2.5'>
-            <IconBadge tone='chart-3'>
-              <Share2 />
-            </IconBadge>
-            <div className='min-w-0'>
-              <div className='flex items-center gap-2'>
-                <h3 className='truncate text-sm font-semibold'>
-                  {t('Referral Program')}
-                </h3>
-                {summary ? (
-                  <Badge variant='secondary' className='text-[11px]'>
-                    {t('Commission rate: {{rate}}%', {
-                      rate: summary.rate_percent,
-                    })}
-                  </Badge>
-                ) : null}
-              </div>
-              <p className='text-muted-foreground line-clamp-1 text-xs'>
-                {t(
-                  'Earn commission when your invited users spend wallet balance. Transfer commission to your balance or request a withdrawal.'
-                )}
-              </p>
+      <section className='min-w-0' aria-label={t('Referral Program')}>
+        <TitledCard
+          disableHoverEffect
+          title={
+            <div className='flex flex-wrap items-center gap-2'>
+              <h3>{t('Referral Program')}</h3>
+              {summary && (
+                <StatusBadge
+                  copyable={false}
+                  showDot={summary.enabled}
+                  className='bg-muted text-foreground'
+                  label={summary.enabled ? t('Enabled') : t('Disabled')}
+                  variant={summary.enabled ? 'success' : 'neutral'}
+                />
+              )}
             </div>
-          </div>
-
-          <div className='grid grid-cols-4 gap-1.5 text-center'>
-            {[
-              {
-                key: 'available',
-                label: t('Available'),
-                value: <CurrencyAmount amount={availableQuota} mode='quota' />,
-              },
-              {
-                key: 'total-earned',
-                label: t('Total Earned'),
-                value: <CurrencyAmount amount={totalEarned} mode='quota' />,
-              },
-              {
-                key: 'invites',
-                label: t('Invites'),
-                value: String(inviteeCount),
-              },
-              {
-                key: 'records',
-                label: t('Records'),
-                value: String(commissionCount),
-              },
-            ].map((item) => (
-              <div key={item.key}>
-                <div className='text-muted-foreground truncate text-[10px] font-medium tracking-wider uppercase'>
+          }
+          action={
+            summary && (
+              <p className='text-base font-semibold tabular-nums'>
+                {t('Commission rate: {{rate}}%', {
+                  rate: summary.rate_percent,
+                })}
+              </p>
+            )
+          }
+          contentClassName='space-y-4'
+        >
+          {props.summaryQuery.isPending && (
+            <div role='status'>
+              <LoadingState inline size='sm' message={t('Loading...')} />
+            </div>
+          )}
+          {props.summaryQuery.isError && (
+            <ErrorState
+              className='min-h-0 p-3'
+              title={t('Failed to load')}
+              onRetry={() => void props.summaryQuery.refetch()}
+            />
+          )}
+          <dl
+            aria-busy={props.summaryQuery.isPending}
+            className='grid grid-cols-2 gap-2 sm:grid-cols-4'
+          >
+            {stats.map((item) => (
+              <div
+                key={item.label}
+                className='bg-muted/40 row-span-2 grid min-w-0 grid-rows-subgrid gap-1 rounded-lg border p-3 sm:p-4'
+              >
+                <dt className='text-muted-foreground text-xs font-medium wrap-anywhere'>
                   {item.label}
-                </div>
-                <div className='mt-0.5 truncate text-sm font-semibold tabular-nums'>
-                  {item.value}
-                </div>
+                </dt>
+                <dd className='text-lg leading-tight font-semibold tracking-tight wrap-anywhere tabular-nums sm:text-2xl'>
+                  {item.value ||
+                    (props.summaryQuery.isPending ? (
+                      <Skeleton className='h-6 w-12 max-w-full' />
+                    ) : (
+                      '—'
+                    ))}
+                </dd>
               </div>
             ))}
-          </div>
-
-          <div className='flex items-center gap-2'>
-            <Input
-              value={affiliateLink}
-              readOnly
-              className='border-muted bg-background/70 h-9 min-w-0 flex-1 font-mono text-xs'
-            />
-            <CopyButton
-              value={affiliateLink}
-              variant='outline'
-              className='bg-background size-9 shrink-0'
-              iconClassName='size-4'
-              tooltip={t('Copy referral link')}
-              aria-label={t('Copy referral link')}
-            />
+          </dl>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-end'>
+            <div
+              role='group'
+              aria-labelledby={linkId}
+              className='min-w-0 flex-1 space-y-1.5'
+            >
+              <p id={linkId} className='text-sm font-medium'>
+                {t('Your referral link')}
+              </p>
+              {linkContent}
+            </div>
             <div
               role='group'
               aria-label={t('Referral reward actions')}
-              className='flex shrink-0 flex-col gap-2'
+              className='flex flex-col gap-2 sm:flex-row sm:flex-wrap'
             >
               <Button
-                onClick={onTransfer}
-                disabled={!hasRewards || !complianceConfirmed}
-                className='h-9 px-3'
-                size='sm'
+                variant='secondary'
+                onClick={props.onTransfer}
+                disabled={!hasRewards || !props.complianceConfirmed}
               >
                 {t('Transfer to Balance')}
               </Button>
               <Button
-                onClick={onWithdraw}
-                disabled={!withdrawalAvailable || !complianceConfirmed}
-                className='h-9 px-3'
-                size='sm'
+                variant='outline'
+                onClick={props.onWithdraw}
+                disabled={
+                  !props.withdrawalAvailable || !props.complianceConfirmed
+                }
               >
                 {t('Withdraw')}
               </Button>
             </div>
           </div>
-
-          <div className='flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-3'>
-            {!hasRewards ? (
-              <p className='text-muted-foreground text-xs'>
-                {t('No referral rewards available to transfer or withdraw')}
-              </p>
-            ) : null}
-            {hasRewards && !withdrawalAvailable ? (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'Withdrawal is unavailable until your referral rewards balance is loaded'
-                )}
-              </p>
-            ) : null}
-            <Button
-              variant='link'
-              size='sm'
-              className='h-auto p-0 text-xs'
-              onClick={() => setCommissionsDialogOpen(true)}
-            >
-              {t('Commission records')}
-              <ArrowRight className='size-3' />
-            </Button>
-            <Button
-              variant='link'
-              size='sm'
-              className='h-auto p-0 text-xs'
-              onClick={() => setInviteesDialogOpen(true)}
-            >
-              {t('Invited users')}
-              <ArrowRight className='size-3' />
-            </Button>
-            <Button
-              variant='link'
-              size='sm'
-              className='h-auto p-0 text-xs'
-              onClick={() => setWithdrawalRecordsOpen(true)}
-            >
-              {t('Withdrawal records')}
-              <ArrowRight className='size-3' />
-            </Button>
-            {summary && !summary.enabled ? (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'The affiliate program is currently disabled. Existing balances are kept, but no new commission is settled.'
-                )}
-              </p>
-            ) : null}
-            {!complianceConfirmed ? (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'Referral reward transfers and withdrawals are disabled until the administrator confirms compliance terms.'
-                )}
-              </p>
-            ) : null}
+          <div className='grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'>
+            <div className='min-w-0'>
+              <h4 className='text-sm font-semibold'>{t('Rules')}</h4>
+              <ul className='divide-y'>
+                {rules.map((rule) => (
+                  <li
+                    key={rule}
+                    className='text-muted-foreground hover:bg-muted/50 px-2 py-2 text-sm leading-relaxed wrap-anywhere'
+                  >
+                    {rule}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className='min-w-0'>
+              <h4 className='text-sm font-semibold'>{t('Records')}</h4>
+              <div className='divide-y'>
+                {[
+                  {
+                    label: t('Commission records'),
+                    open: setCommissionsDialogOpen,
+                  },
+                  { label: t('Invited users'), open: setInviteesDialogOpen },
+                  {
+                    label: t('Withdrawal records'),
+                    open: setWithdrawalRecordsOpen,
+                  },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <Button
+                      variant='ghost'
+                      className='h-auto w-full justify-between gap-2 px-2 py-2 text-start whitespace-normal'
+                      onClick={() => item.open(true)}
+                    >
+                      {item.label}
+                      <ChevronRight aria-hidden='true' />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
+        </TitledCard>
+      </section>
       <AffiliateCommissionsDialog
         open={commissionsDialogOpen}
         onOpenChange={setCommissionsDialogOpen}
