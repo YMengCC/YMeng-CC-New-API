@@ -418,9 +418,16 @@ export function PaymentMethodDialog({
                       <SelectValue placeholder={t('Select payment type')} />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent alignItemWithTrigger={false}>
+                  <SelectContent
+                    alignItemWithTrigger={false}
+                    className='w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]'
+                  >
                     {paymentTypeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        className='[&_[data-slot=select-item-text]]:break-words [&_[data-slot=select-item-text]]:whitespace-normal'
+                      >
                         {option.label}
                       </SelectItem>
                     ))}
