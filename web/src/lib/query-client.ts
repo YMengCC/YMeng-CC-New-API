@@ -24,6 +24,8 @@ import { getServerErrorStatus } from './server-error-message'
 interface ErrorNotificationMeta extends Record<string, unknown> {
   /** Disable automatic notifications when a caller presents the failure itself. */
   errorToast?: boolean
+  /** Optional panels can handle HTTP 500 with their own retry action. */
+  redirectOnServerError?: boolean
 }
 
 declare module '@tanstack/react-query' {
@@ -58,7 +60,12 @@ export function createAppQueryClient(
     queryCache: new QueryCache({
       onError: (error, query) => {
         if (query.meta?.errorToast !== false) handleServerError(error)
-        if (getServerErrorStatus(error) === 500) onInternalServerError?.()
+        if (
+          query.meta?.redirectOnServerError !== false &&
+          getServerErrorStatus(error) === 500
+        ) {
+          onInternalServerError?.()
+        }
       },
     }),
   })

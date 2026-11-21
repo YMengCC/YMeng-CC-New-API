@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "Aucun mappage de point de terminaison configuré.",
     "No items configured yet.": "Aucun élément configuré pour le moment.",
     "{{count}} item": "{{count}} élément",
-    "{{count}} items": "{{count}} éléments"
+    "{{count}} items": "{{count}} éléments",
+    "Usage insights": "Aperçu de l'utilisation",
+    "Hide analytics amounts": "Masquer les montants des statistiques",
+    "Open logs": "Ouvrir les journaux",
+    "Unable to load usage insights": "Impossible de charger l'aperçu de l'utilisation",
+    "No usage data yet": "Aucune donnée d'utilisation pour le moment",
+    "Model recommendations": "Recommandations de modèles",
+    "Popular models and vendors from this week": "Modèles et fournisseurs populaires cette semaine",
+    "View rankings": "Voir les classements",
+    "Unable to load model recommendations": "Impossible de charger les recommandations de modèles",
+    "No model ranking data yet": "Aucune donnée de classement des modèles",
+    "Show analytics amounts": "Afficher les montants des statistiques",
+    "Open referral analytics": "Ouvrir l'analytique des parrainages",
+    "Unable to load referral analytics": "Impossible de charger l'analytique des parrainages",
+    "No referral activity yet": "Aucune activité de parrainage pour le moment"
   }
 }

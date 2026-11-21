@@ -67,6 +67,7 @@ import { normalizeEndpoint } from '../../lib/api-endpoint'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
+import { OverviewInsights } from './overview-insights'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
@@ -769,6 +770,8 @@ export function OverviewDashboard() {
           )}
 
           <SummaryCards />
+
+          <OverviewInsights />
 
           {showContentPanels && (
             <CardStaggerContainer

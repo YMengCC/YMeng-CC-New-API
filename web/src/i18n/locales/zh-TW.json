@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "尚未設定端點對映。",
     "No items configured yet.": "尚未設定項目。",
     "{{count}} item": "{{count}} 個項目",
-    "{{count}} items": "{{count}} 個項目"
+    "{{count}} items": "{{count}} 個項目",
+    "Usage insights": "用量洞察",
+    "Hide analytics amounts": "隱藏看板金額",
+    "Open logs": "開啟日誌",
+    "Unable to load usage insights": "無法載入用量洞察",
+    "No usage data yet": "尚無用量資料",
+    "Model recommendations": "模型推薦",
+    "Popular models and vendors from this week": "本週熱門模型和供應商",
+    "View rankings": "查看排行榜",
+    "Unable to load model recommendations": "無法載入模型推薦",
+    "No model ranking data yet": "尚無模型排行資料",
+    "Show analytics amounts": "顯示看板金額",
+    "Open referral analytics": "開啟推薦看板",
+    "Unable to load referral analytics": "無法載入推薦看板",
+    "No referral activity yet": "尚無推薦活動"
   }
 }

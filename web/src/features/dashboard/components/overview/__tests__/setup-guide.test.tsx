@@ -77,9 +77,24 @@ beforeEach(() => {
         }
       case '/api/user/models':
         return { data: { success: true, data: ['gpt-4o-mini'] } }
+      case '/api/rankings':
+        return {
+          data: {
+            success: true,
+            data: { models: [], vendors: [], top_movers: [] },
+          },
+        }
       case '/api/data/self':
         return { data: { success: true, data: [] } }
       default:
+        if (url.startsWith('/api/log/self/stat?')) {
+          return {
+            data: {
+              success: true,
+              data: { quota: 0, rpm: 0, tpm: 0, cache_rate: 0 },
+            },
+          }
+        }
         throw new Error(`Unexpected dashboard request: ${url}`)
     }
   })
@@ -113,7 +128,10 @@ describe('overview setup guide', () => {
     const toggle = await screen.findByRole('button', { name: 'Setup guide' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(
-      screen.getAllByRole('heading').map((heading) => heading.textContent)
+      screen
+        .getAllByRole('heading')
+        .slice(0, 2)
+        .map((heading) => heading.textContent)
     ).toEqual(['Overview', 'Usage at a glance'])
     expect(screen.queryByText('Setup guide complete')).not.toBeInTheDocument()
     expect(screen.queryByText('Setup progress: 3/3')).not.toBeInTheDocument()

@@ -23,10 +23,16 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { getRankings } from '../api'
 import type { RankingPeriod } from '../types'
 
-export function useRankings(period: RankingPeriod) {
+export function useRankings(
+  period: RankingPeriod,
+  options?: { inlineErrors: boolean }
+) {
   return useQuery({
     queryKey: ['rankings', period],
     queryFn: async () => requireServerSuccess(await getRankings(period)),
+    meta: options?.inlineErrors
+      ? { errorToast: false, redirectOnServerError: false }
+      : undefined,
     staleTime: 5 * 60 * 1000,
   })
 }
