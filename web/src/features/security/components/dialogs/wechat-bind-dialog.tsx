@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -133,10 +134,16 @@ export function WeChatBindDialog(props: WeChatBindDialogProps) {
           >
             {props.qrCodeUrl ? (
               <div className='flex justify-center'>
-                <img
+                <ConfiguredImage
                   src={props.qrCodeUrl}
                   alt={t('WeChat login QR code')}
                   className='size-48 rounded-lg border object-contain'
+                  loading='lazy'
+                  fallback={
+                    <p className='text-muted-foreground text-sm'>
+                      {t('QR code is not configured. Please contact support.')}
+                    </p>
+                  }
                 />
               </div>
             ) : (

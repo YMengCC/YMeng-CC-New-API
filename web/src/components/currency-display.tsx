@@ -94,7 +94,7 @@ export function CurrencySymbol(props: CurrencySymbolProps) {
     fallback = isCurrencyImageUrl(value) ? '¤' : value || '¤'
   }
   if (configuredAsImage && !directImageUrl) {
-    fallback = '¤'
+    fallback = display.meta.kind === 'custom' ? display.meta.symbol : '¤'
   }
 
   if (configuredAsImage && fallback) {

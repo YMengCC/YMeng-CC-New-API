@@ -41,6 +41,8 @@ export function HeaderLogo({
     <img
       src={src}
       alt={alt}
+      loading='eager'
+      decoding='async'
       className={cn(
         'h-6 w-6 rounded-lg transition-opacity duration-200',
         !loading && logoLoaded ? 'opacity-100' : 'opacity-0',

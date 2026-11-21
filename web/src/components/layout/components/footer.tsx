@@ -20,6 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { Fragment, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
@@ -262,7 +263,7 @@ export function Footer(props: FooterProps) {
               data-depth-tilt='8'
               className='group flex items-center gap-2.5'
             >
-              <img
+              <ConfiguredImage
                 src={displayLogo}
                 alt={displayName}
                 data-relief='float'

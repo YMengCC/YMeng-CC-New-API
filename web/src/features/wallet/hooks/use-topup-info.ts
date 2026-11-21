@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useCallback } from 'react'
 
 import { handleServerError } from '@/lib/handle-server-error'
+import { preloadImage } from '@/lib/image-preload'
 
 import { getTopupInfo } from '../api'
 import {
@@ -119,6 +120,24 @@ function parseWaffoPayMethods(data: unknown): WaffoPayMethod[] {
     .filter((item) => item.name)
 }
 
+function preloadTopupImage(source: string | undefined): void {
+  if (!source) return
+  const trimmedSource = source.trim()
+  if (!trimmedSource) return
+  if (trimmedSource.startsWith('data:') || trimmedSource.startsWith('blob:')) {
+    return
+  }
+
+  try {
+    const parsed = new URL(trimmedSource, window.location.href)
+    if (parsed.protocol === 'https:' || trimmedSource.startsWith('/')) {
+      void preloadImage(parsed.toString())
+    }
+  } catch {
+    /* Invalid configured image URLs are rejected by the renderers. */
+  }
+}
+
 function parseCreemProducts(data: unknown): CreemProduct[] {
   return parseJsonArray(data)
     .filter(
@@ -184,6 +203,17 @@ function parseDiscountMap(data: unknown): Record<number, number> {
   )
 }
 
+function preloadTopupImages(info: TopupInfo): void {
+  for (const method of info.pay_methods) {
+    preloadTopupImage(method.icon)
+    preloadTopupImage(method.topup_link_image)
+  }
+
+  for (const method of info.waffo_pay_methods ?? []) {
+    preloadTopupImage(method.icon)
+  }
+}
+
 export function useTopupInfo() {
   const [topupInfo, setTopupInfo] = useState<TopupInfo | null>(null)
   const [presetAmounts, setPresetAmounts] = useState<PresetAmount[]>([])
@@ -214,6 +244,7 @@ export function useTopupInfo() {
         ),
       }
 
+      preloadTopupImages(processedData)
       setTopupInfo(processedData)
 
       if (processedData.amount_options.length > 0) {

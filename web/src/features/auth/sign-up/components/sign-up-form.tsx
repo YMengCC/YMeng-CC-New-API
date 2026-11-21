@@ -18,12 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { z } from 'zod'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Dialog } from '@/components/dialog'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
@@ -53,6 +54,7 @@ import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
+import { getWechatQrCodeUrl } from '@/lib/status-query'
 import { cn } from '@/lib/utils'
 
 export function SignUpForm({
@@ -110,19 +112,7 @@ export function SignUpForm({
   const hasWeChatLogin = Boolean(status?.wechat_login)
   const turnstileReady = !isTurnstileEnabled || Boolean(turnstileToken)
 
-  const wechatQrCodeUrl = useMemo(() => {
-    return (
-      status?.wechat_qrcode ||
-      status?.wechat_qr_code ||
-      status?.wechat_qrcode_image_url ||
-      status?.wechat_qr_code_image_url ||
-      status?.wechat_account_qrcode_image_url ||
-      status?.WeChatAccountQRCodeImageURL ||
-      status?.data?.wechat_qrcode ||
-      status?.data?.WeChatAccountQRCodeImageURL ||
-      ''
-    )
-  }, [status])
+  const wechatQrCodeUrl = getWechatQrCodeUrl(status)
 
   useEffect(() => {
     if (requiresLegalConsent) {
@@ -435,10 +425,16 @@ export function SignUpForm({
         >
           {wechatQrCodeUrl ? (
             <div className='flex justify-center'>
-              <img
+              <ConfiguredImage
                 src={wechatQrCodeUrl}
                 alt={t('WeChat login QR code')}
                 className='h-40 w-40 rounded-md border object-contain'
+                loading='lazy'
+                fallback={
+                  <p className='text-muted-foreground text-sm'>
+                    {t('QR code is not configured. Please contact support.')}
+                  </p>
+                }
               />
             </div>
           ) : (

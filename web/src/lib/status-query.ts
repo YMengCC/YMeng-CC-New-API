@@ -21,6 +21,7 @@ import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { getStatus } from '@/lib/api'
 import { DEFAULT_SYSTEM_NAME, DEFAULT_LOGO } from '@/lib/constants'
 import { isCurrencyImageUrl } from '@/lib/currency'
+import { preloadImage } from '@/lib/image-preload'
 import {
   useSystemConfigStore,
   type CurrencyConfig,
@@ -56,6 +57,80 @@ function toNumber(value: unknown, fallback: number): number {
     if (!Number.isNaN(parsed)) return parsed
   }
   return fallback
+}
+
+function isPreloadableStatusImage(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const source = value.trim()
+  if (!source) return false
+  if (source.startsWith('data:') || source.startsWith('blob:')) return true
+  if (source.startsWith('/')) return true
+
+  try {
+    const parsed = new URL(source)
+    return (
+      parsed.host !== '' &&
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+    )
+  } catch {
+    return false
+  }
+}
+
+/** Warm the browser cache for images supplied by the public status payload. */
+export function preloadStatusImages(data: StatusData | undefined | null): void {
+  if (!data) return
+
+  const sources = [
+    data.logo,
+    data.custom_currency_image_url,
+    data.custom_currency_symbol,
+    data.wechat_qrcode,
+    data.wechat_qr_code,
+    data.wechat_qrcode_image_url,
+    data.wechat_qr_code_image_url,
+    data.wechat_account_qrcode_image_url,
+    data.WeChatAccountQRCodeImageURL,
+  ]
+
+  for (const source of sources) {
+    if (isPreloadableStatusImage(source)) preloadImage(source)
+  }
+}
+
+/** Resolve the compatible WeChat QR-code fields exposed by older servers. */
+export function getWechatQrCodeUrl(
+  status: Record<string, unknown> | null | undefined
+): string {
+  if (!status) return ''
+
+  const nestedStatus =
+    status.data && typeof status.data === 'object'
+      ? (status.data as Record<string, unknown>)
+      : undefined
+  const candidates = [
+    status.wechat_qrcode,
+    status.wechat_qr_code,
+    status.wechat_qrcode_image_url,
+    status.wechat_qr_code_image_url,
+    status.wechat_account_qrcode_image_url,
+    status.WeChatAccountQRCodeImageURL,
+    nestedStatus?.wechat_qrcode,
+    nestedStatus?.wechat_qr_code,
+    nestedStatus?.wechat_qrcode_image_url,
+    nestedStatus?.wechat_qr_code_image_url,
+    nestedStatus?.wechat_account_qrcode_image_url,
+    nestedStatus?.WeChatAccountQRCodeImageURL,
+  ]
+
+  return (
+    candidates
+      .find(
+        (candidate): candidate is string =>
+          typeof candidate === 'string' && candidate.trim() !== ''
+      )
+      ?.trim() ?? ''
+  )
 }
 
 /**
@@ -123,7 +198,10 @@ export function readCachedStatus(): StatusData | null {
   try {
     if (typeof window === 'undefined') return null
     const raw = window.localStorage.getItem(STATUS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as StatusData) : null
+    if (!raw) return null
+    const status = JSON.parse(raw) as StatusData
+    preloadStatusImages(status)
+    return status
   } catch {
     return null
   }
@@ -150,6 +228,7 @@ async function fetchStatus(): Promise<StatusData | null> {
   const status = (await getStatus()) as StatusData | null
 
   if (status) {
+    preloadStatusImages(status)
     try {
       useSystemConfigStore.getState().setConfig(mapStatusDataToConfig(status))
     } catch (err) {

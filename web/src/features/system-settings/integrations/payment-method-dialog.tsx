@@ -22,6 +22,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -605,10 +606,16 @@ export function PaymentMethodDialog({
                   <FormMessage />
                   {showTopupLink && topupLinkImagePreview && (
                     <div className='bg-muted/30 flex justify-center rounded-lg border p-3'>
-                      <img
+                      <ConfiguredImage
                         src={topupLinkImagePreview}
                         alt={t('Top-up link image preview')}
                         className='h-12 max-w-full rounded-lg object-contain'
+                        loading='lazy'
+                        fallback={
+                          <span className='text-muted-foreground text-xs'>
+                            {t('Image not available')}
+                          </span>
+                        }
                       />
                     </div>
                   )}

@@ -21,6 +21,7 @@ import { type ChangeEvent, useRef, type SetStateAction, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
 import { StaticRowActions } from '@/components/data-table/static/static-row-actions'
 import { Dialog } from '@/components/dialog'
@@ -342,10 +343,11 @@ export function WaffoSettingsSection({
               header: t('Icon'),
               cell: (m) =>
                 m.icon ? (
-                  <img
+                  <ConfiguredImage
                     src={m.icon}
                     alt={m.name}
                     className='h-6 w-6 rounded object-contain'
+                    loading='lazy'
                   />
                 ) : (
                   <span className='text-muted-foreground'>-</span>
@@ -421,10 +423,11 @@ export function WaffoSettingsSection({
             <Label>{t('Icon')}</Label>
             <div className='flex items-center gap-3'>
               {methodForm.icon ? (
-                <img
+                <ConfiguredImage
                   src={methodForm.icon}
                   alt={methodForm.name || t('Icon')}
                   className='h-10 w-10 rounded border object-contain p-1'
+                  loading='lazy'
                 />
               ) : (
                 <div className='bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded border text-xs'>

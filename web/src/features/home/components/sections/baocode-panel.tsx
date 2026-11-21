@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { ArrowUpRight, Download, LogIn, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -79,16 +80,12 @@ export function BaoCodePanel() {
         style={{ animationDelay: '60ms' }}
       >
         <span className='inline-flex max-w-full min-w-0 items-center gap-[0.28em]'>
-          <img
+          <ConfiguredImage
             src={logo}
             alt=''
             data-depth-float='1'
             data-relief='float'
             className='h-[0.78em] w-auto shrink-0 rounded-[0.18em]'
-            onError={(event) => {
-              // A missing site logo leaves the name on its own
-              event.currentTarget.style.display = 'none'
-            }}
           />
           <span className='min-w-0 break-words'>{systemName}</span>
           <span

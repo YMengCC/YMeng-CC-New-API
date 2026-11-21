@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { formatPricingNumber } from '@/features/system-settings/models/pricing-format'
-import { getCurrencyImageUrl, isCurrencySymbolUrlLike } from '@/lib/currency'
+import { getCurrencySymbolResolution } from '@/lib/currency'
 import type { CurrencyConfig } from '@/stores/system-config-store'
 
 export type PricingCurrency = {
@@ -40,18 +40,11 @@ export function getSitePricingCurrency(
     return { label: 'CNY', symbol: '¥', exchangeRate: config.usdExchangeRate }
   }
   if (config.quotaDisplayType === 'CUSTOM') {
-    const configuredSymbol = config.customCurrencySymbol?.trim() || '¤'
-    let symbol = configuredSymbol
-    if (
-      isCurrencySymbolUrlLike(configuredSymbol) &&
-      [...configuredSymbol].length > 8
-    ) {
-      symbol = '¤'
-    }
+    const resolved = getCurrencySymbolResolution(config)
     return {
-      label: symbol,
-      symbol,
-      imageUrl: getCurrencyImageUrl(config),
+      label: resolved.textSymbol,
+      symbol: resolved.textSymbol,
+      imageUrl: resolved.imageUrl,
       exchangeRate: config.customCurrencyExchangeRate,
     }
   }

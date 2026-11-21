@@ -30,6 +30,7 @@ import {
 import {
   STATUS_QUERY_KEY,
   ensureStatus,
+  getWechatQrCodeUrl,
   mapStatusDataToConfig,
   statusQueryOptions,
 } from '@/lib/status-query'
@@ -310,5 +311,13 @@ describe('custom currency status mapping', () => {
       DEFAULT_CURRENCY_CONFIG.customCurrencySymbol
     )
     expect(config.currency?.customCurrencyImageUrl).toBeUndefined()
+  })
+
+  test('resolves the first compatible WeChat QR-code field', () => {
+    expect(
+      getWechatQrCodeUrl({
+        data: { WeChatAccountQRCodeImageURL: 'https://cdn.example.com/qr.png' },
+      })
+    ).toBe('https://cdn.example.com/qr.png')
   })
 })

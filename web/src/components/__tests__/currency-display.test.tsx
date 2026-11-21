@@ -124,6 +124,22 @@ describe('CurrencySymbol', () => {
       IMAGE_URL
     )
   })
+
+  it('falls back to the configured text symbol when its image fails', () => {
+    useSystemConfigStore.getState().setConfig({
+      currency: {
+        ...DEFAULT_CURRENCY_CONFIG,
+        quotaDisplayType: 'CUSTOM',
+        customCurrencySymbol: '€',
+        customCurrencyImageUrl: IMAGE_URL,
+      },
+    })
+
+    render(<CurrencySymbol />)
+    fireEvent.error(screen.getByRole('img', { name: '¤' }))
+
+    expect(screen.getByText('€')).toBeInTheDocument()
+  })
 })
 
 describe('CurrencyFormattedText', () => {

@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { ExternalLink, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { CurrencyAmount } from '@/components/currency-display'
 import { Input } from '@/components/ui/input'
@@ -258,10 +259,16 @@ export function PaymentConfirmDialog({
                 title={t('Open external top-up link')}
                 className='focus-visible:ring-ring group relative inline-flex rounded-lg transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
               >
-                <img
+                <ConfiguredImage
                   src={topupPromptContent.linkImage}
                   alt={t('Open external top-up link')}
                   className='h-12 w-auto rounded-lg'
+                  loading='lazy'
+                  fallback={
+                    <span className='text-muted-foreground px-3 py-2 text-xs'>
+                      {t('Image not available')}
+                    </span>
+                  }
                 />
                 <span className='bg-background text-muted-foreground group-hover:text-foreground absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border shadow-sm'>
                   <ExternalLink className='h-3 w-3' aria-hidden='true' />

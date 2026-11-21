@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { CopyButton } from '@/components/copy-button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -1124,6 +1125,19 @@ export function OAuthSection(props: OAuthSectionProps) {
                           ref={field.ref}
                         />
                       </FormControl>
+                      {field.value && (
+                        <ConfiguredImage
+                          src={field.value}
+                          alt={t('WeChat login QR code')}
+                          className='size-32 rounded-lg border object-contain'
+                          loading='lazy'
+                          fallback={
+                            <span className='text-muted-foreground text-xs'>
+                              {t('Image not available')}
+                            </span>
+                          }
+                        />
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

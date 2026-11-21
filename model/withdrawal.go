@@ -54,7 +54,7 @@ type WithdrawalCurrencySnapshot struct {
 	QuotaDisplayType           string  `json:"quotaDisplayType" gorm:"type:varchar(16)"`
 	QuotaPerUnit               float64 `json:"quotaPerUnit"`
 	USDExchangeRate            float64 `json:"usdExchangeRate"`
-	CustomCurrencySymbol       string  `json:"customCurrencySymbol" gorm:"type:varchar(255)"`
+	CustomCurrencySymbol       string  `json:"customCurrencySymbol" gorm:"type:text"`
 	CustomCurrencyExchangeRate float64 `json:"customCurrencyExchangeRate"`
 }
 

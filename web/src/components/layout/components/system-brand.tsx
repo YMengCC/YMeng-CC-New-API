@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -66,7 +67,7 @@ export function SystemBrand(props: SystemBrandProps) {
         )}
       >
         <div className='flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md'>
-          <img
+          <ConfiguredImage
             src={logo}
             alt={t('Logo')}
             className='size-full rounded-md object-cover'
@@ -86,7 +87,7 @@ export function SystemBrand(props: SystemBrandProps) {
           render={<div />}
         >
           <div className='flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg'>
-            <img
+            <ConfiguredImage
               src={logo}
               alt={t('Logo')}
               className='size-full rounded-lg object-cover'

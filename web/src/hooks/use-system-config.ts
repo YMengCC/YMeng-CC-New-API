@@ -21,29 +21,13 @@ import { useEffect, useCallback } from 'react'
 
 import { DEFAULT_LOGO } from '@/lib/constants'
 import { applyFaviconToDom } from '@/lib/dom-utils'
+import { preloadImage } from '@/lib/image-preload'
 import { ensureStatus } from '@/lib/status-query'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 interface UseSystemConfigOptions {
   /** Automatically fetch config from backend (use only in root component) */
   autoLoad?: boolean
-}
-
-/** Preload an image, returning a cleanup that detaches the pending handlers. */
-function preloadImage(
-  src: string,
-  onLoad: () => void,
-  onError: () => void
-): () => void {
-  const img = new Image()
-  img.onload = onLoad
-  img.onerror = onError
-  img.src = src
-
-  return () => {
-    img.onload = null
-    img.onerror = null
-  }
 }
 
 /**
@@ -89,22 +73,27 @@ export function useSystemConfig(options: UseSystemConfigOptions = {}) {
     // Skip if logo is already loaded
     if (!logo || logo === loadedLogoUrl) return
 
-    // Preload new logo
-    return preloadImage(
-      logo,
-      () => {
-        setLoadedLogoUrl(logo)
-        applyFaviconToDom(logo)
-      },
-      () => {
-        if (logo !== DEFAULT_LOGO) {
+    let active = true
+    void preloadImage(logo)
+      .then((loaded) => {
+        if (!active) return
+        if (loaded) {
+          applyFaviconToDom(logo)
+        } else if (logo !== DEFAULT_LOGO) {
           // eslint-disable-next-line no-console
           console.error('Failed to load logo:', logo)
         }
-        // Mark as loaded even on error to prevent infinite retry
+        // Mark the URL as handled on success and failure to prevent retries.
         setLoadedLogoUrl(logo)
-      }
-    )
+      })
+      .catch(() => {
+        if (!active) return
+        setLoadedLogoUrl(logo)
+      })
+
+    return () => {
+      active = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.logo, loadedLogoUrl, setLoadedLogoUrl])
 

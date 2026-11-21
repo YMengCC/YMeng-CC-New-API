@@ -21,6 +21,7 @@ import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import {
   Form,
   FormControl,
@@ -257,6 +258,19 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                     <FormDescription>
                       {t('URL to your logo image (optional)')}
                     </FormDescription>
+                    {field.value && (
+                      <ConfiguredImage
+                        src={field.value}
+                        alt={t('Logo')}
+                        className='size-10 rounded-lg border object-contain'
+                        loading='lazy'
+                        fallback={
+                          <span className='text-muted-foreground text-xs'>
+                            {t('Image not available')}
+                          </span>
+                        }
+                      />
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

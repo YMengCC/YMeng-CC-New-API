@@ -20,6 +20,7 @@ import { CheckCircle2, Info, Lock } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -117,7 +118,7 @@ export function RegionNoticeDialog() {
         <div className='flex flex-col gap-2 sm:gap-2.5'>
           <div className='flex items-center gap-2'>
             <div className='flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md'>
-              <img
+              <ConfiguredImage
                 src={logo}
                 alt=''
                 className='size-full rounded-md object-cover'

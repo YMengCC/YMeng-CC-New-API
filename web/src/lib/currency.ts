@@ -169,21 +169,53 @@ export function isCurrencySymbolUrlLike(value: unknown): value is string {
   )
 }
 
-function resolveCurrencyImageUrl(config: CurrencyConfig): string | null {
-  if (config.quotaDisplayType !== 'CUSTOM') return null
+export type CurrencySymbolResolution = {
+  textSymbol: string
+  imageUrl: string | null
+}
+
+function resolveCurrencySymbol(
+  config: CurrencyConfig
+): CurrencySymbolResolution {
+  if (config.quotaDisplayType !== 'CUSTOM') {
+    return { textSymbol: '', imageUrl: null }
+  }
+
+  const configuredSymbol = config.customCurrencySymbol?.trim() ?? ''
+  let imageUrl: string | null = null
   if (isCurrencyImageUrl(config.customCurrencyImageUrl)) {
-    return config.customCurrencyImageUrl.trim()
+    imageUrl = config.customCurrencyImageUrl.trim()
+  } else if (isCurrencyImageUrl(configuredSymbol)) {
+    imageUrl = configuredSymbol
   }
-  // Older servers and historical snapshots only carry the image in the symbol.
-  if (isCurrencyImageUrl(config.customCurrencySymbol)) {
-    return config.customCurrencySymbol.trim()
+
+  if (imageUrl) {
+    const textSymbol = isCurrencyImageUrl(configuredSymbol)
+      ? '¤'
+      : configuredSymbol || '¤'
+    return { textSymbol, imageUrl }
   }
-  return null
+
+  if (
+    isCurrencySymbolUrlLike(configuredSymbol) &&
+    [...configuredSymbol].length > 8
+  ) {
+    return { textSymbol: '¤', imageUrl: null }
+  }
+
+  return { textSymbol: configuredSymbol || '¤', imageUrl: null }
+}
+
+/** Resolve the one text symbol and image URL used by currency components. */
+export function getCurrencySymbolResolution(
+  snapshot?: CurrencyConfig
+): CurrencySymbolResolution {
+  return resolveCurrencySymbol(getConfig(snapshot))
 }
 
 /** Return the configured custom currency image URL, if the symbol is an image. */
 export function getCurrencyImageUrl(snapshot?: CurrencyConfig): string | null {
-  return resolveCurrencyImageUrl(getConfig(snapshot))
+  return getCurrencySymbolResolution(snapshot).imageUrl
 }
 
 export function isCurrencyDisplayType(
@@ -237,19 +269,10 @@ function getDisplayMeta(config: CurrencyConfig): DisplayMeta {
         exchangeRate: config.usdExchangeRate,
       }
     case 'CUSTOM': {
-      const configuredSymbol = config.customCurrencySymbol?.trim() ?? ''
-      let textSymbol = configuredSymbol
-      if (
-        isCurrencySymbolUrlLike(configuredSymbol) &&
-        [...configuredSymbol].length > 8
-      ) {
-        // The console only allows URL-shaped values above 8 characters when
-        // they are images, so anything else here is legacy junk.
-        textSymbol = '¤'
-      }
+      const resolved = resolveCurrencySymbol(config)
       return {
         kind: 'custom',
-        symbol: resolveCurrencyImageUrl(config) ? '¤' : textSymbol,
+        symbol: resolved.textSymbol,
         exchangeRate: config.customCurrencyExchangeRate,
       }
     }

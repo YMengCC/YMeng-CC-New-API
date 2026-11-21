@@ -21,6 +21,7 @@ import { CreditCard, Landmark } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { IconAlipay, IconWeChat, IconStripe } from '@/assets/brand-icons'
+import { ConfiguredImage } from '@/components/configured-image'
 import { ReactIconByName } from '@/components/react-icon-by-name'
 
 import { PAYMENT_TYPES, PAYMENT_ICON_COLORS } from '../constants'
@@ -72,14 +73,14 @@ export function getPaymentIcon(
   const safeIconUrl = normalizeHttpIconUrl(iconValue)
   if (safeIconUrl) {
     return (
-      <img
+      <ConfiguredImage
         src={safeIconUrl}
         alt={altName || paymentType || 'payment'}
         className={className}
         style={{ objectFit: 'contain' }}
         loading='lazy'
-        decoding='async'
         referrerPolicy='no-referrer'
+        fallback={getPaymentIcon(paymentType, className, undefined, altName)}
       />
     )
   }

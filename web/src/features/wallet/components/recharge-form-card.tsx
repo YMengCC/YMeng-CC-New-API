@@ -27,6 +27,7 @@ import {
 import { useState, useEffect } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -547,10 +548,12 @@ export function RechargeFormCard({
                           )
                         } else if (method.icon) {
                           methodIcon = (
-                            <img
+                            <ConfiguredImage
                               src={method.icon}
                               alt={method.name}
                               className='h-4 w-4 object-contain'
+                              loading='lazy'
+                              fallback={getPaymentIcon('waffo')}
                             />
                           )
                         }

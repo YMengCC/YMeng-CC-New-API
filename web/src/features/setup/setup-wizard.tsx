@@ -23,6 +23,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfiguredImage } from '@/components/configured-image'
 import { ErrorState } from '@/components/error-state'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { LoadingState } from '@/components/loading-state'
@@ -293,7 +294,7 @@ export function SetupWizard() {
             {systemConfigLoading ? (
               <Skeleton className='absolute inset-0 rounded-xl' />
             ) : (
-              <img
+              <ConfiguredImage
                 src={logo}
                 alt={t('System logo')}
                 className='h-12 w-12 rounded-xl object-cover shadow-sm'
