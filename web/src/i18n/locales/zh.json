@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "尚未配置端点映射。",
     "No items configured yet.": "尚未配置项目。",
     "{{count}} item": "{{count}} 个项目",
-    "{{count}} items": "{{count}} 个项目"
+    "{{count}} items": "{{count}} 个项目",
+    "Usage insights": "用量洞察",
+    "Hide analytics amounts": "隐藏看板金额",
+    "Open logs": "打开日志",
+    "Unable to load usage insights": "无法加载用量洞察",
+    "No usage data yet": "暂无用量数据",
+    "Model recommendations": "模型推荐",
+    "Popular models and vendors from this week": "本周热门模型和供应商",
+    "View rankings": "查看排行榜",
+    "Unable to load model recommendations": "无法加载模型推荐",
+    "No model ranking data yet": "暂无模型排行数据",
+    "Show analytics amounts": "显示看板金额",
+    "Open referral analytics": "打开推荐看板",
+    "Unable to load referral analytics": "无法加载推荐看板",
+    "No referral activity yet": "暂无推荐活动"
   }
 }

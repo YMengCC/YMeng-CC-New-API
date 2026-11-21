@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "Chưa cấu hình ánh xạ endpoint.",
     "No items configured yet.": "Chưa cấu hình mục nào.",
     "{{count}} item": "{{count}} mục",
-    "{{count}} items": "{{count}} mục"
+    "{{count}} items": "{{count}} mục",
+    "Usage insights": "Tổng quan sử dụng",
+    "Hide analytics amounts": "Ẩn số tiền trong thống kê",
+    "Open logs": "Mở nhật ký",
+    "Unable to load usage insights": "Không thể tải tổng quan sử dụng",
+    "No usage data yet": "Chưa có dữ liệu sử dụng",
+    "Model recommendations": "Đề xuất mô hình",
+    "Popular models and vendors from this week": "Mô hình và nhà cung cấp phổ biến trong tuần này",
+    "View rankings": "Xem bảng xếp hạng",
+    "Unable to load model recommendations": "Không thể tải đề xuất mô hình",
+    "No model ranking data yet": "Chưa có dữ liệu xếp hạng mô hình",
+    "Show analytics amounts": "Hiện số tiền trong thống kê",
+    "Open referral analytics": "Mở bảng phân tích giới thiệu",
+    "Unable to load referral analytics": "Không thể tải bảng phân tích giới thiệu",
+    "No referral activity yet": "Chưa có hoạt động giới thiệu"
   }
 }

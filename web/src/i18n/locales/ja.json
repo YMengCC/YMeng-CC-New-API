@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "エンドポイントのマッピングは設定されていません。",
     "No items configured yet.": "項目はまだ設定されていません。",
     "{{count}} item": "{{count}} 件",
-    "{{count}} items": "{{count}} 件"
+    "{{count}} items": "{{count}} 件",
+    "Usage insights": "使用状況の概要",
+    "Hide analytics amounts": "分析欄の金額を隠す",
+    "Open logs": "ログを開く",
+    "Unable to load usage insights": "使用状況の概要を読み込めません",
+    "No usage data yet": "使用データはまだありません",
+    "Model recommendations": "モデルのおすすめ",
+    "Popular models and vendors from this week": "今週よく使われたモデルとベンダー",
+    "View rankings": "ランキングを見る",
+    "Unable to load model recommendations": "モデルのおすすめを読み込めません",
+    "No model ranking data yet": "モデルランキングのデータはまだありません",
+    "Show analytics amounts": "分析欄の金額を表示",
+    "Open referral analytics": "紹介分析を開く",
+    "Unable to load referral analytics": "紹介分析を読み込めません",
+    "No referral activity yet": "紹介アクティビティはまだありません"
   }
 }

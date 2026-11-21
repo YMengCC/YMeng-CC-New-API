@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "No endpoint mappings configured.",
     "No items configured yet.": "No items configured yet.",
     "{{count}} item": "{{count}} item",
-    "{{count}} items": "{{count}} items"
+    "{{count}} items": "{{count}} items",
+    "Usage insights": "Usage insights",
+    "Hide analytics amounts": "Hide analytics amounts",
+    "Open logs": "Open logs",
+    "Unable to load usage insights": "Unable to load usage insights",
+    "No usage data yet": "No usage data yet",
+    "Model recommendations": "Model recommendations",
+    "Popular models and vendors from this week": "Popular models and vendors from this week",
+    "View rankings": "View rankings",
+    "Unable to load model recommendations": "Unable to load model recommendations",
+    "No model ranking data yet": "No model ranking data yet",
+    "Show analytics amounts": "Show analytics amounts",
+    "Open referral analytics": "Open referral analytics",
+    "Unable to load referral analytics": "Unable to load referral analytics",
+    "No referral activity yet": "No referral activity yet"
   }
 }

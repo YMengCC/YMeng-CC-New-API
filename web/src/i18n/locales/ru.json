@@ -8243,6 +8243,20 @@
     "No endpoint mappings configured.": "Сопоставления конечных точек не настроены.",
     "No items configured yet.": "Элементы пока не настроены.",
     "{{count}} item": "{{count}} элемент",
-    "{{count}} items": "{{count}} элементов"
+    "{{count}} items": "{{count}} элементов",
+    "Usage insights": "Обзор использования",
+    "Hide analytics amounts": "Скрыть суммы в аналитике",
+    "Open logs": "Открыть журналы",
+    "Unable to load usage insights": "Не удалось загрузить обзор использования",
+    "No usage data yet": "Данных об использовании пока нет",
+    "Model recommendations": "Рекомендации моделей",
+    "Popular models and vendors from this week": "Популярные модели и поставщики за неделю",
+    "View rankings": "Открыть рейтинг",
+    "Unable to load model recommendations": "Не удалось загрузить рекомендации моделей",
+    "No model ranking data yet": "Данных рейтинга моделей пока нет",
+    "Show analytics amounts": "Показать суммы в аналитике",
+    "Open referral analytics": "Открыть аналитику рекомендаций",
+    "Unable to load referral analytics": "Не удалось загрузить аналитику рекомендаций",
+    "No referral activity yet": "Активности рекомендаций пока нет"
   }
 }
