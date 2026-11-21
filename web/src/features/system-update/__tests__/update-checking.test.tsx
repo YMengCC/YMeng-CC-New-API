@@ -273,6 +273,9 @@ describe('backend update feed', () => {
     await within(dialog).findByRole('button', {
       name: /v1\.10\.0.*Latest release/,
     })
+    const history = within(dialog).getByRole('region', {
+      name: 'Release history',
+    })
     expect(
       within(dialog).getAllByRole('region', { name: 'Release history' })
     ).toHaveLength(1)
@@ -281,6 +284,11 @@ describe('backend update feed', () => {
         name: /v1\.10\.0.*Latest release/,
       })
     ).toHaveLength(1)
+    const installButton = within(dialog).getByRole('button', {
+      name: 'Install update',
+    })
+    expect(installButton).toBeEnabled()
+    expect(history).not.toContainElement(installButton)
     expect(
       within(dialog).getAllByText('GitHub rate limit reached. Try again later.')
     ).toHaveLength(1)
@@ -288,9 +296,6 @@ describe('backend update feed', () => {
       within(dialog).queryByText('Updates have not been checked yet.')
     ).not.toBeInTheDocument()
     expect(within(dialog).queryByText('Unknown')).not.toBeInTheDocument()
-    expect(
-      within(dialog).getByRole('button', { name: 'Install update' })
-    ).toBeEnabled()
     expect(useSystemUpdateStore.getState().snapshot?.releases).toEqual([])
     expect(browserFetch).not.toHaveBeenCalled()
   })

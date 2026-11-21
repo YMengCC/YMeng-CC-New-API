@@ -124,22 +124,27 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
               </>
             }
           >
-            <dl className='grid min-w-0 gap-3 text-sm sm:grid-cols-2'>
-              <div className='min-w-0'>
-                <dt className='text-muted-foreground'>
-                  {t('Current version')}
-                </dt>
-                <dd className='font-medium break-all'>
-                  {update.currentVersion || t('Unknown version')}
-                </dd>
-              </div>
-              <div className='min-w-0'>
-                <dt className='text-muted-foreground'>{t('Latest version')}</dt>
-                <dd className='font-medium break-all'>
-                  {release?.tag_name || t('Unknown')}
-                </dd>
-              </div>
-            </dl>
+            <div className='flex min-w-0 flex-col gap-4 rounded-lg border p-3 sm:flex-row sm:items-end sm:justify-between sm:p-4'>
+              <dl className='grid min-w-0 flex-1 gap-3 text-sm sm:grid-cols-2'>
+                <div className='min-w-0'>
+                  <dt className='text-muted-foreground'>
+                    {t('Current version')}
+                  </dt>
+                  <dd className='font-medium break-all'>
+                    {update.currentVersion || t('Unknown version')}
+                  </dd>
+                </div>
+                <div className='min-w-0'>
+                  <dt className='text-muted-foreground'>
+                    {t('Latest version')}
+                  </dt>
+                  <dd className='font-medium break-all'>
+                    {release?.tag_name || t('Unknown')}
+                  </dd>
+                </div>
+              </dl>
+              {release && managed.renderReleaseAction(release.tag_name)}
+            </div>
             {statusText && (
               <p role='status' aria-live='polite' className='text-sm'>
                 {statusText}
@@ -187,7 +192,6 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
                 key={release.tag_name}
                 releases={update.releases}
                 currentVersion={update.currentVersion}
-                renderReleaseAction={managed.renderReleaseAction}
               />
             )}
           </Dialog>

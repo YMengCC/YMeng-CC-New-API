@@ -150,16 +150,19 @@ const feedReleases: SystemRelease[] = [
 ]
 
 function renderUpdates(releases = feedReleases) {
+  const latestRelease = releases[0]
   return render(
     <QueryClientProvider client={client}>
       <ManagedUpdateSection enabled>
         {(managed) => (
           <>
             {managed.statusContent}
+            {latestRelease && (
+              <div>{managed.renderReleaseAction(latestRelease.tag_name)}</div>
+            )}
             <ReleaseHistory
               releases={releases}
               currentVersion={status.current_version}
-              renderReleaseAction={managed.renderReleaseAction}
             />
             <button
               type='button'
@@ -538,14 +541,14 @@ describe('retained instance cleanup', () => {
 })
 
 describe('single release list', () => {
-  test('composes installation with the matching release notes and never renders a second version list', async () => {
+  test('keeps installation beside the version summary and outside the release history', async () => {
     renderUpdates()
     const history = screen.getByRole('region', { name: 'Release history' })
-    await waitFor(() =>
-      expect(
-        within(history).getByRole('button', { name: 'Install update' })
-      ).toBeEnabled()
-    )
+    const installButton = await screen.findByRole('button', {
+      name: 'Install update',
+    })
+    await waitFor(() => expect(installButton).toBeEnabled())
+    expect(history).not.toContainElement(installButton)
     expect(
       await within(history).findByText('Latest branch release notes')
     ).toBeVisible()
@@ -658,20 +661,20 @@ describe('managed installation availability', () => {
     }
   )
 
-  test('labels the installed release as current and prevents reinstalling it', async () => {
+  test('keeps the latest-version installation action when the current release is expanded', async () => {
     const user = userEvent.setup()
     renderUpdates()
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Install update' })
-      ).toBeEnabled()
-    )
+    const installButton = await screen.findByRole('button', {
+      name: 'Install update',
+    })
+    await waitFor(() => expect(installButton).toBeEnabled())
     await user.click(
       screen.getByRole('button', { name: /v1\.2\.1.*Current version/ })
     )
+    expect(installButton).toBeEnabled()
     expect(
-      screen.getByRole('button', { name: 'Current version' })
-    ).toBeDisabled()
+      screen.queryByRole('button', { name: 'Current version' })
+    ).not.toBeInTheDocument()
   })
 
   test('translates the retained-container status when switching interface language', async () => {
