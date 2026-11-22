@@ -464,14 +464,19 @@ For commercial licensing, please contact support@quantumnous.com
     }
   }
 
+  /* The animation only runs when the ticker reports that its content is wider
+   * than the pill; a short announcement stays still and readable. */
   .announcement-ticker-track {
-    animation-name: announcement-ticker-ltr;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
     will-change: transform;
   }
 
-  [dir='rtl'] .announcement-ticker-track {
+  .announcement-ticker-track[data-scrolling='true'] {
+    animation-name: announcement-ticker-ltr;
+  }
+
+  [dir='rtl'] .announcement-ticker-track[data-scrolling='true'] {
     animation-name: announcement-ticker-rtl;
   }
 
