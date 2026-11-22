@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate } from '@tanstack/react-router'
-import { User, Wallet, LogOut, Settings, ShieldCheck } from 'lucide-react'
+import {
+  User,
+  Wallet,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SignOutDialog } from '@/components/sign-out-dialog'
@@ -95,6 +102,11 @@ export function ProfileDropdown() {
           <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
             <User className='size-4' />
             {t('Profile')}
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => navigate({ to: '/advisor' })}>
+            <Sparkles className='size-4' />
+            萌萌的专属顾问
           </DropdownMenuItem>
 
           {isSecurityVisible && (
