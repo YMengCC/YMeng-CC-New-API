@@ -120,6 +120,11 @@ export function SidebarModulesCard() {
       description: t('User personal functions'),
       modules: [
         {
+          key: 'advisor',
+          title: '萌萌的专属顾问',
+          description: '余额查询与 QQ 绑定',
+        },
+        {
           key: 'topup',
           title: t('Wallet Management'),
           description: t('Balance and top-up management'),

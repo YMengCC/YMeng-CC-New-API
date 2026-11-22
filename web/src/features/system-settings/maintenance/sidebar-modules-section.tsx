@@ -124,6 +124,10 @@ export function SidebarModulesSection({
       },
     },
     personal: {
+      advisor: {
+        title: '萌萌的专属顾问',
+        description: '余额查询、QQ 绑定与群内指令。',
+      },
       topup: {
         title: t('Wallet'),
         description: t('Top up balance and view billing history.'),

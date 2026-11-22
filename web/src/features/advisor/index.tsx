@@ -23,15 +23,10 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { useProfile } from '@/features/profile/hooks'
 
 import { BalanceCard } from './components/balance-card'
+import { FeatureOverviewCard } from './components/feature-overview-card'
 import { QqBindingCard } from './components/qq-binding-card'
 
 export function Advisor() {
@@ -58,6 +53,10 @@ export function Advisor() {
           </CardStaggerItem>
 
           <CardStaggerItem>
+            <FeatureOverviewCard />
+          </CardStaggerItem>
+
+          <CardStaggerItem>
             <BalanceCard
               profile={profile}
               loading={loading}
@@ -67,17 +66,6 @@ export function Advisor() {
 
           <CardStaggerItem>
             <QqBindingCard />
-          </CardStaggerItem>
-
-          <CardStaggerItem>
-            <Card>
-              <CardHeader>
-                <CardTitle>更多功能</CardTitle>
-                <CardDescription>
-                  正在准备中，后续会在这里陆续上线。
-                </CardDescription>
-              </CardHeader>
-            </Card>
           </CardStaggerItem>
         </CardStaggerContainer>
       </div>

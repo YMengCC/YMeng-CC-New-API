@@ -34,6 +34,7 @@ import {
   ServerCog,
   Settings,
   ShieldCheck,
+  Sparkles,
   Ticket,
   User,
   Users,
@@ -113,6 +114,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
         id: 'personal',
         title: t('Personal'),
         items: [
+          {
+            title: '萌萌的专属顾问',
+            url: '/advisor',
+            icon: Sparkles,
+          },
           {
             title: t('Wallet'),
             url: '/wallet',
