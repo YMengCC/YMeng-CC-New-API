@@ -321,8 +321,15 @@ func topUpQueryCutoff() int64 {
 	return common.GetTimestamp() - topUpQueryWindowSeconds
 }
 
-func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
-	// Start transaction
+type TopUpFilters struct {
+	Keyword       string
+	PaymentMethod string
+	Status        string
+	StartTime     int64
+	EndTime       int64
+}
+
+func queryTopUps(userId int, filters TopUpFilters, pageInfo *common.PageInfo, recentOnly bool) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -333,57 +340,75 @@ func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, tota
 		}
 	}()
 
-	cutoff := topUpQueryCutoff()
-
-	// Get total count within transaction
-	err = tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff).Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
+	query := tx.Model(&TopUp{})
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if recentOnly {
+		query = query.Where("create_time >= ?", topUpQueryCutoff())
+	}
+	if filters.Keyword != "" {
+		pattern, perr := sanitizeLikePattern(filters.Keyword)
+		if perr != nil {
+			tx.Rollback()
+			return nil, 0, perr
+		}
+		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
+	}
+	if filters.PaymentMethod != "" {
+		query = query.Where("payment_method = ?", filters.PaymentMethod)
+	}
+	if filters.Status != "" {
+		query = query.Where("status = ?", filters.Status)
+	}
+	if filters.StartTime > 0 {
+		query = query.Where("create_time >= ?", filters.StartTime)
+	}
+	if filters.EndTime > 0 {
+		query = query.Where("create_time < ?", filters.EndTime)
 	}
 
-	// Get paginated topups within same transaction
-	err = tx.Where("user_id = ? AND create_time >= ?", userId, cutoff).Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error
-	if err != nil {
+	countQuery := query
+	if filters.Keyword != "" {
+		countQuery = countQuery.Limit(searchTopUpCountHardLimit)
+	}
+	if err = countQuery.Count(&total).Error; err != nil {
 		tx.Rollback()
+		if filters.Keyword != "" {
+			common.SysError(common.LogText("failed to count search topups: %s", err.Error()))
+			return nil, 0, common.NewMessage("Failed to search top-up records")
+		}
 		return nil, 0, err
 	}
-
-	// Commit transaction
+	if err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error; err != nil {
+		tx.Rollback()
+		if filters.Keyword != "" {
+			common.SysError(common.LogText("failed to search topups: %s", err.Error()))
+			return nil, 0, common.NewMessage("Failed to search top-up records")
+		}
+		return nil, 0, err
+	}
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
-
 	return topups, total, nil
+}
+
+func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+	return queryTopUps(userId, TopUpFilters{}, pageInfo, true)
+}
+
+func GetUserTopUpsFiltered(userId int, filters TopUpFilters, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+	return queryTopUps(userId, filters, pageInfo, true)
 }
 
 // GetAllTopUps 获取全平台的充值记录（管理员使用，不限制时间窗口）
 func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	return queryTopUps(0, TopUpFilters{}, pageInfo, false)
+}
 
-	if err = tx.Model(&TopUp{}).Count(&total).Error; err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	if err = tx.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error; err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return topups, total, nil
+func GetAllTopUpsFiltered(filters TopUpFilters, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+	return queryTopUps(0, filters, pageInfo, false)
 }
 
 // GetTodayTopUpAmount sums immutable credited recharge snapshots in the given local day.

@@ -40,6 +40,7 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  BillingHistoryFilters,
 } from './types'
 
 // ============================================================================
@@ -203,19 +204,33 @@ export async function transferAffiliateQuota(
 /**
  * Get billing history for current user
  */
-export async function getUserBillingHistory(
-  page: number,
-  pageSize: number,
-  keyword?: string
-): Promise<ApiResponse<BillingHistoryResponse>> {
+function billingHistoryParams(filters: BillingHistoryFilters): URLSearchParams {
   const params = new URLSearchParams({
-    p: page.toString(),
-    page_size: pageSize.toString(),
+    p: String(filters.page ?? 1),
+    page_size: String(filters.pageSize ?? 10),
   })
-  if (keyword) {
-    params.append('keyword', keyword)
+  const values: Record<string, string | undefined> = {
+    order_type: filters.orderType,
+    status: filters.status,
+    start_date: filters.startDate,
+    end_date: filters.endDate,
+    order_no: filters.orderNo,
   }
-  const res = await api.get(`/api/user/topup/self?${params.toString()}`)
+  for (const [key, value] of Object.entries(values)) {
+    if (value) params.set(key, value)
+  }
+  return params
+}
+
+/**
+ * Get billing history for current user
+ */
+export async function getUserBillingHistory(
+  filters: BillingHistoryFilters
+): Promise<ApiResponse<BillingHistoryResponse>> {
+  const res = await api.get(
+    `/api/user/topup/self?${billingHistoryParams(filters).toString()}`
+  )
   return res.data
 }
 
@@ -223,18 +238,11 @@ export async function getUserBillingHistory(
  * Get billing history for all users (admin only)
  */
 export async function getAllBillingHistory(
-  page: number,
-  pageSize: number,
-  keyword?: string
+  filters: BillingHistoryFilters
 ): Promise<ApiResponse<BillingHistoryResponse>> {
-  const params = new URLSearchParams({
-    p: page.toString(),
-    page_size: pageSize.toString(),
-  })
-  if (keyword) {
-    params.append('keyword', keyword)
-  }
-  const res = await api.get(`/api/user/topup?${params.toString()}`)
+  const res = await api.get(
+    `/api/user/topup?${billingHistoryParams(filters).toString()}`
+  )
   return res.data
 }
 

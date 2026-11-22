@@ -13,15 +13,12 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { useIsAdmin } from '@/hooks/use-admin'
-import { useDebounce } from '@/hooks/use-debounce'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import {
@@ -30,141 +27,112 @@ import {
   completeOrder,
   isApiSuccess,
 } from '../api'
-import type { TopupRecord } from '../types'
-
-// ============================================================================
-// Billing History Hook
-// ============================================================================
+import type { BillingHistoryFilters, TopupRecord } from '../types'
 
 interface UseBillingHistoryOptions {
-  /** Initial page number */
-  initialPage?: number
-  /** Initial page size */
-  initialPageSize?: number
+  filters: BillingHistoryFilters
+  enabled: boolean
+  onFiltersChange: (filters: BillingHistoryFilters) => void
 }
 
-export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
-  const { initialPage = 1, initialPageSize = 10 } = options
+export function useBillingHistory(options: UseBillingHistoryOptions) {
   const isAdmin = useIsAdmin()
-
   const [records, setRecords] = useState<TopupRecord[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(initialPage)
-  const [pageSize, setPageSize] = useState(initialPageSize)
-  const [keyword, setKeyword] = useState('')
-  const debouncedKeyword = useDebounce(keyword)
-  const requestIdRef = useRef(0)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<unknown>(null)
   const [completing, setCompleting] = useState(false)
+  const requestIdRef = useRef(0)
 
-  /**
-   * Fetch billing history
-   */
   const fetchBillingHistory = useCallback(async () => {
     const requestId = ++requestIdRef.current
     setLoading(true)
+    setError(null)
     try {
       const response = isAdmin
-        ? await getAllBillingHistory(page, pageSize, debouncedKeyword)
-        : await getUserBillingHistory(page, pageSize, debouncedKeyword)
-
+        ? await getAllBillingHistory(options.filters)
+        : await getUserBillingHistory(options.filters)
       if (requestId !== requestIdRef.current) return
-
       if (isApiSuccess(response) && response.data) {
         setRecords(response.data.items || [])
         setTotal(response.data.total || 0)
       } else {
-        handleServerError(response, i18next.t('Failed to load billing history'))
+        const failure = new Error(i18next.t('Failed to load billing history'))
+        setError(failure)
         setRecords([])
         setTotal(0)
+        handleServerError(response, failure.message)
       }
-    } catch (error) {
+    } catch (requestError) {
       if (requestId !== requestIdRef.current) return
-      handleServerError(error, i18next.t('Failed to load billing history'))
+      setError(requestError)
       setRecords([])
       setTotal(0)
+      handleServerError(
+        requestError,
+        i18next.t('Failed to load billing history')
+      )
     } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false)
-      }
+      if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [debouncedKeyword, isAdmin, page, pageSize])
+  }, [isAdmin, options.filters])
 
-  /**
-   * Complete a pending order (admin only)
-   */
   const handleCompleteOrder = useCallback(
     async (tradeNo: string) => {
       if (!isAdmin) {
         toast.error(i18next.t('Admin access required'))
         return false
       }
-
       setCompleting(true)
       try {
         const response = await completeOrder({ trade_no: tradeNo })
         if (isApiSuccess(response)) {
           toast.success(i18next.t('Order completed successfully'))
-          // Refresh the list
           await fetchBillingHistory()
           return true
-        } else {
-          handleServerError(response, i18next.t('Failed to complete order'))
-          return false
         }
-      } catch (error) {
-        handleServerError(error, i18next.t('Failed to complete order'))
+        handleServerError(response, i18next.t('Failed to complete order'))
+        return false
+      } catch (requestError) {
+        handleServerError(requestError, i18next.t('Failed to complete order'))
         return false
       } finally {
         setCompleting(false)
       }
     },
-    [isAdmin, fetchBillingHistory]
+    [fetchBillingHistory, isAdmin]
   )
 
-  /**
-   * Change page
-   */
-  const handlePageChange = useCallback((newPage: number) => {
-    setPage(newPage)
-  }, [])
+  const updateFilters = useCallback(
+    (changes: Partial<BillingHistoryFilters>) => {
+      options.onFiltersChange({
+        ...options.filters,
+        ...changes,
+        page: changes.page ?? 1,
+      })
+    },
+    [options]
+  )
 
-  /**
-   * Change page size
-   */
-  const handlePageSizeChange = useCallback((newPageSize: number) => {
-    setPageSize(newPageSize)
-    setPage(1) // Reset to first page when changing page size
-  }, [])
-
-  /**
-   * Search by keyword
-   */
-  const handleSearch = useCallback((newKeyword: string) => {
-    requestIdRef.current += 1
-    setKeyword(newKeyword)
-    setPage(1) // Reset to first page when searching
-  }, [])
-
-  // Fetch data after the search draft has settled.
   useEffect(() => {
-    if (keyword !== debouncedKeyword) return
-
-    fetchBillingHistory()
-  }, [debouncedKeyword, fetchBillingHistory, keyword])
+    if (options.enabled) void fetchBillingHistory()
+  }, [fetchBillingHistory, options.enabled])
 
   return {
     records,
     total,
-    page,
-    pageSize,
-    keyword,
+    page: options.filters.page ?? 1,
+    pageSize: options.filters.pageSize ?? 10,
+    orderNo: options.filters.orderNo ?? '',
     loading,
+    error,
     completing,
     isAdmin,
-    handlePageChange,
-    handlePageSizeChange,
-    handleSearch,
+    handlePageChange: (page: number) => updateFilters({ page }),
+    handlePageSizeChange: (pageSize: number) => updateFilters({ pageSize }),
+    handleSearch: (orderNo: string) =>
+      updateFilters({ orderNo: orderNo || undefined }),
+    handleFilterChange: updateFilters,
     handleCompleteOrder,
     refresh: fetchBillingHistory,
   }

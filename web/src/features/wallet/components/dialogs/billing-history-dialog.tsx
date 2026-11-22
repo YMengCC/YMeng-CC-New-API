@@ -19,9 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { Search, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { CurrencyAmount } from '@/components/currency-display'
+import { DatePicker } from '@/components/date-picker'
 import { Dialog } from '@/components/dialog'
+import { EmptyState } from '@/components/empty-state'
+import { ErrorState } from '@/components/error-state'
 import { StatusBadge } from '@/components/status-badge'
 import {
   AlertDialog,
@@ -46,6 +50,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+import dayjs from '@/lib/dayjs'
 import { formatNumber } from '@/lib/format'
 
 import { useBillingHistory } from '../../hooks/use-billing-history'
@@ -54,35 +59,49 @@ import {
   getPaymentMethodName,
   formatTimestamp,
 } from '../../lib/billing'
+import type { BillingHistoryFilters, TopupStatus } from '../../types'
 import { CatfkRedemptionDialog } from './catfk-redemption-dialog'
 
 // These providers store the credited wallet quota rather than a USD amount.
 const quotaAmountProviders = new Set(['catfk', 'redemption'])
+const defaultBillingHistoryFilters: BillingHistoryFilters = {
+  page: 1,
+  pageSize: 10,
+}
+const noopFiltersChange = () => {}
 
 interface BillingHistoryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  filters?: BillingHistoryFilters
+  onFiltersChange?: (filters: BillingHistoryFilters) => void
 }
 
-export function BillingHistoryDialog({
-  open,
-  onOpenChange,
-}: BillingHistoryDialogProps) {
+export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
   const { t } = useTranslation()
+  const filters = props.filters ?? defaultBillingHistoryFilters
+  const onFiltersChange = props.onFiltersChange ?? noopFiltersChange
   const {
     records,
     total,
     page,
     pageSize,
-    keyword,
+    orderNo,
     loading,
+    error,
     completing,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
+    handleFilterChange,
     handleCompleteOrder,
-  } = useBillingHistory()
+    refresh,
+  } = useBillingHistory({
+    filters,
+    enabled: props.open,
+    onFiltersChange,
+  })
 
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
   const [redemptionTradeNo, setRedemptionTradeNo] = useState<string | null>(
@@ -90,7 +109,29 @@ export function BillingHistoryDialog({
   )
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
 
-  const totalPages = Math.ceil(total / pageSize)
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const hasFilters = Boolean(
+    filters.orderType ||
+    filters.status ||
+    filters.startDate ||
+    filters.endDate ||
+    filters.orderNo
+  )
+  const clearFilters = () =>
+    onFiltersChange({ page: 1, pageSize: filters.pageSize })
+  const handleDateChange = (key: 'startDate' | 'endDate', date?: Date) => {
+    const value = date ? dayjs(date).format('YYYY-MM-DD') : undefined
+    const next = { ...filters, [key]: value, page: 1 }
+    if (
+      next.startDate &&
+      next.endDate &&
+      dayjs(next.startDate).isAfter(dayjs(next.endDate), 'day')
+    ) {
+      toast.error(t('Start date must be before end date'))
+      return
+    }
+    handleFilterChange(next)
+  }
 
   const handleConfirmComplete = async () => {
     if (confirmTradeNo) {
@@ -104,8 +145,8 @@ export function BillingHistoryDialog({
   return (
     <>
       <Dialog
-        open={open}
-        onOpenChange={onOpenChange}
+        open={props.open}
+        onOpenChange={props.onOpenChange}
         title={t('Billing History')}
         description={t(
           'View your topup transaction records and payment history'
@@ -116,16 +157,117 @@ export function BillingHistoryDialog({
       >
         <div className='min-h-0 space-y-3'>
           {/* Search and Filter Bar */}
-          <div className='flex items-center gap-2'>
-            <div className='relative flex-1'>
+          <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-4'>
+            <div className='relative sm:col-span-2'>
               <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
               <Input
+                aria-label={t('Order number')}
                 placeholder={t('Search by order number...')}
-                value={keyword}
+                value={orderNo}
                 onChange={(e) => handleSearch(e.target.value)}
                 className='h-9 pl-10'
               />
             </div>
+            <Select
+              items={[
+                { value: 'all', label: t('All order types') },
+                ...[
+                  'alipay',
+                  'wxpay',
+                  'stripe',
+                  'creem',
+                  'waffo',
+                  'waffo_pancake',
+                  'catfk',
+                  'catfk_alipay',
+                  'catfk_wxpay',
+                  'redemption',
+                ].map((value) => ({
+                  value,
+                  label: getPaymentMethodName(value, t),
+                })),
+              ]}
+              value={filters.orderType ?? 'all'}
+              onValueChange={(value) =>
+                handleFilterChange({
+                  orderType: value === 'all' ? undefined : (value ?? undefined),
+                })
+              }
+            >
+              <SelectTrigger className='h-9'>
+                <SelectValue placeholder={t('Payment Method')} />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  <SelectItem value='all'>{t('All order types')}</SelectItem>
+                  {[
+                    'alipay',
+                    'wxpay',
+                    'stripe',
+                    'creem',
+                    'waffo',
+                    'waffo_pancake',
+                    'catfk',
+                    'catfk_alipay',
+                    'catfk_wxpay',
+                    'redemption',
+                  ].map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {getPaymentMethodName(value, t)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Select
+              items={[
+                { value: 'all', label: t('All statuses') },
+                { value: 'pending', label: t('Pending') },
+                { value: 'success', label: t('Success') },
+                { value: 'failed', label: t('Failed') },
+                { value: 'expired', label: t('Expired') },
+              ]}
+              value={filters.status ?? 'all'}
+              onValueChange={(value) =>
+                handleFilterChange({
+                  status: value === 'all' ? undefined : (value as TopupStatus),
+                })
+              }
+            >
+              <SelectTrigger className='h-9'>
+                <SelectValue placeholder={t('Status')} />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  <SelectItem value='all'>{t('All statuses')}</SelectItem>
+                  <SelectItem value='pending'>{t('Pending')}</SelectItem>
+                  <SelectItem value='success'>{t('Success')}</SelectItem>
+                  <SelectItem value='failed'>{t('Failed')}</SelectItem>
+                  <SelectItem value='expired'>{t('Expired')}</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <DatePicker
+              selected={
+                filters.startDate
+                  ? dayjs(filters.startDate).toDate()
+                  : undefined
+              }
+              onSelect={(date) => handleDateChange('startDate', date)}
+              placeholder={t('Start date')}
+            />
+            <DatePicker
+              selected={
+                filters.endDate ? dayjs(filters.endDate).toDate() : undefined
+              }
+              onSelect={(date) => handleDateChange('endDate', date)}
+              placeholder={t('End date')}
+            />
+            {hasFilters && (
+              <Button variant='outline' className='h-9' onClick={clearFilters}>
+                {t('Reset')}
+              </Button>
+            )}
             <Select
               items={[
                 { value: '10', label: t('10 / page') },
@@ -179,17 +321,30 @@ export function BillingHistoryDialog({
                 )}
               </div>
             )}
-            {!loading && records.length === 0 && (
-              <div className='text-muted-foreground flex min-h-40 flex-col items-center justify-center py-10 text-center'>
-                <p className='text-sm font-medium'>
-                  {t('No billing records found')}
-                </p>
-                <p className='mt-1 text-xs'>
-                  {keyword
+            {!loading && error != null && (
+              <ErrorState
+                className='min-h-40'
+                description={t('Failed to load billing history')}
+                onRetry={() => void refresh()}
+              />
+            )}
+            {!loading && !error && records.length === 0 && (
+              <EmptyState
+                className='min-h-40'
+                title={t('No billing records found')}
+                description={
+                  hasFilters
                     ? t('Try adjusting your search')
-                    : t('Your transaction history will appear here')}
-                </p>
-              </div>
+                    : t('Your transaction history will appear here')
+                }
+                action={
+                  hasFilters ? (
+                    <Button variant='outline' onClick={clearFilters}>
+                      {t('Clear filters')}
+                    </Button>
+                  ) : undefined
+                }
+              />
             )}
             {!loading && records.length > 0 && (
               <div className='space-y-3'>
@@ -321,7 +476,7 @@ export function BillingHistoryDialog({
           </div>
 
           {/* Pagination */}
-          {!loading && records.length > 0 && (
+          {!loading && !error && records.length > 0 && (
             <div className='flex flex-col items-center gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between'>
               <div className='text-muted-foreground text-xs sm:text-sm'>
                 {t('Showing')} {(page - 1) * pageSize + 1}-

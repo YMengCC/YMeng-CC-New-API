@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -527,21 +528,63 @@ func RequestAmount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success", "data": strconv.FormatFloat(payMoney, 'f', 2, 64)})
 }
 
+func parseTopUpFilters(c *gin.Context) (model.TopUpFilters, bool) {
+	filters := model.TopUpFilters{
+		Keyword:       strings.TrimSpace(c.Query("order_no")),
+		PaymentMethod: strings.TrimSpace(c.Query("order_type")),
+		Status:        strings.TrimSpace(c.Query("status")),
+	}
+	if filters.Keyword == "" {
+		filters.Keyword = strings.TrimSpace(c.Query("keyword"))
+	}
+	if len([]rune(filters.Keyword)) > 255 || len([]rune(filters.PaymentMethod)) > 64 {
+		common.ApiErrorMsg(c, "Invalid top-up filters")
+		return model.TopUpFilters{}, false
+	}
+	if filters.Status != "" {
+		switch filters.Status {
+		case common.TopUpStatusPending, common.TopUpStatusSuccess, common.TopUpStatusFailed, common.TopUpStatusExpired:
+		default:
+			common.ApiErrorMsg(c, "Invalid top-up filters")
+			return model.TopUpFilters{}, false
+		}
+	}
+	parseDate := func(value string, endOfDay bool) (int64, bool) {
+		if value == "" {
+			return 0, true
+		}
+		parsed, err := time.ParseInLocation("2006-01-02", value, time.Local)
+		if err != nil {
+			common.ApiErrorMsg(c, "Invalid top-up date range")
+			return 0, false
+		}
+		if endOfDay {
+			parsed = parsed.AddDate(0, 0, 1)
+		}
+		return parsed.Unix(), true
+	}
+	var ok bool
+	if filters.StartTime, ok = parseDate(strings.TrimSpace(c.Query("start_date")), false); !ok {
+		return model.TopUpFilters{}, false
+	}
+	if filters.EndTime, ok = parseDate(strings.TrimSpace(c.Query("end_date")), true); !ok {
+		return model.TopUpFilters{}, false
+	}
+	if filters.StartTime > 0 && filters.EndTime > 0 && filters.StartTime >= filters.EndTime {
+		common.ApiErrorMsg(c, "Invalid top-up date range")
+		return model.TopUpFilters{}, false
+	}
+	return filters, true
+}
+
 func GetUserTopUps(c *gin.Context) {
 	userId := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
-
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo)
+	filters, ok := parseTopUpFilters(c)
+	if !ok {
+		return
 	}
+	topups, total, err := model.GetUserTopUpsFiltered(userId, filters, pageInfo)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -555,18 +598,11 @@ func GetUserTopUps(c *gin.Context) {
 // GetAllTopUps 管理员获取全平台充值记录
 func GetAllTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
-
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo)
+	filters, ok := parseTopUpFilters(c)
+	if !ok {
+		return
 	}
+	topups, total, err := model.GetAllTopUpsFiltered(filters, pageInfo)
 	if err != nil {
 		common.ApiError(c, err)
 		return

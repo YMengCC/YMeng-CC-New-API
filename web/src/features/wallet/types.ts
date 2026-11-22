@@ -329,7 +329,17 @@ export interface UserWalletData {
 /**
  * Topup record status
  */
-export type TopupStatus = 'success' | 'pending' | 'expired'
+export type TopupStatus = 'success' | 'pending' | 'failed' | 'expired'
+
+export interface BillingHistoryFilters {
+  page?: number
+  pageSize?: number
+  orderType?: string
+  status?: TopupStatus
+  startDate?: string
+  endDate?: string
+  orderNo?: string
+}
 
 /**
  * Topup billing record

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -63,15 +64,68 @@ import type {
   PresetAmount,
   CreemProduct,
   WaffoPayMethod,
+  BillingHistoryFilters,
 } from './types'
 
+type WalletSearch = {
+  show_history?: boolean
+  p?: number
+  page_size?: number
+  order_type?: string
+  status?: BillingHistoryFilters['status']
+  start_date?: string
+  end_date?: string
+  order_no?: string
+}
+
 interface WalletProps {
-  initialShowHistory?: boolean
+  search?: WalletSearch
 }
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const search = props.search ?? {}
   const queryClient = useQueryClient()
+  const billingFilters: BillingHistoryFilters = useMemo(
+    () => ({
+      page: search.p,
+      pageSize: search.page_size,
+      orderType: search.order_type || undefined,
+      status: search.status,
+      startDate: search.start_date || undefined,
+      endDate: search.end_date || undefined,
+      orderNo: search.order_no || undefined,
+    }),
+    [
+      search.end_date,
+      search.order_no,
+      search.order_type,
+      search.p,
+      search.page_size,
+      search.start_date,
+      search.status,
+    ]
+  )
+  const updateBillingFilters = useCallback(
+    (next: BillingHistoryFilters) => {
+      void navigate({
+        search: (previous) =>
+          ({
+            ...previous,
+            p: next.page === 1 ? undefined : next.page,
+            page_size: next.pageSize,
+            order_type: next.orderType || undefined,
+            status: next.status,
+            start_date: next.startDate || undefined,
+            end_date: next.endDate || undefined,
+            order_no: next.orderNo || undefined,
+          }) as never,
+        replace: true,
+      })
+    },
+    [navigate]
+  )
   const summaryQuery = useQuery({
     queryKey: ['affiliate', 'summary'],
     queryFn: getAffiliateSummary,
@@ -168,11 +222,22 @@ export function Wallet(props: WalletProps) {
   }, [fetchUser])
 
   useEffect(() => {
-    if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-  }, [props.initialShowHistory])
+    if (search.show_history) setBillingDialogOpen(true)
+  }, [search.show_history])
+
+  const handleBillingDialogChange = useCallback(
+    (open: boolean) => {
+      setBillingDialogOpen(open)
+      if (!open && search.show_history) {
+        void navigate({
+          search: (previous) =>
+            ({ ...previous, show_history: undefined }) as never,
+          replace: true,
+        })
+      }
+    },
+    [navigate, search.show_history]
+  )
 
   // Get current payment type (selected or default)
   const getCurrentPaymentType = useCallback(() => {
@@ -478,7 +543,9 @@ export function Wallet(props: WalletProps) {
 
       <BillingHistoryDialog
         open={billingDialogOpen}
-        onOpenChange={setBillingDialogOpen}
+        onOpenChange={handleBillingDialogChange}
+        filters={billingFilters}
+        onFiltersChange={updateBillingFilters}
       />
 
       <UserInvoiceDialog
