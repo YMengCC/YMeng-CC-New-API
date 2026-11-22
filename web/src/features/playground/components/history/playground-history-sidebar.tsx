@@ -22,10 +22,13 @@ import {
   PanelLeftOpenIcon,
   PencilIcon,
   PlusIcon,
+  Trash2Icon,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -55,6 +58,8 @@ type PlaygroundHistorySidebarProps = {
   onNewConversation: () => void
   onSelectConversation: (id: string) => void
   onRenameConversation: (id: string, title: string) => void
+  onDeleteConversation: (id: string) => void
+  onClearHistory: () => void
   onToggleCollapsed: (collapsed: boolean) => void
   className?: string
 }
@@ -62,19 +67,24 @@ type PlaygroundHistorySidebarProps = {
 type ConversationItemProps = {
   conversation: PlaygroundConversation
   isActive: boolean
+  isDisabled: boolean
   onSelect: () => void
   onRename: (title: string) => void
+  onDelete: () => void
 }
 
 function ConversationItem({
   conversation,
   isActive,
+  isDisabled,
   onSelect,
   onRename,
+  onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation()
   const [isRenaming, setIsRenaming] = useState(false)
   const [draftTitle, setDraftTitle] = useState(conversation.title)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const displayTitle =
     conversation.title === DEFAULT_CONVERSATION_TITLE
       ? t(DEFAULT_CONVERSATION_TITLE)
@@ -88,6 +98,12 @@ function ConversationItem({
   const commitRename = () => {
     onRename(draftTitle)
     setIsRenaming(false)
+  }
+
+  const handleDelete = () => {
+    onDelete()
+    setDeleteConfirmOpen(false)
+    toast.success(t('Conversation deleted'))
   }
 
   return (
@@ -133,6 +149,7 @@ function ConversationItem({
               <Button
                 aria-label={t('Conversation actions')}
                 className='size-7 shrink-0'
+                disabled={isDisabled}
                 size='icon-sm'
                 variant='ghost'
               />
@@ -143,13 +160,30 @@ function ConversationItem({
           <DropdownMenuContent align='end'>
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={startRename}>
-                <PencilIcon className='mr-2 size-4' />
+                <PencilIcon />
                 {t('Rename')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className='text-destructive focus:text-destructive'
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                <Trash2Icon />
+                {t('Delete')}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+
+      <ConfirmDialog
+        destructive
+        desc={t('This conversation will be permanently deleted.')}
+        confirmText={t('Delete')}
+        handleConfirm={handleDelete}
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t('Delete conversation?')}
+      />
     </div>
   )
 }
@@ -161,11 +195,20 @@ export function PlaygroundHistorySidebar({
   onNewConversation,
   onSelectConversation,
   onRenameConversation,
+  onDeleteConversation,
+  onClearHistory,
   onToggleCollapsed,
   className,
 }: PlaygroundHistorySidebarProps) {
   const { t } = useTranslation()
   const { conversations } = history
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+
+  const handleClearHistory = () => {
+    onClearHistory()
+    setClearConfirmOpen(false)
+    toast.success(t('Conversation history cleared'))
+  }
 
   const toggleLabel = isCollapsed
     ? t('Show conversation history')
@@ -186,6 +229,25 @@ export function PlaygroundHistorySidebar({
             {t('Conversation history')}
           </h2>
         )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label={t('Clear conversation history')}
+                className='hover:text-destructive size-8 shrink-0'
+                disabled={isGenerating || conversations.length === 0}
+                onClick={() => setClearConfirmOpen(true)}
+                size='icon-sm'
+                variant='ghost'
+              />
+            }
+          >
+            <Trash2Icon className='size-4' />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('Clear conversation history')}</p>
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -240,7 +302,9 @@ export function PlaygroundHistorySidebar({
                 <ConversationItem
                   conversation={conversation}
                   isActive={conversation.id === history.activeId}
+                  isDisabled={isGenerating}
                   key={conversation.id}
+                  onDelete={() => onDeleteConversation(conversation.id)}
                   onRename={(title) =>
                     onRenameConversation(conversation.id, title)
                   }
@@ -251,6 +315,16 @@ export function PlaygroundHistorySidebar({
           )}
         </ScrollArea>
       )}
+
+      <ConfirmDialog
+        destructive
+        desc={t('All conversation history will be permanently deleted.')}
+        confirmText={t('Clear')}
+        handleConfirm={handleClearHistory}
+        open={clearConfirmOpen}
+        onOpenChange={setClearConfirmOpen}
+        title={t('Clear conversation history?')}
+      />
     </aside>
   )
 }

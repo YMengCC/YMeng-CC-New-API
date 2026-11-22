@@ -20,13 +20,14 @@ import { afterEach, beforeEach, expect, test } from 'vitest'
 
 import { useAuthStore } from '@/stores/auth-store'
 
-import { STORAGE_KEYS } from '../../../constants'
+import { LEGACY_STORAGE_KEYS, STORAGE_KEYS } from '../../../constants'
 import type { Message } from '../../../types'
 import {
   createConversation,
   getConversationTitle,
   loadHistory,
   pruneHistory,
+  removeConversation,
   saveActiveConversationId,
   saveHistory,
   sanitizeConversationTitle,
@@ -36,10 +37,8 @@ import {
   getUserStorageKey,
   loadConfig,
   loadMessages,
-  loadParameterEnabled,
   saveConfig,
   saveMessages,
-  saveParameterEnabled,
 } from '../storage'
 import { MAX_STORED_CONVERSATIONS } from '../storage-schema'
 
@@ -61,32 +60,27 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-test('switching accounts isolates config, messages and parameter toggles and preserves returning account data', () => {
+test('switching accounts isolates config and messages and preserves returning account data', () => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
   saveConfig({ model: 'account-a-model' })
   saveMessages(messages)
-  saveParameterEnabled({ temperature: true })
 
   useAuthStore.getState().auth.reset()
   useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
   expect(loadConfig()).toEqual({})
   expect(loadMessages()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
   saveConfig({ model: 'account-b-model' })
   saveMessages([])
-  saveParameterEnabled({ temperature: false })
 
   useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
   expect(loadConfig()).toEqual({ model: 'account-a-model' })
   expect(loadMessages()).toEqual(messages)
-  expect(loadParameterEnabled()).toEqual({ temperature: true })
 
   clearPlaygroundData()
   expect(loadMessages()).toBeNull()
   useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
   expect(loadConfig()).toEqual({ model: 'account-b-model' })
   expect(loadMessages()).toEqual([])
-  expect(loadParameterEnabled()).toEqual({ temperature: false })
 })
 
 test('legacy global data is removed instead of assigned to the first signed-in account', () => {
@@ -96,15 +90,17 @@ test('legacy global data is removed instead of assigned to the first signed-in a
   )
   localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages))
   localStorage.setItem(
-    STORAGE_KEYS.PARAMETER_ENABLED,
+    LEGACY_STORAGE_KEYS.PARAMETER_ENABLED,
     JSON.stringify({ temperature: true })
   )
   useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
 
   expect(loadConfig()).toEqual({})
   expect(loadMessages()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
-  for (const key of Object.values(STORAGE_KEYS)) {
+  for (const key of [
+    ...Object.values(STORAGE_KEYS),
+    ...Object.values(LEGACY_STORAGE_KEYS),
+  ]) {
     expect(localStorage.getItem(key)).toBeNull()
   }
 })
@@ -112,10 +108,8 @@ test('legacy global data is removed instead of assigned to the first signed-in a
 test('storage calls without a signed-in user do not persist shared data', () => {
   saveConfig({ model: 'signed-out-model' })
   saveMessages(messages)
-  saveParameterEnabled({ temperature: true })
   expect(loadConfig()).toEqual({})
   expect(loadMessages()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
   expect(localStorage.length).toBe(0)
 })
 
@@ -164,6 +158,50 @@ test('active conversation id is restored on reload and history is per-user', () 
   expect(loadHistory().activeId).toBe(second.id)
 })
 
+test('removing the active conversation selects the first remaining conversation', () => {
+  const first = createConversation([], 3000)
+  const second = createConversation([], 2000)
+  const third = createConversation([], 1000)
+
+  const result = removeConversation(
+    {
+      activeId: second.id,
+      conversations: [first, second, third],
+    },
+    second.id
+  )
+
+  expect(result.activeId).toBe(first.id)
+  expect(result.conversations.map((item) => item.id)).toEqual([
+    first.id,
+    third.id,
+  ])
+})
+
+test('removing a non-active conversation keeps the active id', () => {
+  const active = createConversation([], 3000)
+  const other = createConversation([], 2000)
+
+  const result = removeConversation(
+    { activeId: active.id, conversations: [active, other] },
+    other.id
+  )
+
+  expect(result.activeId).toBe(active.id)
+  expect(result.conversations).toEqual([active])
+})
+
+test('removing the last conversation returns an empty conversation list', () => {
+  const conversation = createConversation()
+
+  expect(
+    removeConversation(
+      { activeId: conversation.id, conversations: [conversation] },
+      conversation.id
+    )
+  ).toEqual({ activeId: conversation.id, conversations: [] })
+})
+
 test('history is pruned to the conversation cap, keeping the active entry', () => {
   const conversations = Array.from(
     { length: MAX_STORED_CONVERSATIONS + 5 },
@@ -188,13 +226,26 @@ test('corrupt history falls back to a fresh empty conversation', () => {
   expect(history.activeId).toBe(history.conversations[0].id)
 })
 
-test('clearing playground data removes the history keys too', () => {
+test('clearing playground data removes current and legacy storage keys', () => {
   useAuthStore.getState().auth.setUser({ id: 4, username: 'A', role: 1 })
   saveHistory({ activeId: 'x', conversations: [createConversation()] })
   saveActiveConversationId('x')
+  const legacyParameterKey = getUserStorageKey(
+    LEGACY_STORAGE_KEYS.PARAMETER_ENABLED
+  )
+  if (legacyParameterKey) {
+    localStorage.setItem(
+      legacyParameterKey,
+      JSON.stringify({ temperature: true })
+    )
+  }
+
   clearPlaygroundData()
 
-  for (const baseKey of Object.values(STORAGE_KEYS)) {
+  for (const baseKey of [
+    ...Object.values(STORAGE_KEYS),
+    ...Object.values(LEGACY_STORAGE_KEYS),
+  ]) {
     const key = getUserStorageKey(baseKey)
     if (key) expect(localStorage.getItem(key)).toBeNull()
   }

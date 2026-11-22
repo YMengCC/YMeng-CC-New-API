@@ -22,13 +22,8 @@ import i18next from 'i18next'
 import { toast } from 'sonner'
 import { afterAll, beforeAll, expect, test, vi } from 'vitest'
 
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../../constants'
-import type {
-  GroupOption,
-  ModelOption,
-  ParameterEnabled,
-  PlaygroundConfig,
-} from '../../../types'
+import { DEFAULT_CONFIG } from '../../../constants'
+import type { GroupOption, ModelOption, PlaygroundConfig } from '../../../types'
 import { PlaygroundInput } from '../playground-input'
 
 const models: ModelOption[] = [{ label: 'gpt-4o', value: 'gpt-4o' }]
@@ -57,7 +52,6 @@ beforeAll(() => {
     Stop: 'Stop',
     Attach: 'Attach',
     Search: 'Search',
-    Parameters: 'Parameters',
     'Clear chat history': 'Clear chat history',
     'to send': 'to send',
     'for a new line': 'for a new line',
@@ -99,10 +93,8 @@ function renderInput(
     onConfigChange: vi.fn(),
     onGroupChange: vi.fn(),
     onModelChange: vi.fn(),
-    onParameterEnabledChange: vi.fn(),
     onStop,
     onSubmit,
-    parameterEnabled: DEFAULT_PARAMETER_ENABLED as ParameterEnabled,
     ...overrides,
   }
 
@@ -171,17 +163,13 @@ test('the submit control keeps a stable touch size across Send and Stop', () => 
   expect(stop.className).toContain('sm:min-w-20')
 })
 
-test('all four tool buttons have accessible names and are focusable', () => {
+test('the remaining tool buttons have accessible names and the parameter button is removed', () => {
   renderInput()
 
-  for (const name of [
-    'Attach files',
-    'Web search',
-    'Parameters',
-    'Clear chat history',
-  ]) {
+  for (const name of ['Attach files', 'Web search', 'Clear chat history']) {
     expect(screen.getByRole('button', { name })).toBeInTheDocument()
   }
+  expect(screen.queryByRole('button', { name: 'Parameters' })).toBeNull()
 })
 
 test('the clear button is disabled when the conversation has no messages', () => {

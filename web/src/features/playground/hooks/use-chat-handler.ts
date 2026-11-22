@@ -41,13 +41,11 @@ import type {
   Message,
   MessageSource,
   PlaygroundConfig,
-  ParameterEnabled,
 } from '../types'
 import { useStreamRequest } from './use-stream-request'
 
 interface UseChatHandlerOptions {
   config: PlaygroundConfig
-  parameterEnabled: ParameterEnabled
   onMessageUpdate: (updater: (prev: Message[]) => Message[]) => void
 }
 
@@ -81,7 +79,6 @@ function mergePendingStreamChunk(
  */
 export function useChatHandler({
   config,
-  parameterEnabled,
   onMessageUpdate,
 }: UseChatHandlerOptions) {
   const { t } = useTranslation()
@@ -304,12 +301,7 @@ export function useChatHandler({
       discardPendingStreamUpdates(generation)
       const result = beginSend(generation)
       setIsRequesting(true)
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled,
-        fileIds
-      )
+      const payload = buildChatCompletionPayload(messages, config, fileIds)
       void sendStreamRequest(payload, {
         onUpdate: (type, chunk) => handleStreamUpdate(generation, type, chunk),
         onSources: (sources) => handleStreamSources(generation, sources),
@@ -327,7 +319,6 @@ export function useChatHandler({
     },
     [
       config,
-      parameterEnabled,
       sendStreamRequest,
       discardPendingStreamUpdates,
       beginSend,
@@ -342,12 +333,7 @@ export function useChatHandler({
   // Send non-streaming chat request
   const sendNonStreamingChat = useCallback(
     (messages: Message[], fileIds?: string[]): Promise<ChatSendResult> => {
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled,
-        fileIds
-      )
+      const payload = buildChatCompletionPayload(messages, config, fileIds)
       const generation = requestGenerationRef.current + 1
       const abortController = new AbortController()
 
@@ -413,7 +399,6 @@ export function useChatHandler({
     },
     [
       config,
-      parameterEnabled,
       stopStream,
       discardPendingStreamUpdates,
       beginSend,

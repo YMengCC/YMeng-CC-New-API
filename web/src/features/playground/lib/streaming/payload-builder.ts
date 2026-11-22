@@ -28,7 +28,6 @@ import type {
   ImageGenerationRequest,
   Message,
   PlaygroundConfig,
-  ParameterEnabled,
   VideoGenerationOptions,
   VideoGenerationRequest,
 } from '../../types'
@@ -97,7 +96,6 @@ export function buildVideoGenerationPayload(
 export function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
-  parameterEnabled: ParameterEnabled,
   fileIds: string[] = []
 ): ChatCompletionRequest {
   // Filter and format valid messages
@@ -129,30 +127,6 @@ export function buildChatCompletionPayload(
 
   if (config.web_search) {
     payload.web_search_options = {}
-  }
-
-  if (parameterEnabled.temperature) {
-    payload.temperature = config.temperature
-  }
-
-  if (parameterEnabled.top_p) {
-    payload.top_p = config.top_p
-  }
-
-  if (parameterEnabled.max_tokens) {
-    payload.max_tokens = config.max_tokens
-  }
-
-  if (parameterEnabled.frequency_penalty) {
-    payload.frequency_penalty = config.frequency_penalty
-  }
-
-  if (parameterEnabled.presence_penalty) {
-    payload.presence_penalty = config.presence_penalty
-  }
-
-  if (parameterEnabled.seed && config.seed !== null) {
-    payload.seed = config.seed
   }
 
   return payload

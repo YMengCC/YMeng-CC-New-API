@@ -39,12 +39,7 @@ import {
   MAX_CHAT_ATTACHMENTS_TOTAL_BYTES,
 } from '../../constants'
 import { canSubmitInput, getSubmittableInputText } from '../../lib'
-import type {
-  ModelOption,
-  GroupOption,
-  ParameterEnabled,
-  PlaygroundConfig,
-} from '../../types'
+import type { ModelOption, GroupOption, PlaygroundConfig } from '../../types'
 import { PlaygroundInputControls } from './playground-input-controls'
 import { PlaygroundInputNotices } from './playground-input-notices'
 import { PlaygroundInputTools } from './playground-input-tools'
@@ -72,11 +67,6 @@ interface PlaygroundInputProps {
     value: PlaygroundConfig[K]
   ) => void
   onClearMessages?: () => void
-  onParameterEnabledChange: (
-    key: keyof ParameterEnabled,
-    value: boolean
-  ) => void
-  parameterEnabled: ParameterEnabled
 }
 
 export function PlaygroundInput({
@@ -95,8 +85,6 @@ export function PlaygroundInput({
   hasMessages = false,
   onConfigChange,
   onClearMessages,
-  onParameterEnabledChange,
-  parameterEnabled,
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
@@ -202,8 +190,6 @@ export function PlaygroundInput({
                 hasMessages={hasMessages}
                 onConfigChange={onConfigChange}
                 onClearMessages={onClearMessages}
-                onParameterEnabledChange={onParameterEnabledChange}
-                parameterEnabled={parameterEnabled}
               />
             }
           />

@@ -20,7 +20,7 @@ import { act, renderHook } from '@testing-library/react'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../constants'
+import { DEFAULT_CONFIG } from '../../constants'
 import { appendUserMessagePair } from '../../lib'
 import type { Message } from '../../types'
 import { useChatHandler } from '../use-chat-handler'
@@ -39,7 +39,6 @@ function renderChat() {
   const view = renderHook(() =>
     useChatHandler({
       config: { ...DEFAULT_CONFIG, stream: false },
-      parameterEnabled: DEFAULT_PARAMETER_ENABLED,
       onMessageUpdate,
     })
   )

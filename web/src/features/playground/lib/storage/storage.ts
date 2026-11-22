@@ -18,8 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useAuthStore } from '@/stores/auth-store'
 
-import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
-import type { PlaygroundConfig, ParameterEnabled, Message } from '../../types'
+import {
+  LEGACY_STORAGE_KEYS,
+  MESSAGE_STATUS,
+  STORAGE_KEYS,
+} from '../../constants'
+import type { PlaygroundConfig, Message } from '../../types'
 import { toSafeCitationUrl } from '../message/message-citations'
 import {
   finalizeMessage,
@@ -35,7 +39,6 @@ import {
   MAX_STORED_MESSAGES_BYTES,
   STORAGE_VERSION,
   messagesSchema,
-  parameterEnabledSchema,
   playgroundConfigSchema,
 } from './storage-schema'
 
@@ -51,7 +54,10 @@ const SECTION_HEADING_LINE_PATTERN = /^#{2,6}\s+\d+\.\s+.+$/gm
 
 export function getUserStorageKey(key: string): string | null {
   // Legacy data has no owner; never assign it to the next signed-in account.
-  for (const legacyKey of Object.values(STORAGE_KEYS)) {
+  for (const legacyKey of [
+    ...Object.values(STORAGE_KEYS),
+    ...Object.values(LEGACY_STORAGE_KEYS),
+  ]) {
     localStorage.removeItem(legacyKey)
   }
   const userId = useAuthStore.getState().auth.user?.id
@@ -342,37 +348,6 @@ export function saveConfig(config: Partial<PlaygroundConfig>): void {
 }
 
 /**
- * Load parameter enabled state from localStorage
- */
-export function loadParameterEnabled(): Partial<ParameterEnabled> {
-  try {
-    const saved = readStoredValue(STORAGE_KEYS.PARAMETER_ENABLED)
-    if (!saved) return {}
-
-    return parameterEnabledSchema.parse(unwrapStoredValue(saved))
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to load parameter enabled:', error)
-  }
-  return {}
-}
-
-/**
- * Save parameter enabled state to localStorage
- */
-export function saveParameterEnabled(
-  parameterEnabled: Partial<ParameterEnabled>
-): void {
-  try {
-    const parsed = parameterEnabledSchema.parse(parameterEnabled)
-    writeStoredValue(STORAGE_KEYS.PARAMETER_ENABLED, parsed)
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to save parameter enabled:', error)
-  }
-}
-
-/**
  * Load messages from localStorage
  */
 export function loadMessages(): Message[] | null {
@@ -425,7 +400,10 @@ export function saveMessages(messages: Message[]): void {
  */
 export function clearPlaygroundData(): void {
   try {
-    for (const baseKey of Object.values(STORAGE_KEYS)) {
+    for (const baseKey of [
+      ...Object.values(STORAGE_KEYS),
+      ...Object.values(LEGACY_STORAGE_KEYS),
+    ]) {
       const key = getUserStorageKey(baseKey)
       if (key) localStorage.removeItem(key)
     }

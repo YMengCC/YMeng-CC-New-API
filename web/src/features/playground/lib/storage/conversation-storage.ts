@@ -169,6 +169,24 @@ export function pruneHistory(history: PlaygroundHistory): PlaygroundHistory {
   return { activeId, conversations }
 }
 
+export function removeConversation(
+  history: PlaygroundHistory,
+  id: string
+): PlaygroundHistory {
+  const conversations = history.conversations.filter(
+    (conversation) => conversation.id !== id
+  )
+
+  if (conversations.length === 0) {
+    return { activeId: history.activeId, conversations }
+  }
+
+  return {
+    activeId: history.activeId === id ? conversations[0].id : history.activeId,
+    conversations,
+  }
+}
+
 export function loadHistory(): PlaygroundHistory {
   try {
     const saved = readStoredValue(STORAGE_KEYS.HISTORY)

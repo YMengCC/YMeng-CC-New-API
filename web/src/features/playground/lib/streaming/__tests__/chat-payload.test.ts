@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { expect, test } from 'vitest'
 
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../../constants'
+import { DEFAULT_CONFIG } from '../../../constants'
 import type { Message } from '../../../types'
 import { buildChatCompletionPayload } from '../payload-builder'
 
@@ -45,21 +45,33 @@ function assistantMessage(key: string, content: string): Message {
 test('web search off omits web_search_options', () => {
   const payload = buildChatCompletionPayload(
     [userMessage('u1', 'hello')],
-    DEFAULT_CONFIG,
-    DEFAULT_PARAMETER_ENABLED
+    DEFAULT_CONFIG
   )
 
   expect(payload).not.toHaveProperty('web_search_options')
 })
 
 test('web search on adds an empty web_search_options object', () => {
-  const payload = buildChatCompletionPayload(
-    [userMessage('u1', 'hello')],
-    { ...DEFAULT_CONFIG, web_search: true },
-    DEFAULT_PARAMETER_ENABLED
-  )
+  const payload = buildChatCompletionPayload([userMessage('u1', 'hello')], {
+    ...DEFAULT_CONFIG,
+    web_search: true,
+  })
 
   expect(payload.web_search_options).toEqual({})
+})
+
+test('chat payload omits removed parameter controls', () => {
+  const payload = buildChatCompletionPayload(
+    [userMessage('u1', 'hello')],
+    DEFAULT_CONFIG
+  )
+
+  expect(payload).not.toHaveProperty('temperature')
+  expect(payload).not.toHaveProperty('top_p')
+  expect(payload).not.toHaveProperty('max_tokens')
+  expect(payload).not.toHaveProperty('frequency_penalty')
+  expect(payload).not.toHaveProperty('presence_penalty')
+  expect(payload).not.toHaveProperty('seed')
 })
 
 test('temporary file ids are attached to the last user message only', () => {
@@ -70,7 +82,6 @@ test('temporary file ids are attached to the last user message only', () => {
       userMessage('u2', 'summarize', true),
     ],
     DEFAULT_CONFIG,
-    DEFAULT_PARAMETER_ENABLED,
     ['tmp-1', 'tmp-2']
   )
 
@@ -91,8 +102,7 @@ test('temporary file ids are attached to the last user message only', () => {
 test('earlier attachments are sent as text only when no new files are given', () => {
   const payload = buildChatCompletionPayload(
     [userMessage('u1', 'first', true)],
-    DEFAULT_CONFIG,
-    DEFAULT_PARAMETER_ENABLED
+    DEFAULT_CONFIG
   )
 
   expect(payload.messages).toEqual([{ role: 'user', content: 'first' }])
@@ -102,7 +112,6 @@ test('file ids are not attached when the last message is not from the user', () 
   const payload = buildChatCompletionPayload(
     [userMessage('u1', 'first'), assistantMessage('a1', 'reply')],
     DEFAULT_CONFIG,
-    DEFAULT_PARAMETER_ENABLED,
     ['tmp-1']
   )
 

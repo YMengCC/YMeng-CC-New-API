@@ -36,9 +36,8 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-import type { ParameterEnabled, PlaygroundConfig } from '../../types'
+import type { PlaygroundConfig } from '../../types'
 import { PLAYGROUND_TOOL_BUTTON_CLASS } from './input-tool-styles'
-import { PlaygroundParameterPanel } from './playground-parameter-panel'
 
 type PlaygroundInputToolsProps = {
   config: PlaygroundConfig
@@ -49,11 +48,6 @@ type PlaygroundInputToolsProps = {
     key: K,
     value: PlaygroundConfig[K]
   ) => void
-  onParameterEnabledChange: (
-    key: keyof ParameterEnabled,
-    value: boolean
-  ) => void
-  parameterEnabled: ParameterEnabled
 }
 
 export function PlaygroundInputTools({
@@ -62,8 +56,6 @@ export function PlaygroundInputTools({
   hasMessages = false,
   onClearMessages,
   onConfigChange,
-  onParameterEnabledChange,
-  parameterEnabled,
 }: PlaygroundInputToolsProps) {
   const { t } = useTranslation()
   const attachments = usePromptInputAttachments()
@@ -126,14 +118,6 @@ export function PlaygroundInputTools({
             </p>
           </TooltipContent>
         </Tooltip>
-
-        <PlaygroundParameterPanel
-          config={config}
-          disabled={disabled}
-          onConfigChange={onConfigChange}
-          onParameterEnabledChange={onParameterEnabledChange}
-          parameterEnabled={parameterEnabled}
-        />
 
         <Separator className='mx-0.5 h-6' orientation='vertical' />
 

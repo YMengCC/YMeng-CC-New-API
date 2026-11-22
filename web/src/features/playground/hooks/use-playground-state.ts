@@ -18,24 +18,19 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-  DEFAULT_CONFIG,
-  DEFAULT_CONVERSATION_TITLE,
-  DEFAULT_PARAMETER_ENABLED,
-} from '../constants'
+import { DEFAULT_CONFIG, DEFAULT_CONVERSATION_TITLE } from '../constants'
 import {
   applyMessageStateUpdate,
   createConversation,
   getConversationTitle,
   loadHistory,
+  removeConversation,
   loadHistoryCollapsed,
   pruneHistory,
   saveActiveConversationId,
   saveConfig,
   saveHistory,
   saveHistoryCollapsed,
-  saveParameterEnabled,
-  getInitialParameterEnabled,
   getInitialPlaygroundConfig,
   sanitizeConversationTitle,
   type MessageStateUpdater,
@@ -43,7 +38,6 @@ import {
 import type {
   Message,
   PlaygroundConfig,
-  ParameterEnabled,
   ModelOption,
   GroupOption,
   PlaygroundHistory,
@@ -62,10 +56,6 @@ function createInitialHistory(): PlaygroundHistory {
 export function usePlaygroundState() {
   const [config, setConfig] = useState<PlaygroundConfig>(
     getInitialPlaygroundConfig
-  )
-
-  const [parameterEnabled, setParameterEnabled] = useState<ParameterEnabled>(
-    getInitialParameterEnabled
   )
 
   const [history, setHistory] =
@@ -151,17 +141,6 @@ export function usePlaygroundState() {
       setConfig((prev) => {
         const updated = { ...prev, [key]: value }
         saveConfig(updated)
-        return updated
-      })
-    },
-    []
-  )
-
-  const updateParameterEnabled = useCallback(
-    (key: keyof ParameterEnabled, value: boolean) => {
-      setParameterEnabled((prev) => {
-        const updated = { ...prev, [key]: value }
-        saveParameterEnabled(updated)
         return updated
       })
     },
@@ -259,6 +238,38 @@ export function usePlaygroundState() {
     [commitHistory]
   )
 
+  const deleteConversation = useCallback(
+    (id: string) => {
+      flushSave()
+      const nextHistory = removeConversation(historyRef.current, id)
+      if (nextHistory.conversations.length === 0) {
+        const conversation = createConversation()
+        const emptyHistory = {
+          activeId: conversation.id,
+          conversations: [conversation],
+        }
+        commitHistory(emptyHistory)
+        saveActiveConversationId(emptyHistory.activeId)
+        return
+      }
+
+      commitHistory(nextHistory)
+      saveActiveConversationId(nextHistory.activeId)
+    },
+    [commitHistory, flushSave]
+  )
+
+  const clearHistory = useCallback(() => {
+    flushSave()
+    const conversation = createConversation()
+    const nextHistory = {
+      activeId: conversation.id,
+      conversations: [conversation],
+    }
+    commitHistory(nextHistory)
+    saveActiveConversationId(nextHistory.activeId)
+  }, [commitHistory, flushSave])
+
   const setHistoryCollapsed = useCallback((collapsed: boolean) => {
     setIsHistoryCollapsed(collapsed)
     saveHistoryCollapsed(collapsed)
@@ -266,15 +277,12 @@ export function usePlaygroundState() {
 
   const resetConfig = useCallback(() => {
     setConfig(DEFAULT_CONFIG)
-    setParameterEnabled(DEFAULT_PARAMETER_ENABLED)
     saveConfig(DEFAULT_CONFIG)
-    saveParameterEnabled(DEFAULT_PARAMETER_ENABLED)
   }, [])
 
   return {
     // State
     config,
-    parameterEnabled,
     messages,
     history,
     isLoadingMessages,
@@ -288,12 +296,13 @@ export function usePlaygroundState() {
 
     // Actions
     updateConfig,
-    updateParameterEnabled,
     updateMessages,
     clearMessages,
     newConversation,
     switchConversation,
     renameConversation,
+    deleteConversation,
+    clearHistory,
     setHistoryCollapsed,
     resetConfig,
   }

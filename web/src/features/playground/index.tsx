@@ -45,7 +45,6 @@ export function Playground() {
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false)
   const {
     config,
-    parameterEnabled,
     messages,
     history,
     isLoadingMessages,
@@ -56,17 +55,17 @@ export function Playground() {
     setModels,
     setGroups,
     updateConfig,
-    updateParameterEnabled,
     clearMessages,
     newConversation,
     switchConversation,
     renameConversation,
+    deleteConversation,
+    clearHistory,
     setHistoryCollapsed,
   } = usePlaygroundState()
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
-    parameterEnabled,
     onMessageUpdate: updateMessages,
   })
 
@@ -128,6 +127,20 @@ export function Playground() {
     clearMessages()
   }
 
+  const handleDeleteConversation = (id: string) => {
+    stopAll()
+    handleEditOpenChange(false)
+    deleteConversation(id)
+    setIsMobileHistoryOpen(false)
+  }
+
+  const handleClearHistory = () => {
+    stopAll()
+    handleEditOpenChange(false)
+    clearHistory()
+    setIsMobileHistoryOpen(false)
+  }
+
   const { isLoadingModels } = usePlaygroundOptions({
     currentGroup: config.group,
     currentModel: config.model,
@@ -141,6 +154,8 @@ export function Playground() {
     isGenerating: isChatBusy,
     onNewConversation: startNewConversation,
     onRenameConversation: renameConversation,
+    onDeleteConversation: handleDeleteConversation,
+    onClearHistory: handleClearHistory,
     onSelectConversation: selectConversation,
   }
 
@@ -233,10 +248,8 @@ export function Playground() {
               onConfigChange={updateConfig}
               onClearMessages={handleClearMessages}
               onModelChange={(value) => updateConfig('model', value)}
-              onParameterEnabledChange={updateParameterEnabled}
               onStop={stopAll}
               onSubmit={handleSendMessage}
-              parameterEnabled={parameterEnabled}
               hasMessages={messages.length > 0}
             />
           ) : (

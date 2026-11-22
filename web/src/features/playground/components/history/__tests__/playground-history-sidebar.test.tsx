@@ -65,6 +65,18 @@ beforeAll(() => {
     'No conversations yet': 'No conversations yet',
     'Start a new chat to see it here.': 'Start a new chat to see it here.',
     Rename: 'Rename',
+    Delete: 'Delete',
+    'Delete conversation?': 'Delete conversation?',
+    'This conversation will be permanently deleted.':
+      'This conversation will be permanently deleted.',
+    'Clear conversation history': 'Clear conversation history',
+    'Clear conversation history?': 'Clear conversation history?',
+    'All conversation history will be permanently deleted.':
+      'All conversation history will be permanently deleted.',
+    Clear: 'Clear',
+    Cancel: 'Cancel',
+    'Conversation deleted': 'Conversation deleted',
+    'Conversation history cleared': 'Conversation history cleared',
   })
 })
 
@@ -86,6 +98,8 @@ function renderSidebar(
   const onNewConversation = vi.fn()
   const onSelectConversation = vi.fn()
   const onRenameConversation = vi.fn()
+  const onDeleteConversation = vi.fn()
+  const onClearHistory = vi.fn()
   const onToggleCollapsed = vi.fn()
 
   render(
@@ -93,6 +107,8 @@ function renderSidebar(
       history={history}
       isCollapsed={false}
       isGenerating={false}
+      onClearHistory={onClearHistory}
+      onDeleteConversation={onDeleteConversation}
       onNewConversation={onNewConversation}
       onRenameConversation={onRenameConversation}
       onSelectConversation={onSelectConversation}
@@ -105,6 +121,8 @@ function renderSidebar(
     onNewConversation,
     onSelectConversation,
     onRenameConversation,
+    onDeleteConversation,
+    onClearHistory,
     onToggleCollapsed,
   }
 }
@@ -167,6 +185,58 @@ test('renaming with Escape cancels without calling the handler', async () => {
   expect(screen.getByRole('button', { name: /First chat/ })).toBeInTheDocument()
 })
 
+test('deleting a conversation requires confirmation and passes its id', async () => {
+  const user = userEvent.setup()
+  const handlers = renderSidebar()
+
+  await user.click(
+    screen.getAllByRole('button', { name: 'Conversation actions' })[0]
+  )
+  await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+  expect(handlers.onDeleteConversation).toHaveBeenCalledWith('a')
+})
+
+test('cancelling conversation deletion keeps the history unchanged', async () => {
+  const user = userEvent.setup()
+  const handlers = renderSidebar()
+
+  await user.click(
+    screen.getAllByRole('button', { name: 'Conversation actions' })[0]
+  )
+  await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(handlers.onDeleteConversation).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: /First chat/ })).toBeInTheDocument()
+})
+
+test('clearing all history requires confirmation', async () => {
+  const user = userEvent.setup()
+  const handlers = renderSidebar()
+
+  await user.click(
+    screen.getByRole('button', { name: 'Clear conversation history' })
+  )
+  await user.click(screen.getByRole('button', { name: 'Clear' }))
+
+  expect(handlers.onClearHistory).toHaveBeenCalledOnce()
+})
+
+test('history deletion controls are disabled while a response is generating', () => {
+  renderSidebar({ isGenerating: true })
+
+  expect(
+    screen.getByRole('button', { name: 'Clear conversation history' })
+  ).toBeDisabled()
+  expect(
+    screen.getAllByRole('button', { name: 'Conversation actions' })[0]
+  ).toBeDisabled()
+})
+
 test('the collapse toggle reports its expanded state', async () => {
   const user = userEvent.setup()
   const handlers = renderSidebar()
@@ -183,6 +253,8 @@ test('the collapse toggle reports its expanded state', async () => {
       history={history}
       isCollapsed
       isGenerating={false}
+      onClearHistory={vi.fn()}
+      onDeleteConversation={vi.fn()}
       onNewConversation={vi.fn()}
       onRenameConversation={vi.fn()}
       onSelectConversation={vi.fn()}

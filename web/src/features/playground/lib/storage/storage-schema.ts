@@ -31,23 +31,8 @@ export const MAX_STORED_HISTORY_BYTES = 4 * 1024 * 1024
 export const playgroundConfigSchema = z.object({
   model: z.string().optional(),
   group: z.string().optional(),
-  temperature: z.number().optional(),
-  top_p: z.number().optional(),
-  max_tokens: z.number().optional(),
-  frequency_penalty: z.number().optional(),
-  presence_penalty: z.number().optional(),
-  seed: z.number().nullable().optional(),
   stream: z.boolean().optional(),
   web_search: z.boolean().optional(),
-})
-
-export const parameterEnabledSchema = z.object({
-  temperature: z.boolean().optional(),
-  top_p: z.boolean().optional(),
-  max_tokens: z.boolean().optional(),
-  frequency_penalty: z.boolean().optional(),
-  presence_penalty: z.boolean().optional(),
-  seed: z.boolean().optional(),
 })
 
 const messageRoleSchema = z.enum(['user', 'assistant', 'system'])
