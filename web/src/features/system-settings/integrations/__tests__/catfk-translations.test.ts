@@ -52,6 +52,8 @@ it.each(Object.entries(resources))(
       'Read Catfk channels',
       'Catfk Alipay',
       'Catfk WeChat Pay',
+      'catfk Alipay',
+      'catfk WeChat Pay',
       'Select payment type',
       'Custom Epay payment identifier',
       'Payment method display name',

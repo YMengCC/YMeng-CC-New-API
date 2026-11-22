@@ -46,6 +46,8 @@ func (topUp *TopUp) BeforeSave(_ *gorm.DB) error {
 
 const (
 	PaymentMethodCatFK        = "catfk"
+	PaymentMethodCatFKAlipay  = "catfk_alipay"
+	PaymentMethodCatFKWeChat  = "catfk_wxpay"
 	PaymentMethodStripe       = "stripe"
 	PaymentMethodCreem        = "creem"
 	PaymentMethodWaffo        = "waffo"

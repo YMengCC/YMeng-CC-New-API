@@ -1108,6 +1108,8 @@
     "Category name must be less than 50 characters": "カテゴリ名は50文字以内にしてください",
     "Catfk": "Catfk",
     "Catfk Alipay": "Catfk Alipay 決済",
+    "catfk Alipay": "catfk Alipay 決済",
+    "catfk WeChat Pay": "catfk WeChat Pay 決済",
     "Catfk available channels": "Catfk 利用可能な決済チャネル",
     "CatFK channel IDs must be unique": "Yunmao チャネル ID は重複できません",
     "Catfk consignment store payments": "Catfk 店舗決済",

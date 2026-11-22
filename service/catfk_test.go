@@ -309,6 +309,7 @@ func TestCatFKCreateOnceAndCredentialRecovery(t *testing.T) {
 	assert.EqualValues(t, 1, a.creates.Load())
 	require.NotNil(t, store.order)
 	assert.Equal(t, model.CatFKOrderStatusPending, store.order.Status)
+	assert.Equal(t, model.PaymentMethodCatFKWeChat, store.order.PaymentMethod)
 	var credentials CatFKCredentials
 	key, err := s.key()
 	require.NoError(t, err)

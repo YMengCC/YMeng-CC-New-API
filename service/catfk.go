@@ -198,7 +198,7 @@ func catFKChannelPaymentType(channel operation_setting.CatFKChannel) string {
 	return operation_setting.CatFKPaymentTypeForChannelName(channel.Name)
 }
 
-func catFKConfiguredChannel(cfg *operation_setting.CatFKSetting, channelID string) bool {
+func catFKPaymentMethod(cfg *operation_setting.CatFKSetting, channelID string) string {
 	var channel *operation_setting.CatFKChannel
 	for i := range cfg.Channels {
 		if cfg.Channels[i].ID == channelID {
@@ -207,25 +207,26 @@ func catFKConfiguredChannel(cfg *operation_setting.CatFKSetting, channelID strin
 		}
 	}
 	if channel == nil {
-		return false
+		return ""
 	}
 
 	paymentType := catFKChannelPaymentType(*channel)
-	if paymentType == "" {
-		return false
-	}
 	methodType := operation_setting.CatFKPaymentMethodAlipay
 	if paymentType == "wxpay" {
 		methodType = operation_setting.CatFKPaymentMethodWeChat
 	} else if paymentType != "alipay" {
-		return false
+		return ""
 	}
 	for _, method := range operation_setting.PayMethods {
 		if method["type"] == methodType && method["channel_id"] == channelID {
-			return true
+			return methodType
 		}
 	}
-	return false
+	return ""
+}
+
+func catFKConfiguredChannel(cfg *operation_setting.CatFKSetting, channelID string) bool {
+	return catFKPaymentMethod(cfg, channelID) != ""
 }
 
 func CatFKUnavailableReason() string {
@@ -528,6 +529,7 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 		return nil, err
 	}
 	trade := "catfk_" + common.GetUUID()
+	paymentMethod := catFKPaymentMethod(cfg, req.ChannelID)
 	password := make([]byte, 32)
 	if _, err = rand.Read(password); err != nil {
 		return nil, err
@@ -537,7 +539,7 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 	if err != nil {
 		return nil, err
 	}
-	order := &model.CatFKOrder{UserID: userID, TradeNo: trade, TierID: req.ProductID, ProductID: snap.Offer.ProductID, ChannelID: req.ChannelID, ExpectedQuota: snap.Quota, PriceAmount: snap.Offer.Amount, Currency: snap.Offer.Currency, ShopID: snap.Offer.ShopID, ShopName: snap.Offer.ShopName, ShopURL: snap.Offer.ShopURL, PaymentMethod: req.ChannelID, Status: model.CatFKOrderStatusNew, NextQueryAt: s.now().Unix(), CredentialCiphertext: ciphertext, IdempotencyKey: req.IdempotencyKey}
+	order := &model.CatFKOrder{UserID: userID, TradeNo: trade, TierID: req.ProductID, ProductID: snap.Offer.ProductID, ChannelID: req.ChannelID, ExpectedQuota: snap.Quota, PriceAmount: snap.Offer.Amount, Currency: snap.Offer.Currency, ShopID: snap.Offer.ShopID, ShopName: snap.Offer.ShopName, ShopURL: snap.Offer.ShopURL, PaymentMethod: paymentMethod, Status: model.CatFKOrderStatusNew, NextQueryAt: s.now().Unix(), CredentialCiphertext: ciphertext, IdempotencyKey: req.IdempotencyKey}
 	order, alreadyExists, err := s.store.Create(order)
 	if err != nil {
 		return nil, ErrCatFKOrderUnavailable

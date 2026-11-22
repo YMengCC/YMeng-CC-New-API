@@ -1108,6 +1108,8 @@
     "Category name must be less than 50 characters": "分類名稱不能超過 50 個字元",
     "Catfk": "Catfk",
     "Catfk Alipay": "Catfk 支付寶",
+    "catfk Alipay": "catfk 支付寶",
+    "catfk WeChat Pay": "catfk 微信支付",
     "Catfk available channels": "Catfk 可用渠道",
     "CatFK channel IDs must be unique": "雲貓 管道 ID 不可重複",
     "Catfk consignment store payments": "Catfk 店鋪支付",

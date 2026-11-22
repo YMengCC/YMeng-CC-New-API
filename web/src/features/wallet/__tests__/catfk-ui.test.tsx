@@ -718,8 +718,28 @@ function mockCatfkHistory(redemption: unknown) {
       data: {
         success: true,
         data: {
-          total: 3,
+          total: 5,
           items: [
+            {
+              id: 5,
+              amount: 5000000,
+              money: 72,
+              trade_no: 'catfk-wxpay-order',
+              payment_method: 'catfk_wxpay',
+              payment_provider: 'catfk',
+              status: 'success',
+              create_time: 1,
+            },
+            {
+              id: 4,
+              amount: 5000000,
+              money: 72,
+              trade_no: 'catfk-alipay-order',
+              payment_method: 'catfk_alipay',
+              payment_provider: 'catfk',
+              status: 'success',
+              create_time: 1,
+            },
             {
               id: 3,
               amount: 5000000,
@@ -756,6 +776,16 @@ function mockCatfkHistory(redemption: unknown) {
   })
 }
 
+it('labels Catfk payment channels separately while preserving legacy and regular methods', async () => {
+  mockCatfkHistory({ success: true, data: {} })
+  render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
+  const dialog = await screen.findByRole('dialog')
+  expect(await within(dialog).findByText('catfk Alipay')).toBeVisible()
+  expect(within(dialog).getByText('catfk WeChat Pay')).toBeVisible()
+  expect(within(dialog).getAllByText('Online Payment')).toHaveLength(2)
+  expect(within(dialog).getByText('Alipay')).toBeVisible()
+})
+
 it('renders the currency image on both quota-based and USD-based order amounts', async () => {
   const imageUrl = 'https://assets.example.com/coin.svg'
   useSystemConfigStore.getState().setConfig(
@@ -773,11 +803,11 @@ it('renders the currency image on both quota-based and USD-based order amounts',
   const dialog = await screen.findByRole('dialog')
   await within(dialog).findByText('catfk-order')
   const symbols = within(dialog).getAllByRole('img', { name: '¤' })
-  expect(symbols).toHaveLength(3)
+  expect(symbols).toHaveLength(5)
   for (const symbol of symbols) {
     expect(symbol).toHaveAttribute('src', imageUrl)
   }
-  expect(within(dialog).getAllByText('20')).toHaveLength(3)
+  expect(within(dialog).getAllByText('20')).toHaveLength(5)
   expect(dialog).not.toHaveTextContent(imageUrl)
 })
 
@@ -788,10 +818,10 @@ it('offers a redemption code button on every Catfk history order and no status q
   mockCatfkHistory({ success: true, data: {} })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
   await screen.findByText('catfk-order')
-  expect(screen.getAllByText('$10')).toHaveLength(3)
+  expect(screen.getAllByText('$10')).toHaveLength(5)
   expect(
     screen.getAllByRole('button', { name: 'View redemption code' })
-  ).toHaveLength(2)
+  ).toHaveLength(4)
   expect(
     screen.queryByRole('button', { name: 'Check status' })
   ).not.toBeInTheDocument()
@@ -809,7 +839,7 @@ it('shows the redeemed code of a completed Catfk order when its button is clicke
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
   await screen.findByText('completed-catfk-order')
   await userEvent.click(
-    screen.getAllByRole('button', { name: 'View redemption code' })[0]
+    screen.getAllByRole('button', { name: 'View redemption code' })[2]
   )
   const dialog = await screen.findByRole('dialog', { name: 'Redemption Code' })
   expect(

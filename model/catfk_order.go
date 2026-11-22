@@ -85,12 +85,16 @@ func CreateCatFKOrder(order *CatFKOrder) (existing *CatFKOrder, alreadyExists bo
 		}
 		now := common.GetTimestamp()
 		money, _ := price.Float64()
-		topup := &TopUp{UserId: order.UserID, TradeNo: order.TradeNo, Money: money, Amount: int64(order.ExpectedQuota), PaymentMethod: PaymentMethodCatFK, PaymentProvider: PaymentProviderCatFK, Status: common.TopUpStatusPending, CreateTime: now}
+		paymentMethod := order.PaymentMethod
+		if paymentMethod != PaymentMethodCatFKAlipay && paymentMethod != PaymentMethodCatFKWeChat {
+			paymentMethod = PaymentMethodCatFK
+		}
+		topup := &TopUp{UserId: order.UserID, TradeNo: order.TradeNo, Money: money, Amount: int64(order.ExpectedQuota), PaymentMethod: paymentMethod, PaymentProvider: PaymentProviderCatFK, Status: common.TopUpStatusPending, CreateTime: now}
 		if err := tx.Create(topup).Error; err != nil {
 			return err
 		}
 		order.TopUpID = topup.Id
-		order.PaymentMethod = PaymentMethodCatFK
+		order.PaymentMethod = paymentMethod
 		order.Status = CatFKOrderStatusNew
 		order.UpstreamOrderID, order.RedemptionID = nil, nil
 		order.PaymentURL, order.FailureCode = "", ""
@@ -297,7 +301,8 @@ func CompleteVerifiedCatFKOrder(id int, version int64, redemptionKey string, cal
 		if err := lockForUpdate(tx).First(topup, "id = ?", order.TopUpID).Error; err != nil {
 			return err
 		}
-		if topup.UserId != order.UserID || topup.TradeNo != order.TradeNo || topup.PaymentProvider != PaymentProviderCatFK || topup.PaymentMethod != PaymentMethodCatFK || topup.Status != common.TopUpStatusPending {
+		validPaymentMethod := topup.PaymentMethod == PaymentMethodCatFK || topup.PaymentMethod == PaymentMethodCatFKAlipay || topup.PaymentMethod == PaymentMethodCatFKWeChat
+		if topup.UserId != order.UserID || topup.TradeNo != order.TradeNo || topup.PaymentProvider != PaymentProviderCatFK || topup.PaymentMethod != order.PaymentMethod || !validPaymentMethod || topup.Status != common.TopUpStatusPending {
 			return ErrCatFKOrderConflict
 		}
 		now := common.GetTimestamp()

@@ -1108,6 +1108,8 @@
     "Category name must be less than 50 characters": "Le nom de la catégorie doit contenir moins de 50 caractères",
     "Catfk": "Catfk",
     "Catfk Alipay": "Paiement Catfk par Alipay",
+    "catfk Alipay": "Paiement catfk par Alipay",
+    "catfk WeChat Pay": "Paiement catfk par WeChat",
     "Catfk available channels": "Canaux Catfk disponibles",
     "CatFK channel IDs must be unique": "Les identifiants des canaux Yunmao doivent être uniques",
     "Catfk consignment store payments": "Paiement boutique Catfk",
