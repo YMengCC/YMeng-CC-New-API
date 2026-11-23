@@ -140,7 +140,7 @@ export function QqBindingCard() {
   }
 
   const unbind = async () => {
-    if (!window.confirm('确定解除 QQ 绑定吗？解除后群里 /余额 将不可用。')) {
+    if (!window.confirm('确定解除 QQ 绑定吗？解除后群里 /余额、/签到 与红包将不可用。')) {
       return
     }
     setUnbinding(true)
@@ -260,7 +260,7 @@ export function QqBindingCard() {
               QQ 绑定
             </CardTitle>
             <CardDescription>
-              绑定后可在 QQ 群使用 /余额 查询额度。
+              绑定后可在 QQ 群使用 /帮助 查看全部指令。
             </CardDescription>
           </div>
           {bindings.length > 0 ? (
