@@ -68,8 +68,8 @@ export function FeatureOverviewCard() {
                 /签到
               </code>
               。机器人统计绑定账号北京时间昨日的消费，达到 10（站点显示货币）即可随机获得
-              1.00–5.00 额度（两位小数，金额越大抽中概率越低），直接计入 New API
-              余额；每个 New API 账号每天限一次。
+              1.00–5.00 额度（两位小数，金额越大抽中概率越低），直接计入 YMeng CC
+              余额；每个 YMeng CC 账号每天限一次。
             </p>
           </div>
         </div>
@@ -84,7 +84,7 @@ export function FeatureOverviewCard() {
               <code className='bg-muted rounded px-1 py-0.5 text-xs'>
                 /发红包 &lt;总量&gt; &lt;个数&gt;
               </code>
-              （例如 /发红包 10 5）。费用从发送者自己绑定的 New API
+              （例如 /发红包 10 5）。费用从发送者自己绑定的 YMeng CC
               余额扣除；群友发送{' '}
               <code className='bg-muted rounded px-1 py-0.5 text-xs'>
                 /领取红包 &lt;红包码&gt;
@@ -109,7 +109,7 @@ export function FeatureOverviewCard() {
                 /查询余额
               </code>
               ），机器人会返回当前绑定账号的余额、已用额度和原始额度，数据直接来自
-              New API。
+              YMeng CC。
             </p>
           </div>
         </div>

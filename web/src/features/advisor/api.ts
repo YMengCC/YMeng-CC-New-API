@@ -37,7 +37,7 @@ export interface AdvisorEnvelope<T> {
   data?: T
 }
 
-/** Bindings for the current New API user, verified by the plugin via the JWT. */
+/** Bindings for the current YMeng CC user, verified by the plugin via the JWT. */
 export async function getAdvisorBindings(): Promise<
   AdvisorEnvelope<{ qqs: AdvisorBinding[] }>
 > {
@@ -59,7 +59,7 @@ export async function createAdvisorCode(): Promise<
   return res.data
 }
 
-/** Remove every QQ binding for the current New API user. */
+/** Remove every QQ binding for the current YMeng CC user. */
 export async function unbindAdvisor(): Promise<
   AdvisorEnvelope<{ removed: number }>
 > {

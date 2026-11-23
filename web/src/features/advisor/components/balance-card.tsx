@@ -93,7 +93,7 @@ export function BalanceCard({
             <CardDescription>
               {profile
                 ? `账号：${profile.username}（ID ${profile.id}）`
-                : '登录后显示你的 New API 账户额度'}
+                : '登录后显示你的 YMeng CC 账户额度'}
             </CardDescription>
           </div>
           <Button

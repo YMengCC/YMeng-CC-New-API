@@ -42,7 +42,7 @@ export function Advisor() {
                   萌萌的专属顾问
                 </h1>
                 <p className='text-muted-foreground text-sm'>
-                  你的 New API 账户小助手
+                  你的 YMeng CC 账户小助手
                 </p>
               </div>
             </div>
