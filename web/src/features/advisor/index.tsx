@@ -23,15 +23,11 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
-import { useProfile } from '@/features/profile/hooks'
 
-import { BalanceCard } from './components/balance-card'
 import { FeatureOverviewCard } from './components/feature-overview-card'
 import { QqBindingCard } from './components/qq-binding-card'
 
 export function Advisor() {
-  const { profile, loading, refreshProfile } = useProfile()
-
   return (
     <Main>
       <div className='min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-4 sm:py-6'>
@@ -53,19 +49,11 @@ export function Advisor() {
           </CardStaggerItem>
 
           <CardStaggerItem>
-            <FeatureOverviewCard />
-          </CardStaggerItem>
-
-          <CardStaggerItem>
-            <BalanceCard
-              profile={profile}
-              loading={loading}
-              onRefresh={refreshProfile}
-            />
-          </CardStaggerItem>
-
-          <CardStaggerItem>
             <QqBindingCard />
+          </CardStaggerItem>
+
+          <CardStaggerItem>
+            <FeatureOverviewCard />
           </CardStaggerItem>
         </CardStaggerContainer>
       </div>
