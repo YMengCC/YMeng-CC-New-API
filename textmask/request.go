@@ -248,10 +248,14 @@ func (s *Session) maskClaudePart(value object) error {
 			return err
 		}
 		delete(value, "cache_control")
-		if signature, ok := value["signature"]; ok {
-			if text, e := stringValue(signature); e != nil || text != "" {
-				return ErrUnsupported
+		if signature, ok := value["signature"]; ok && !optionalEmpty(signature) {
+			if err = s.opaqueField(value, "signature", true); err != nil {
+				return err
 			}
+			if _, err = stringValue(value["thinking"]); err != nil {
+				return err
+			}
+			return nil
 		}
 		return s.maskString(value, "thinking", true)
 	case "redacted_thinking":
@@ -317,6 +321,12 @@ func (s *Session) maskGeminiPart(value object) error {
 		return err
 	}
 	if _, ok := value["text"]; ok {
+		if signature, signed := value["thoughtSignature"]; signed && !optionalEmpty(signature) {
+			if _, err := stringValue(value["text"]); err != nil {
+				return err
+			}
+			return nil
+		}
 		return s.maskString(value, "text", true)
 	}
 	if raw, ok := value["functionCall"]; ok {
@@ -1009,7 +1019,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 				return nil, ErrUnsupported
 			}
 			kind, e := stringValue(settings["type"])
-			if e != nil || kind != "disabled" {
+			if e != nil || !slices.Contains([]string{"disabled", "enabled", "adaptive"}, kind) {
 				return nil, ErrUnsupported
 			}
 			if enumSetting(settings, "display", "summarized omitted") != nil || numericSettings(settings, "budget_tokens") != nil {

@@ -299,12 +299,6 @@ func TestAgentToolContracts(t *testing.T) {
 		_, err = s.RestoreEvent([]byte(`{"candidates":[{"index":0,"finishReason":"STOP"}]}`))
 		require.NoError(t, err)
 		require.NoError(t, s.Finish())
-
-		signed, err := New()
-		require.NoError(t, err)
-		defer signed.Close()
-		_, err = signed.RestoreJSON([]byte(`{"candidates":[{"content":{"parts":[{"text":"secret","thoughtSignature":"sig"}]}}]}`))
-		require.ErrorIs(t, err, ErrUnsupported)
 	})
 
 	t.Run("agent shapes that still fail closed", func(t *testing.T) {
@@ -322,10 +316,11 @@ func TestAgentToolContracts(t *testing.T) {
 			{"responses", `{"model":"m","input":"x","max_tool_calls":-1}`},
 			{"responses", `{"model":"m","input":[{"type":"function_call","call_id":"c","name":"lookup","arguments":"not-json"}]}`},
 			{"responses", `{"model":"m","input":[{"type":"function_call_output","call_id":"c","output":[{"type":"input_image","image_url":"https://x"}]}]}`},
-			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":"sig"}]}]}`},
+			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":123}]}]}`},
 			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":[{"type":"image","source":{"data":"x"}}]}]}]}`},
-			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"x"}],"thinking":{"type":"enabled","budget_tokens":1024}}`},
+			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"x"}],"thinking":{"type":"enabled","budget_tokens":"big"}}`},
 			{"gemini", `{"model":"m","contents":[{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{},"partialArgs":[{"jsonPath":"$.x"}],"willContinue":true}}]}]}`},
+			{"gemini", `{"model":"m","contents":[{"role":"model","parts":[{"text":"secret","thoughtSignature":123}]}]}`},
 		}
 		for _, tc := range cases {
 			_, err = s.MaskJSON([]byte(tc.body), tc.protocol)
@@ -636,5 +631,165 @@ func TestMaskingContracts(t *testing.T) {
 		restorer := s.NewStreamRestorer(MaxEventBytes)
 		require.NoError(t, restorer.Write([]byte("data: {\"choices\":[]}"), func([]byte) error { return nil }))
 		require.ErrorIs(t, restorer.Close(), ErrIncomplete)
+	})
+}
+
+func TestSignedReasoningPassThrough(t *testing.T) {
+	t.Run("claude signed thinking request and response", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+
+		request := map[string]any{
+			"model":      "m",
+			"max_tokens": 1,
+			"thinking":   map[string]any{"type": "enabled", "budget_tokens": 1024, "display": "summarized"},
+			"messages": []any{
+				map[string]any{"role": "user", "content": "ordinary alice@example.com"},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{
+					"type": "thinking", "thinking": "private alice@example.com", "signature": "sig-1",
+				}}},
+			},
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "claude")
+		require.NoError(t, err)
+		assert.Contains(t, string(masked), `"thinking":"private alice@example.com"`)
+		assert.Contains(t, string(masked), `"signature":"sig-1"`)
+		assert.NotContains(t, string(masked), "ordinary alice@example.com")
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		adaptive, err := json.Marshal(map[string]any{
+			"model": "m", "max_tokens": 1,
+			"thinking": map[string]any{"type": "adaptive", "display": "omitted"},
+			"messages": []any{map[string]any{"role": "user", "content": "x"}},
+		})
+		require.NoError(t, err)
+		_, err = s.MaskJSON(adaptive, "claude")
+		require.NoError(t, err)
+
+		reply := map[string]any{
+			"type": "message",
+			"content": []any{
+				map[string]any{"type": "thinking", "thinking": "private " + token, "signature": "sig-2"},
+				map[string]any{"type": "text", "text": "ordinary " + token},
+			},
+		}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), `"thinking":"private `+token+`"`)
+		assert.Contains(t, string(restored), "ordinary alice@example.com")
+
+		events := []map[string]any{
+			{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "thinking", "thinking": "private " + token, "signature": "sig-3"}},
+			{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "thinking_delta", "thinking": " more " + token}},
+			{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "signature_delta", "signature": "sig-4"}},
+			{"type": "content_block_stop", "index": 0},
+			{"type": "content_block_delta", "index": 1, "delta": map[string]any{"type": "text_delta", "text": "ordinary " + token}},
+			{"type": "message_stop"},
+		}
+		for _, event := range events {
+			data, e := json.Marshal(event)
+			require.NoError(t, e)
+			out, e := s.RestoreEvent(data)
+			require.NoError(t, e, string(data))
+			delta, ok := event["delta"].(map[string]any)
+			if !ok {
+				continue
+			}
+			switch delta["type"] {
+			case "text_delta":
+				assert.Contains(t, string(out), "ordinary alice@example.com")
+			case "thinking_delta":
+				assert.Contains(t, string(out), token)
+			}
+		}
+	})
+
+	t.Run("gemini signed thought request and response", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+
+		request := map[string]any{
+			"model": "m",
+			"contents": []any{
+				map[string]any{"role": "user", "parts": []any{map[string]any{"text": "ordinary alice@example.com"}}},
+				map[string]any{"role": "model", "parts": []any{map[string]any{
+					"text": "private alice@example.com", "thought": true, "thoughtSignature": "sig-1",
+				}}},
+			},
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "gemini")
+		require.NoError(t, err)
+		assert.Contains(t, string(masked), `"text":"private alice@example.com"`)
+		assert.Contains(t, string(masked), `"thoughtSignature":"sig-1"`)
+		assert.NotContains(t, string(masked), "ordinary alice@example.com")
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		reply := map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{
+			map[string]any{"text": "private " + token, "thought": true, "thoughtSignature": "sig-2"},
+			map[string]any{"text": "ordinary " + token},
+		}}}}}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), `"text":"private `+token+`"`)
+		assert.Contains(t, string(restored), "ordinary alice@example.com")
+
+		events := []map[string]any{
+			{"candidates": []any{map[string]any{"index": 0, "content": map[string]any{"parts": []any{
+				map[string]any{"text": "private " + token, "thought": true, "thoughtSignature": "sig-3"},
+			}}}}},
+			{"candidates": []any{map[string]any{"index": 0, "content": map[string]any{"parts": []any{
+				map[string]any{"text": "ordinary " + token},
+			}}}}},
+			{"candidates": []any{map[string]any{"index": 0, "finishReason": "STOP"}}},
+		}
+		for i, event := range events {
+			data, e := json.Marshal(event)
+			require.NoError(t, e)
+			out, e := s.RestoreEvent(data)
+			require.NoError(t, e, string(data))
+			if i == 0 {
+				assert.Contains(t, string(out), token)
+			}
+			if i == 1 {
+				assert.Contains(t, string(out), "ordinary alice@example.com")
+			}
+		}
+		require.NoError(t, s.Finish())
+	})
+
+	t.Run("malformed signed blocks still fail closed", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		for _, body := range []string{
+			`{"type":"message","content":[{"type":"thinking","thinking":"x","signature":123}]}`,
+			`{"type":"message","content":[{"type":"thinking","thinking":"x","signature":"sig","extra":true}]}`,
+			`{"candidates":[{"content":{"parts":[{"text":"x","thoughtSignature":123}]}}]}`,
+			`{"candidates":[{"content":{"parts":[{"text":"x","thoughtSignature":"sig","extra":true}]}}]}`,
+		} {
+			_, e := s.RestoreJSON([]byte(body))
+			assert.ErrorIs(t, e, ErrUnsupported, body)
+		}
+		for _, body := range []string{
+			`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"x","signature":"sig","extra":true}}`,
+			`{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"x","extra":true}}`,
+			`{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":123}}`,
+			`{"candidates":[{"index":0,"content":{"parts":[{"text":"x","thoughtSignature":"sig","extra":true}]}}]}`,
+		} {
+			_, e := s.RestoreEvent([]byte(body))
+			assert.ErrorIs(t, e, ErrUnsupported, body)
+		}
 	})
 }

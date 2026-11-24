@@ -114,6 +114,48 @@ func TestProxyNeverSendsPlaintextUpstream(t *testing.T) {
 		assert.Contains(t, recorder.Body.String(), "data: [DONE]")
 		assert.NotContains(t, recorder.Body.String(), "event: error")
 	})
+	t.Run("signed Claude thinking passes through locally", func(t *testing.T) {
+		var upstreamBody string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, _ := io.ReadAll(r.Body)
+			upstreamBody = string(raw)
+			token := localToken.FindString(upstreamBody)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"type":"message","content":[{"type":"thinking","thinking":"private `+token+`","signature":"sig"},{"type":"text","text":"reply `+token+`"}]}`)
+		}))
+		defer upstream.Close()
+		server := newTestServer(t, upstream.URL)
+		request := localRequest(http.MethodPost, "/v1/messages", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"mail `+secret+`"}]}`)
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		assert.NotContains(t, upstreamBody, secret)
+		assert.Regexp(t, localToken, upstreamBody)
+		assert.Contains(t, recorder.Body.String(), `"thinking":"private `+localToken.FindString(upstreamBody)+`"`)
+		assert.Contains(t, recorder.Body.String(), "reply "+secret)
+	})
+	t.Run("signed Gemini thought passes through locally", func(t *testing.T) {
+		var upstreamBody string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, _ := io.ReadAll(r.Body)
+			upstreamBody = string(raw)
+			token := localToken.FindString(upstreamBody)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"candidates":[{"content":{"parts":[{"text":"private `+token+`","thought":true,"thoughtSignature":"sig"},{"text":"reply `+token+`"}]}}]}`)
+		}))
+		defer upstream.Close()
+		server := newTestServer(t, upstream.URL)
+		request := localRequest(http.MethodPost, "/v1beta/models/gemini-pro:generateContent", `{"model":"m","contents":[{"role":"user","parts":[{"text":"mail `+secret+`"}]}]}`)
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		assert.NotContains(t, upstreamBody, secret)
+		assert.Regexp(t, localToken, upstreamBody)
+		assert.Contains(t, recorder.Body.String(), `"text":"private `+localToken.FindString(upstreamBody)+`"`)
+		assert.Contains(t, recorder.Body.String(), "reply "+secret)
+	})
 }
 
 func TestProxyBlocksWhatItCannotMask(t *testing.T) {

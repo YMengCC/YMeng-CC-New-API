@@ -2,7 +2,7 @@
 
 # Errors returned to AI clients
 privacy.settings_unavailable: "User privacy settings are unavailable"
-privacy.unsupported_request: "Mengmeng's Safe House cannot safely mask this request. Function tools, tool calls and tool results are supported; images, audio, server-side state, native/server tools and signed reasoning are not. The request was not sent upstream."
+privacy.unsupported_request: "Mengmeng's Safe House cannot safely mask this request. Function tools, tool calls and tool results are supported; images, audio, server-side state and native/server tools are not; signed thinking/thought passes through unchanged. The request was not sent upstream."
 privacy.response_failed: "Mengmeng's Safe House could not safely restore the upstream response"
 common.database_error: "Database error, please contact the administrator"
 auth.user_banned: "User has been banned"

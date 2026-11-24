@@ -106,7 +106,7 @@ export function MengmengGatewayMode(props: MengmengGatewayModeProps) {
       </p>
       <p className='text-muted-foreground mt-2 text-xs'>
         {t(
-          'Unsupported requests, including media, stateful calls, native/server tools, and signed reasoning, are rejected before reaching the upstream.'
+          'Signed thinking/thought passes through unchanged without masking. Unsupported requests, including media, stateful calls, and native/server tools, are rejected before reaching the upstream.'
         )}
       </p>
       <div className='mt-4 flex justify-end'>

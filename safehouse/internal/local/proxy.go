@@ -20,7 +20,7 @@ const (
 	errorNotConnected  = "safehouse_not_connected"
 	errorUpstreamError = "safehouse_upstream_unreachable"
 
-	messageUnsupported = "萌萌的安全小屋无法在本机安全处理此请求，已拦截，未发送给站点。函数工具、工具调用和工具结果已支持；图片、音频、服务端会话状态、原生/服务端工具或签名推理仍不支持。 (Mengmeng's Safe House cannot safely mask this request on this computer. It was blocked and not sent to the site. Function tools, tool calls and tool results are supported; images, audio, server-side state, native/server tools and signed reasoning are still unsupported.)"
+	messageUnsupported = "萌萌的安全小屋无法在本机安全处理此请求，已拦截，未发送给站点。函数工具、工具调用和工具结果已支持；图片、音频、服务端会话状态、原生/服务端工具仍不支持；带签名的思考内容会原样透传。 (Mengmeng's Safe House cannot safely mask this request on this computer. It was blocked and not sent to the site. Function tools, tool calls and tool results are supported; images, audio, server-side state and native/server tools are still unsupported; signed thinking/thought passes through unchanged.)"
 	messageFailed      = "萌萌的安全小屋无法在本机安全还原站点的回复。 (Mengmeng's Safe House could not safely restore the site's reply on this computer.)"
 	messageNotPaired   = "萌萌的安全小屋还没有连接站点，请先在控制面板里连接。 (Mengmeng's Safe House is not connected to a site yet. Connect one in the control panel first.)"
 	messageUnreachable = "萌萌的安全小屋无法连接站点。 (Mengmeng's Safe House could not reach the site.)"

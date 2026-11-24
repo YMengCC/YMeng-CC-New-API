@@ -80,10 +80,17 @@ func (s *Session) restoreContent(value object, field, key string, stream, final 
 		case "refusal":
 			err = s.restoreField(part, "refusal", lane, stream, final)
 		case "thinking":
-			if signature, ok := part["signature"]; ok {
-				if text, e := stringValue(signature); e != nil || text != "" {
-					return ErrUnsupported
+			if err = whitelist(part, "type thinking signature"); err != nil {
+				return err
+			}
+			if signature, ok := part["signature"]; ok && !optionalEmpty(signature) {
+				if err = s.opaqueField(part, "signature", true); err != nil {
+					return err
 				}
+				if _, e := stringValue(part["thinking"]); e != nil {
+					return e
+				}
+				break
 			}
 			err = s.restoreField(part, "thinking", lane, stream, final)
 		case "tool_use":
@@ -267,7 +274,10 @@ func (s *Session) restoreGeminiPart(part object, lane string, stream, final bool
 	}
 	if _, ok := part["text"]; ok {
 		if raw, has := part["thoughtSignature"]; has && !optionalEmpty(raw) {
-			return ErrUnsupported
+			if _, err := stringValue(part["text"]); err != nil {
+				return err
+			}
+			return nil
 		}
 		return s.restoreField(part, "text", lane, stream, final)
 	}
@@ -559,12 +569,12 @@ func (s *Session) RestoreJSON(body []byte) ([]byte, error) {
 	if s.incomplete {
 		return nil, ErrIncomplete
 	}
+	if s.hasResidualPlaceholder(value) {
+		return nil, ErrIncomplete
+	}
 	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
-	}
-	if bytes.Contains(result, []byte(s.prefix)) {
-		return nil, ErrIncomplete
 	}
 	return result, nil
 }
@@ -651,8 +661,20 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 			err = s.restoreField(delta, "text", "claude/"+index+"/text", true, false)
 		case "input_json_delta":
 			err = s.restoreJSONField(delta, "partial_json", "claude/"+index+"/input_json", true, false)
-		case "thinking_delta", "signature_delta":
-			return nil, ErrUnsupported
+		case "thinking_delta":
+			if err = whitelist(delta, "type thinking"); err != nil {
+				return nil, err
+			}
+			if _, e := stringValue(delta["thinking"]); e != nil {
+				return nil, e
+			}
+		case "signature_delta":
+			if err = whitelist(delta, "type signature"); err != nil {
+				return nil, err
+			}
+			if err = s.opaqueField(delta, "signature", true); err != nil {
+				return nil, err
+			}
 		default:
 			return nil, ErrUnsupported
 		}
@@ -685,7 +707,17 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 				block["input"] = restored
 			}
 		case "thinking":
-			return nil, ErrUnsupported
+			if err = whitelist(block, "type thinking signature"); err != nil {
+				return nil, err
+			}
+			if signature, ok := block["signature"]; ok && !optionalEmpty(signature) {
+				if err = s.opaqueField(block, "signature", true); err != nil {
+					return nil, err
+				}
+			}
+			if _, e := stringValue(block["thinking"]); e != nil {
+				return nil, e
+			}
 		case "redacted_thinking":
 		default:
 			return nil, ErrUnsupported
@@ -822,12 +854,12 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 	if s.incomplete {
 		return nil, ErrIncomplete
 	}
+	if s.hasResidualPlaceholder(value) {
+		return nil, ErrIncomplete
+	}
 	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
-	}
-	if bytes.Contains(result, []byte(s.prefix)) {
-		return nil, ErrIncomplete
 	}
 	if terminal {
 		if err = s.finish(); err != nil {
@@ -835,4 +867,66 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		}
 	}
 	return result, nil
+}
+
+func (s *Session) hasResidualPlaceholder(value object) bool {
+	for _, raw := range value {
+		if s.hasResidualIn(raw) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Session) hasResidualIn(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	switch trimmed[0] {
+	case '"':
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return true
+		}
+		return strings.Contains(text, s.prefix)
+	case '{':
+		var child object
+		if err := json.Unmarshal(trimmed, &child); err != nil {
+			return true
+		}
+		if opaqueReasoningObject(child) {
+			return false
+		}
+		return s.hasResidualPlaceholder(child)
+	case '[':
+		var items []json.RawMessage
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			return true
+		}
+		for _, item := range items {
+			if s.hasResidualIn(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func opaqueReasoningObject(value object) bool {
+	kind, _ := stringValue(value["type"])
+	if kind == "thinking_delta" || kind == "signature_delta" {
+		return true
+	}
+	if kind == "thinking" {
+		if signature, ok := value["signature"]; ok && !optionalEmpty(signature) {
+			return true
+		}
+	}
+	if _, hasText := value["text"]; hasText {
+		if signature, ok := value["thoughtSignature"]; ok && !optionalEmpty(signature) {
+			return true
+		}
+	}
+	return false
 }

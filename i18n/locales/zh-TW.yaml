@@ -3,7 +3,7 @@
 
 # Errors returned to AI clients
 privacy.settings_unavailable: "無法讀取使用者隱私設定"
-privacy.unsupported_request: "萌萌的安全小屋無法安全處理此請求。支援函式工具、工具呼叫和工具結果；圖片、音訊、伺服器端會話狀態、原生/伺服器端工具和簽章推理不支援。本次請求未傳送至上游。"
+privacy.unsupported_request: "萌萌的安全小屋無法安全處理此請求。支援函式工具、工具呼叫和工具結果；圖片、音訊、伺服器端會話狀態、原生/伺服器端工具不支援；帶簽章的思考內容會原樣透傳。本次請求未傳送至上游。"
 privacy.response_failed: "萌萌的安全小屋無法安全還原上游回應"
 common.database_error: "資料庫出錯，請聯繫管理員"
 auth.user_banned: "使用者已被封禁"
