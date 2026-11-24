@@ -1,5 +1,6 @@
 // Package textmask provides request-local, reversible text privacy masking.
-// It deliberately supports only explicit text-only protocol shapes.
+// It supports text-only protocol shapes plus function tool declarations,
+// tool calls and tool results; media and server-side state stay unsupported.
 package textmask
 
 import (
@@ -190,6 +191,12 @@ func validEntity(text string, start, end int) bool {
 }
 
 func (s *Session) restoreText(text string) string {
+	return s.restoreTextWith(text, false)
+}
+
+// restoreTextWith keeps the replacement valid inside a JSON string when the
+// lane is a partial JSON document (tool arguments, input_json_delta).
+func (s *Session) restoreTextWith(text string, jsonSafe bool) string {
 	// Bound expansion: a short token can represent a much larger private key.
 	var out strings.Builder
 	for {
@@ -219,6 +226,10 @@ func (s *Session) restoreText(text string) string {
 			s.incomplete = true
 			return ""
 		}
+		if jsonSafe && !jsonStringSafe(replacement) {
+			s.incomplete = true
+			return ""
+		}
 		if out.Len()+len(replacement) > s.restoreBudget {
 			s.incomplete = true
 			return ""
@@ -228,6 +239,18 @@ func (s *Session) restoreText(text string) string {
 	}
 	s.restoreBudget -= out.Len()
 	return out.String()
+}
+
+func jsonStringSafe(value string) bool {
+	if strings.ContainsAny(value, "\"\\") {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Session) RestoreText(text string) string {
@@ -253,6 +276,14 @@ func (s *Session) RestoreDelta(key, text string, final bool) string {
 }
 
 func (s *Session) restoreDelta(key, text string, final bool) string {
+	return s.restoreDeltaWith(key, text, final, false)
+}
+
+func (s *Session) restoreJSONDelta(key, text string, final bool) string {
+	return s.restoreDeltaWith(key, text, final, true)
+}
+
+func (s *Session) restoreDeltaWith(key, text string, final, jsonSafe bool) string {
 	text = s.pending[key] + text
 	delete(s.pending, key)
 	hold := len(text)
@@ -289,7 +320,7 @@ func (s *Session) restoreDelta(key, text string, final bool) string {
 			s.pending[key] = suffix
 		}
 	}
-	return s.restoreText(text[:hold])
+	return s.restoreTextWith(text[:hold], jsonSafe)
 }
 
 func (s *Session) finish() error {

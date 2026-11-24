@@ -124,7 +124,7 @@ export function MengmengLocalMode() {
       <ul className='text-muted-foreground list-disc space-y-1 ps-4 text-xs'>
         <li>
           {t(
-            'Supports the same plain-text requests as site masking. Requests with tools, images, audio, or server-side state are blocked on your computer, so most coding agents cannot use it.'
+            'Supports the same text and function-tool requests as site masking, including tool calls, tool results, and multi-turn tool history. Images, audio, server-side state, native/server tools, and signed reasoning are blocked on your computer.'
           )}
         </li>
         <li>

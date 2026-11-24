@@ -167,19 +167,13 @@ func (s *Session) maskParts(raw []byte, protocol string) ([]byte, error) {
 		}
 		switch protocol {
 		case "gemini":
-			if err = whitelist(value, "text"); err != nil {
-				return nil, err
-			}
+			err = s.maskGeminiPart(value)
+		case "claude":
+			err = s.maskClaudePart(value)
 		default:
-			if err = whitelist(value, "type text"); err != nil {
-				return nil, err
-			}
-			kind, err := stringValue(value["type"])
-			if err != nil || (kind != "text" && !(protocol == "responses" && (kind == "input_text" || kind == "output_text"))) {
-				return nil, ErrUnsupported
-			}
+			err = s.maskTextPart(value, protocol)
 		}
-		if err = s.maskString(value, "text", true); err != nil {
+		if err != nil {
 			return nil, err
 		}
 		parts[i], err = json.Marshal(value)
@@ -188,6 +182,199 @@ func (s *Session) maskParts(raw []byte, protocol string) ([]byte, error) {
 		}
 	}
 	return json.Marshal(parts)
+}
+
+func (s *Session) maskTextPart(value object, protocol string) error {
+	if err := whitelist(value, "type text cache_control"); err != nil {
+		return err
+	}
+	delete(value, "cache_control")
+	kind, err := stringValue(value["type"])
+	if err != nil || (kind != "text" && !(protocol == "responses" && (kind == "input_text" || kind == "output_text"))) {
+		return ErrUnsupported
+	}
+	return s.maskString(value, "text", true)
+}
+
+func (s *Session) maskClaudePart(value object) error {
+	kind, err := stringValue(value["type"])
+	if err != nil {
+		return ErrUnsupported
+	}
+	switch kind {
+	case "text":
+		if err = whitelist(value, "type text cache_control"); err != nil {
+			return err
+		}
+		delete(value, "cache_control")
+		return s.maskString(value, "text", true)
+	case "tool_use":
+		if err = whitelist(value, "type id name input cache_control"); err != nil {
+			return err
+		}
+		delete(value, "cache_control")
+		if err = s.opaqueField(value, "id", true); err != nil {
+			return err
+		}
+		if _, err = s.toolName(value, "name"); err != nil {
+			return err
+		}
+		if input, ok := value["input"]; ok {
+			masked, e := s.maskJSONValue(input, 0)
+			if e != nil {
+				return e
+			}
+			value["input"] = masked
+		}
+		return nil
+	case "tool_result":
+		if err = whitelist(value, "type tool_use_id content is_error cache_control"); err != nil {
+			return err
+		}
+		delete(value, "cache_control")
+		if err = s.opaqueField(value, "tool_use_id", true); err != nil {
+			return err
+		}
+		if raw, ok := value["content"]; ok {
+			content, e := s.maskClaudeToolResultContent(raw)
+			if e != nil {
+				return e
+			}
+			value["content"] = content
+		}
+		return boolSettings(value, "is_error")
+	case "thinking":
+		if err = whitelist(value, "type thinking signature cache_control"); err != nil {
+			return err
+		}
+		delete(value, "cache_control")
+		if signature, ok := value["signature"]; ok {
+			if text, e := stringValue(signature); e != nil || text != "" {
+				return ErrUnsupported
+			}
+		}
+		return s.maskString(value, "thinking", true)
+	case "redacted_thinking":
+		if err = whitelist(value, "type data cache_control"); err != nil {
+			return err
+		}
+		delete(value, "cache_control")
+		return s.opaqueField(value, "data", true)
+	default:
+		return ErrUnsupported
+	}
+}
+
+func (s *Session) maskClaudeToolResultContent(raw []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return raw, nil
+	}
+	if trimmed[0] == '"' {
+		return s.maskStrings(raw)
+	}
+	items, err := decodeArray(raw)
+	if err != nil {
+		return nil, err
+	}
+	for i, item := range items {
+		part, err := decodeObject(item)
+		if err != nil {
+			return nil, err
+		}
+		if err = s.maskTextPart(part, "claude"); err != nil {
+			return nil, err
+		}
+		items[i], err = json.Marshal(part)
+		if err != nil {
+			return nil, ErrUnsupported
+		}
+	}
+	return json.Marshal(items)
+}
+
+func (s *Session) maskGeminiPart(value object) error {
+	if err := whitelist(value, "text thought thoughtSignature functionCall functionResponse"); err != nil {
+		return err
+	}
+	lanes := 0
+	if _, ok := value["text"]; ok {
+		lanes++
+	}
+	if _, ok := value["functionCall"]; ok {
+		lanes++
+	}
+	if _, ok := value["functionResponse"]; ok {
+		lanes++
+	}
+	if lanes != 1 {
+		return ErrUnsupported
+	}
+	if err := boolSettings(value, "thought"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(value, "thoughtSignature", false); err != nil {
+		return err
+	}
+	if _, ok := value["text"]; ok {
+		return s.maskString(value, "text", true)
+	}
+	if raw, ok := value["functionCall"]; ok {
+		call, err := decodeObject(raw)
+		if err != nil {
+			return err
+		}
+		if err = whitelist(call, "id name args partialArgs willContinue"); err != nil {
+			return err
+		}
+		if err = s.opaqueField(call, "id", false); err != nil {
+			return err
+		}
+		if _, err = s.toolName(call, "name"); err != nil {
+			return err
+		}
+		for _, field := range []string{"partialArgs", "willContinue"} {
+			if v, ok := call[field]; ok && !optionalEmpty(v) {
+				return ErrUnsupported
+			}
+		}
+		if args, ok := call["args"]; ok {
+			masked, e := s.maskJSONValue(args, 0)
+			if e != nil {
+				return e
+			}
+			call["args"] = masked
+		}
+		value["functionCall"], err = json.Marshal(call)
+		return err
+	}
+	response, err := decodeObject(value["functionResponse"])
+	if err != nil {
+		return err
+	}
+	if err = whitelist(response, "name response id willContinue scheduling parts"); err != nil {
+		return err
+	}
+	if err = s.opaqueField(response, "id", false); err != nil {
+		return err
+	}
+	if _, err = s.toolName(response, "name"); err != nil {
+		return err
+	}
+	for _, field := range []string{"willContinue", "scheduling", "parts"} {
+		if v, ok := response[field]; ok && !optionalEmpty(v) {
+			return ErrUnsupported
+		}
+	}
+	if body, ok := response["response"]; ok {
+		masked, e := s.maskJSONValue(body, 0)
+		if e != nil {
+			return e
+		}
+		response["response"] = masked
+	}
+	value["functionResponse"], err = json.Marshal(response)
+	return err
 }
 
 func (s *Session) maskMessages(raw []byte, protocol string) ([]byte, error) {
@@ -200,45 +387,16 @@ func (s *Session) maskMessages(raw []byte, protocol string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fields := "role content"
-		if protocol == "responses" {
-			fields += " type"
-		}
-		if protocol == "gemini" {
-			fields = "role parts"
-		}
-		if err = whitelist(value, fields); err != nil {
-			return nil, err
-		}
-		if protocol == "responses" {
-			if err = enumSetting(value, "type", "message"); err != nil {
-				return nil, err
-			}
-		}
-		role := ""
-		if rawRole, exists := value["role"]; exists {
-			role, err = stringValue(rawRole)
-			if err != nil {
-				return nil, ErrUnsupported
-			}
-		} else if protocol != "gemini" {
+		switch protocol {
+		case "chat":
+			err = s.maskChatMessage(value)
+		case "claude":
+			err = s.maskClaudeMessage(value)
+		case "gemini":
+			err = s.maskGeminiMessage(value)
+		default:
 			return nil, ErrUnsupported
 		}
-		allowed := "system developer user assistant"
-		if protocol == "claude" {
-			allowed = "user assistant"
-		}
-		if protocol == "gemini" {
-			allowed = "user model"
-		}
-		if role != "" && !slices.Contains(strings.Fields(allowed), role) {
-			return nil, ErrUnsupported
-		}
-		field := "content"
-		if protocol == "gemini" {
-			field = "parts"
-		}
-		value[field], err = s.maskParts(value[field], protocol)
 		if err != nil {
 			return nil, err
 		}
@@ -250,8 +408,381 @@ func (s *Session) maskMessages(raw []byte, protocol string) ([]byte, error) {
 	return json.Marshal(messages)
 }
 
-// MaskJSON validates and masks a single text-only request. Tools, media,
-// encrypted/signed history and server-side conversation references are unsupported.
+func (s *Session) maskChatMessage(value object) error {
+	if err := whitelist(value, "role content tool_calls tool_call_id"); err != nil {
+		return err
+	}
+	role, err := stringValue(value["role"])
+	if err != nil || !slices.Contains(strings.Fields("system developer user assistant tool"), role) {
+		return ErrUnsupported
+	}
+	switch role {
+	case "tool":
+		if err = s.opaqueField(value, "tool_call_id", true); err != nil {
+			return err
+		}
+		if err = s.maskContentField(value, "content", "chat", true, true); err != nil {
+			return err
+		}
+		if raw, ok := value["tool_calls"]; ok && !optionalEmpty(raw) {
+			return ErrUnsupported
+		}
+		return nil
+	case "assistant":
+		if err = s.maskContentField(value, "content", "chat", false, true); err != nil {
+			return err
+		}
+		if raw, ok := value["tool_calls"]; ok {
+			value["tool_calls"], err = s.maskChatToolCalls(raw)
+			return err
+		}
+		return nil
+	default:
+		if err = s.maskContentField(value, "content", "chat", true, false); err != nil {
+			return err
+		}
+		for _, field := range []string{"tool_calls", "tool_call_id"} {
+			if raw, ok := value[field]; ok && !optionalEmpty(raw) {
+				return ErrUnsupported
+			}
+		}
+		return nil
+	}
+}
+
+func (s *Session) maskClaudeMessage(value object) error {
+	if err := whitelist(value, "role content"); err != nil {
+		return err
+	}
+	role, err := stringValue(value["role"])
+	if err != nil || !slices.Contains([]string{"user", "assistant"}, role) {
+		return ErrUnsupported
+	}
+	value["content"], err = s.maskParts(value["content"], "claude")
+	return err
+}
+
+func (s *Session) maskGeminiMessage(value object) error {
+	if err := whitelist(value, "role parts"); err != nil {
+		return err
+	}
+	if rawRole, ok := value["role"]; ok {
+		role, err := stringValue(rawRole)
+		if err != nil || (role != "" && !slices.Contains([]string{"user", "model"}, role)) {
+			return ErrUnsupported
+		}
+	}
+	masked, err := s.maskParts(value["parts"], "gemini")
+	if err != nil {
+		return err
+	}
+	value["parts"] = masked
+	return nil
+}
+
+func (s *Session) maskContentField(value object, field, protocol string, required, allowNull bool) error {
+	raw, ok := value[field]
+	if !ok {
+		if required {
+			return ErrUnsupported
+		}
+		return nil
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return ErrUnsupported
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
+		if allowNull {
+			return nil
+		}
+		return ErrUnsupported
+	}
+	if trimmed[0] == '"' {
+		return s.maskString(value, field, true)
+	}
+	if trimmed[0] != '[' {
+		return ErrUnsupported
+	}
+	masked, err := s.maskParts(raw, protocol)
+	if err != nil {
+		return err
+	}
+	value[field] = masked
+	return nil
+}
+
+func (s *Session) maskChatToolCalls(raw []byte) ([]byte, error) {
+	if optionalEmpty(raw) {
+		return raw, nil
+	}
+	items, err := decodeArray(raw)
+	if err != nil || len(items) > maxToolCount {
+		return nil, ErrUnsupported
+	}
+	for i, item := range items {
+		call, err := decodeObject(item)
+		if err != nil {
+			return nil, err
+		}
+		if err = whitelist(call, "id type function"); err != nil {
+			return nil, err
+		}
+		if err = s.opaqueField(call, "id", true); err != nil {
+			return nil, err
+		}
+		kind, err := stringValue(call["type"])
+		if err != nil || kind != "function" {
+			return nil, ErrUnsupported
+		}
+		function, err := decodeObject(call["function"])
+		if err != nil {
+			return nil, err
+		}
+		if err = whitelist(function, "name arguments"); err != nil {
+			return nil, err
+		}
+		if _, err = s.toolName(function, "name"); err != nil {
+			return nil, err
+		}
+		if _, ok := function["arguments"]; !ok {
+			return nil, ErrUnsupported
+		}
+		if err = s.maskJSONStringField(function, "arguments"); err != nil {
+			return nil, err
+		}
+		call["function"], err = json.Marshal(function)
+		if err != nil {
+			return nil, ErrUnsupported
+		}
+		items[i], err = json.Marshal(call)
+		if err != nil {
+			return nil, ErrUnsupported
+		}
+	}
+	return json.Marshal(items)
+}
+
+func (s *Session) maskResponsesInput(raw []byte) ([]byte, error) {
+	if len(bytes.TrimSpace(raw)) > 0 && bytes.TrimSpace(raw)[0] == '"' {
+		return s.maskStrings(raw)
+	}
+	items, err := decodeArray(raw)
+	if err != nil || len(items) == 0 {
+		return nil, ErrUnsupported
+	}
+	for i, item := range items {
+		value, err := decodeObject(item)
+		if err != nil {
+			return nil, err
+		}
+		kind := ""
+		if rawType, ok := value["type"]; ok {
+			if kind, err = stringValue(rawType); err != nil {
+				return nil, err
+			}
+		}
+		if kind == "" {
+			if _, ok := value["role"]; !ok {
+				return nil, ErrUnsupported
+			}
+			kind = "message"
+		}
+		switch kind {
+		case "message":
+			err = s.maskResponsesMessage(value)
+		case "function_call":
+			err = s.maskResponsesFunctionCall(value)
+		case "function_call_output":
+			err = s.maskResponsesFunctionOutput(value)
+		case "reasoning":
+			err = s.maskResponsesReasoning(value)
+		default:
+			return nil, ErrUnsupported
+		}
+		if err != nil {
+			return nil, err
+		}
+		items[i], err = json.Marshal(value)
+		if err != nil {
+			return nil, ErrUnsupported
+		}
+	}
+	return json.Marshal(items)
+}
+
+func (s *Session) maskResponsesMessage(value object) error {
+	if err := whitelist(value, "type role content"); err != nil {
+		return err
+	}
+	if err := enumSetting(value, "type", "message"); err != nil {
+		return err
+	}
+	role, err := stringValue(value["role"])
+	if err != nil || !slices.Contains(strings.Fields("system developer user assistant"), role) {
+		return ErrUnsupported
+	}
+	return s.maskContentField(value, "content", "responses", true, false)
+}
+
+func (s *Session) maskResponsesFunctionCall(value object) error {
+	if err := whitelist(value, "type call_id name arguments"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(value, "call_id", true); err != nil {
+		return err
+	}
+	if _, err := s.toolName(value, "name"); err != nil {
+		return err
+	}
+	if _, ok := value["arguments"]; !ok {
+		return ErrUnsupported
+	}
+	return s.maskJSONStringField(value, "arguments")
+}
+
+func (s *Session) maskResponsesFunctionOutput(value object) error {
+	if err := whitelist(value, "type call_id output"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(value, "call_id", true); err != nil {
+		return err
+	}
+	raw, ok := value["output"]
+	if !ok {
+		return ErrUnsupported
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return ErrUnsupported
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		return s.maskString(value, "output", true)
+	}
+	if trimmed[0] != '[' {
+		return ErrUnsupported
+	}
+	items, err := decodeArray(raw)
+	if err != nil {
+		return err
+	}
+	for i, item := range items {
+		part, err := decodeObject(item)
+		if err != nil {
+			return err
+		}
+		if err = whitelist(part, "type text"); err != nil {
+			return err
+		}
+		kind, err := stringValue(part["type"])
+		if err != nil || (kind != "input_text" && kind != "output_text" && kind != "text") {
+			return ErrUnsupported
+		}
+		if err = s.maskString(part, "text", true); err != nil {
+			return err
+		}
+		items[i], err = json.Marshal(part)
+		if err != nil {
+			return ErrUnsupported
+		}
+	}
+	value["output"], err = json.Marshal(items)
+	return err
+}
+
+func (s *Session) maskResponsesReasoning(value object) error {
+	if err := whitelist(value, "type id summary content encrypted_content"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(value, "id", false); err != nil {
+		return err
+	}
+	if err := s.opaqueField(value, "encrypted_content", false); err != nil {
+		return err
+	}
+	if raw, ok := value["summary"]; ok {
+		if err := s.maskReasoningParts(value, "summary", "summary_text", raw); err != nil {
+			return err
+		}
+	}
+	if raw, ok := value["content"]; ok {
+		if err := s.maskReasoningParts(value, "content", "reasoning_text", raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Session) maskReasoningParts(value object, field, allowedType string, raw []byte) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte("[]")) {
+		return nil
+	}
+	items, err := decodeArray(raw)
+	if err != nil {
+		return err
+	}
+	for i, item := range items {
+		part, err := decodeObject(item)
+		if err != nil {
+			return err
+		}
+		if err = whitelist(part, "type text"); err != nil {
+			return err
+		}
+		kind, err := stringValue(part["type"])
+		if err != nil || kind != allowedType {
+			return ErrUnsupported
+		}
+		if err = s.maskString(part, "text", true); err != nil {
+			return err
+		}
+		items[i], err = json.Marshal(part)
+		if err != nil {
+			return ErrUnsupported
+		}
+	}
+	value[field], err = json.Marshal(items)
+	return err
+}
+
+func (s *Session) maskPrompt(raw []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return raw, nil
+	}
+	if trimmed[0] == '"' {
+		return s.maskStrings(raw)
+	}
+	if trimmed[0] != '[' {
+		return nil, ErrUnsupported
+	}
+	return s.maskParts(raw, "responses")
+}
+
+func (s *Session) validateInclude(raw []byte) error {
+	if optionalEmpty(raw) {
+		return nil
+	}
+	items, err := decodeArray(raw)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		text, err := stringValue(item)
+		if err != nil || text != "reasoning.encrypted_content" {
+			return ErrUnsupported
+		}
+	}
+	return nil
+}
+
+// MaskJSON validates and masks one request. Text lanes, function tool
+// declarations, tool arguments and tool results are supported; media,
+// encrypted/signed history and server-side conversation references are not.
 // Responses always opts out of storage; an explicit store:true is rejected.
 // Numeric generation parameters remain byte-for-byte raw values for host validation.
 func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
@@ -267,7 +798,9 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 	switch protocol {
 	case "chat", "completions", "playground":
 		fields := "model stream stream_options max_tokens max_completion_tokens min_tokens temperature top_p top_k n frequency_penalty presence_penalty seed logprobs top_logprobs stop reasoning_effort verbosity response_format store"
-		if protocol != "completions" {
+		if protocol == "chat" {
+			fields += " messages tools tool_choice parallel_tool_calls"
+		} else if protocol != "completions" {
 			fields += " messages"
 		} else {
 			fields += " prompt suffix echo best_of logit_bias"
@@ -310,6 +843,23 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if protocol == "chat" {
+			if err = boolSettings(value, "parallel_tool_calls"); err != nil {
+				return nil, err
+			}
+			if raw, ok := value["tools"]; ok {
+				value["tools"], err = s.maskChatTools(raw)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if raw, ok := value["tool_choice"]; ok {
+				value["tool_choice"], err = s.maskChatToolChoice(raw)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 		if err = enumSetting(value, "reasoning_effort", "none minimal low medium high xhigh"); err != nil {
 			return nil, err
 		}
@@ -339,30 +889,54 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			}
 		}
 	case "responses":
-		if err = whitelist(value, "model input instructions stream stream_options max_output_tokens top_logprobs temperature top_p frequency_penalty presence_penalty store background reasoning text truncation service_tier"); err != nil {
+		if err = whitelist(value, "model input instructions stream stream_options max_output_tokens top_logprobs temperature top_p frequency_penalty presence_penalty store background reasoning text truncation service_tier tools tool_choice parallel_tool_calls max_tool_calls include prompt_cache_key prompt_cache_options prompt_cache_retention client_metadata safety_identifier user"); err != nil {
 			return nil, err
 		}
-		if err = boolSettings(value, "stream store background"); err != nil {
+		if err = boolSettings(value, "stream store background parallel_tool_calls"); err != nil {
 			return nil, err
 		}
 		if string(value["store"]) == "true" || string(value["background"]) == "true" {
 			return nil, ErrUnsupported
 		}
 		value["store"] = json.RawMessage("false")
-		if err = numericSettings(value, "max_output_tokens top_logprobs temperature top_p frequency_penalty presence_penalty"); err != nil {
+		if err = numericSettings(value, "max_output_tokens top_logprobs temperature top_p frequency_penalty presence_penalty max_tool_calls"); err != nil {
 			return nil, err
 		}
-		raw := value["input"]
-		if len(bytes.TrimSpace(raw)) > 0 && bytes.TrimSpace(raw)[0] == '"' {
-			value["input"], err = s.maskStrings(raw)
-		} else {
-			value["input"], err = s.maskMessages(raw, protocol)
+		if raw, ok := value["max_tool_calls"]; ok {
+			if _, e := strconv.ParseUint(string(raw), 10, 64); e != nil {
+				return nil, ErrUnsupported
+			}
 		}
+		for _, field := range []string{"prompt_cache_key", "prompt_cache_options", "prompt_cache_retention", "client_metadata", "safety_identifier", "user"} {
+			delete(value, field)
+		}
+		if raw, ok := value["include"]; ok {
+			if err = s.validateInclude(raw); err != nil {
+				return nil, err
+			}
+		}
+		if raw, ok := value["tools"]; ok {
+			value["tools"], err = s.maskResponsesTools(raw)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if raw, ok := value["tool_choice"]; ok {
+			value["tool_choice"], err = s.maskResponsesToolChoice(raw)
+			if err != nil {
+				return nil, err
+			}
+		}
+		raw := value["input"]
+		value["input"], err = s.maskResponsesInput(raw)
 		if err != nil {
 			return nil, err
 		}
-		if err = s.maskString(value, "instructions", false); err != nil {
-			return nil, err
+		if raw, ok := value["instructions"]; ok {
+			value["instructions"], err = s.maskPrompt(raw)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if raw, ok := value["reasoning"]; ok {
 			settings, e := decodeObject(raw)
@@ -389,7 +963,7 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			return nil, ErrUnsupported
 		}
 	case "claude":
-		if err = whitelist(value, "model system messages max_tokens max_tokens_to_sample temperature top_p top_k stream stop_sequences thinking service_tier"); err != nil {
+		if err = whitelist(value, "model system messages max_tokens max_tokens_to_sample temperature top_p top_k stream stop_sequences thinking service_tier tools tool_choice metadata cache_control output_config"); err != nil {
 			return nil, err
 		}
 		if err = numericSettings(value, "max_tokens max_tokens_to_sample temperature top_p top_k"); err != nil {
@@ -397,6 +971,27 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 		}
 		if err = boolSettings(value, "stream"); err != nil {
 			return nil, err
+		}
+		delete(value, "metadata")
+		delete(value, "cache_control")
+		if raw, ok := value["output_config"]; ok {
+			config, e := decodeObject(raw)
+			if e != nil || whitelist(config, "effort") != nil || enumSetting(config, "effort", "low medium high max") != nil {
+				return nil, ErrUnsupported
+			}
+			value["output_config"], _ = json.Marshal(config)
+		}
+		if raw, ok := value["tools"]; ok {
+			value["tools"], err = s.maskClaudeTools(raw)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if raw, ok := value["tool_choice"]; ok {
+			value["tool_choice"], err = s.maskClaudeToolChoice(raw)
+			if err != nil {
+				return nil, err
+			}
 		}
 		value["messages"], err = s.maskMessages(value["messages"], protocol)
 		if err != nil {
@@ -410,7 +1005,14 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 		}
 		if raw, ok := value["thinking"]; ok {
 			settings, e := decodeObject(raw)
-			if e != nil || whitelist(settings, "type budget_tokens display") != nil || enumSetting(settings, "type", "enabled disabled adaptive") != nil || enumSetting(settings, "display", "summarized omitted") != nil || numericSettings(settings, "budget_tokens") != nil {
+			if e != nil || whitelist(settings, "type budget_tokens display") != nil {
+				return nil, ErrUnsupported
+			}
+			kind, e := stringValue(settings["type"])
+			if e != nil || kind != "disabled" {
+				return nil, ErrUnsupported
+			}
+			if enumSetting(settings, "display", "summarized omitted") != nil || numericSettings(settings, "budget_tokens") != nil {
 				return nil, ErrUnsupported
 			}
 			value["thinking"], _ = json.Marshal(settings)
@@ -419,8 +1021,22 @@ func (s *Session) MaskJSON(body []byte, protocol string) ([]byte, error) {
 			return nil, ErrUnsupported
 		}
 	case "gemini":
-		if err = whitelist(value, "model contents systemInstruction system_instruction generationConfig safetySettings"); err != nil {
+		if err = whitelist(value, "model contents systemInstruction system_instruction generationConfig safetySettings tools toolConfig tool_config"); err != nil {
 			return nil, err
+		}
+		if raw, ok := value["tools"]; ok {
+			value["tools"], err = s.maskGeminiTools(raw)
+			if err != nil {
+				return nil, err
+			}
+		}
+		for _, field := range []string{"toolConfig", "tool_config"} {
+			if raw, ok := value[field]; ok {
+				value[field], err = s.maskGeminiToolConfig(raw)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 		value["contents"], err = s.maskMessages(value["contents"], protocol)
 		if err != nil {

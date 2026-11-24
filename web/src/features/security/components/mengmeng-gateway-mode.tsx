@@ -101,12 +101,12 @@ export function MengmengGatewayMode(props: MengmengGatewayModeProps) {
       </p>
       <p className='text-muted-foreground mt-2 text-xs'>
         {t(
-          'Supports plain-text Chat/Completions, stateless Responses, Messages, and Gemini requests. Responses storage is disabled.'
+          'Supports text and function-tool Chat/Completions, stateless Responses, Messages, and Gemini requests. Responses storage is disabled.'
         )}
       </p>
       <p className='text-muted-foreground mt-2 text-xs'>
         {t(
-          'Unsupported requests, including tools, media, and stateful calls, are rejected before reaching the upstream.'
+          'Unsupported requests, including media, stateful calls, native/server tools, and signed reasoning, are rejected before reaching the upstream.'
         )}
       </p>
       <div className='mt-4 flex justify-end'>

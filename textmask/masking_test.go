@@ -9,6 +9,357 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAgentToolContracts(t *testing.T) {
+	t.Run("chat tools arguments and tool results", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		request := map[string]any{
+			"model": "m",
+			"messages": []any{
+				map[string]any{"role": "user", "content": "mail alice@example.com"},
+				map[string]any{"role": "assistant", "content": nil, "tool_calls": []any{
+					map[string]any{"id": "call_1", "type": "function", "function": map[string]any{
+						"name": "lookup", "arguments": `{"email":"alice@example.com","limit":3}`,
+					}},
+				}},
+				map[string]any{"role": "tool", "tool_call_id": "call_1", "content": "found alice@example.com"},
+			},
+			"tools": []any{map[string]any{"type": "function", "function": map[string]any{
+				"name":        "lookup",
+				"description": "Look up alice@example.com",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"email": map[string]any{"type": "string", "description": "account identifier"},
+					},
+					"required": []any{"email"},
+				},
+				"strict": false,
+			}}},
+			"tool_choice":         "auto",
+			"parallel_tool_calls": true,
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "chat")
+		require.NoError(t, err)
+		assert.NotContains(t, string(masked), "alice@example.com")
+		assert.Contains(t, string(masked), `"strict":false`)
+		assert.Contains(t, string(masked), `"properties":{"email"`)
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		reply := map[string]any{"choices": []any{map[string]any{
+			"index": 0,
+			"message": map[string]any{
+				"role": "assistant", "content": "done",
+				"tool_calls": []any{map[string]any{
+					"id": "call_2", "type": "function", "function": map[string]any{
+						"name": "lookup", "arguments": `{"email":"` + token + `"}`,
+					},
+				}},
+			},
+			"finish_reason": "tool_calls",
+		}}}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+		assert.NotContains(t, string(restored), string(GatewayMarker))
+	})
+
+	t.Run("chat streaming tool arguments split across deltas", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		body, err := json.Marshal(map[string]any{"model": "m", "stream": true, "messages": []any{map[string]any{"role": "user", "content": "alice@example.com"}}})
+		require.NoError(t, err)
+		_, err = s.MaskJSON(body, "chat")
+		require.NoError(t, err)
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+		split := len(token) / 2
+		first := `{"email":"` + token[:split]
+		second := token[split:] + `"}`
+
+		event := func(arguments string) []byte {
+			raw, e := json.Marshal(map[string]any{"choices": []any{map[string]any{
+				"index": 0,
+				"delta": map[string]any{"tool_calls": []any{map[string]any{
+					"index": 0, "id": "call_1", "type": "function",
+					"function": map[string]any{"name": "lookup", "arguments": arguments},
+				}}},
+			}}})
+			require.NoError(t, e)
+			return raw
+		}
+		out, err := s.RestoreEvent(event(first))
+		require.NoError(t, err)
+		assert.NotContains(t, string(out), "alice@example.com")
+		out, err = s.RestoreEvent(event(second))
+		require.NoError(t, err)
+		assert.Contains(t, string(out), "alice@example.com")
+		_, err = s.RestoreEvent([]byte(`{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`))
+		require.NoError(t, err)
+		_, err = s.RestoreEvent([]byte(`[DONE]`))
+		require.NoError(t, err)
+		require.NoError(t, s.Finish())
+	})
+
+	t.Run("responses agent loop and function call stream", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		request := map[string]any{
+			"model": "m",
+			"input": []any{
+				map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": "alice@example.com"}}},
+				map[string]any{"type": "reasoning", "id": "rs_1", "summary": []any{map[string]any{"type": "summary_text", "text": "mail alice@example.com"}}, "encrypted_content": "opaque-reasoning"},
+				map[string]any{"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": `{"email":"alice@example.com"}`},
+				map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "found alice@example.com"},
+			},
+			"tools":               []any{map[string]any{"type": "function", "name": "lookup", "description": "lookup alice@example.com", "parameters": map[string]any{"type": "object", "properties": map[string]any{"email": map[string]any{"type": "string"}}}}},
+			"include":             []any{"reasoning.encrypted_content"},
+			"prompt_cache_key":    "cache-secret",
+			"client_metadata":     map[string]any{"originator": "codex_cli_rs"},
+			"parallel_tool_calls": false,
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "responses")
+		require.NoError(t, err)
+		assert.NotContains(t, string(masked), "alice@example.com")
+		assert.NotContains(t, string(masked), "cache-secret")
+		assert.NotContains(t, string(masked), "codex_cli_rs")
+		assert.Contains(t, string(masked), "opaque-reasoning")
+		assert.Contains(t, string(masked), `"include":["reasoning.encrypted_content"]`)
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		reply := map[string]any{"id": "resp_1", "output": []any{
+			map[string]any{"type": "reasoning", "id": "rs_2", "summary": []any{map[string]any{"type": "summary_text", "text": token}}, "encrypted_content": "opaque-reply"},
+			map[string]any{"type": "function_call", "id": "fc_1", "call_id": "call_2", "name": "lookup", "arguments": `{"email":"` + token + `"}`, "status": "completed"},
+		}}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+		assert.Contains(t, string(restored), "opaque-reply")
+
+		args := `{"email":"` + token + `"}`
+		split := len(token) / 2
+		delta := func(fragment string) []byte {
+			raw, e := json.Marshal(map[string]any{"type": "response.function_call_arguments.delta", "item_id": "fc_1", "output_index": 0, "delta": fragment})
+			require.NoError(t, e)
+			return raw
+		}
+		first, err := s.RestoreEvent(delta(args[:strings.Index(args, token)+split]))
+		require.NoError(t, err)
+		assert.NotContains(t, string(first), "alice@example.com")
+		second, err := s.RestoreEvent(delta(args[strings.Index(args, token)+split:]))
+		require.NoError(t, err)
+		assert.Contains(t, string(second), "alice@example.com")
+		done, err := s.RestoreEvent(func() []byte {
+			raw, e := json.Marshal(map[string]any{"type": "response.function_call_arguments.done", "item_id": "fc_1", "output_index": 0, "arguments": args})
+			require.NoError(t, e)
+			return raw
+		}())
+		require.NoError(t, err)
+		assert.Contains(t, string(done), "alice@example.com")
+		item := map[string]any{"type": "function_call", "id": "fc_1", "call_id": "call_2", "name": "lookup", "arguments": args, "status": "completed"}
+		raw, err = json.Marshal(map[string]any{"type": "response.output_item.done", "output_index": 0, "item": item})
+		require.NoError(t, err)
+		_, err = s.RestoreEvent(raw)
+		require.NoError(t, err)
+		raw, err = json.Marshal(map[string]any{"type": "response.completed", "response": map[string]any{"id": "resp_1", "output": []any{item}}})
+		require.NoError(t, err)
+		_, err = s.RestoreEvent(raw)
+		require.NoError(t, err)
+		require.NoError(t, s.Finish())
+	})
+
+	t.Run("responses done snapshot clears a pending argument lane", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		_, err = s.MaskJSON([]byte(`{"model":"m","input":"alice@example.com","stream":true}`), "responses")
+		require.NoError(t, err)
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+		args := `{"email":"` + token + `"}`
+		half := len(args) / 2
+		delta, err := json.Marshal(map[string]any{"type": "response.function_call_arguments.delta", "item_id": "fc_9", "output_index": 0, "delta": args[:half]})
+		require.NoError(t, err)
+		_, err = s.RestoreEvent(delta)
+		require.NoError(t, err)
+		done, err := json.Marshal(map[string]any{"type": "response.function_call_arguments.done", "item_id": "fc_9", "output_index": 0, "arguments": args})
+		require.NoError(t, err)
+		restored, err := s.RestoreEvent(done)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+		_, err = s.RestoreEvent([]byte(`{"type":"response.completed","response":{"output":[]}}`))
+		require.NoError(t, err)
+		require.NoError(t, s.Finish())
+	})
+
+	t.Run("claude tool use tool result and input json stream", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		request := map[string]any{
+			"model": "m", "max_tokens": 128,
+			"system": []any{map[string]any{"type": "text", "text": "alice@example.com", "cache_control": map[string]any{"type": "ephemeral"}}},
+			"messages": []any{
+				map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": "alice@example.com"}}},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": map[string]any{"email": "alice@example.com"}}}},
+				map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": "toolu_1", "content": []any{map[string]any{"type": "text", "text": "found alice@example.com"}}}}},
+			},
+			"tools":       []any{map[string]any{"name": "lookup", "description": "lookup alice@example.com", "input_schema": map[string]any{"type": "object", "properties": map[string]any{"email": map[string]any{"type": "string"}}}}},
+			"tool_choice": map[string]any{"type": "auto"},
+			"metadata":    map[string]any{"user_id": "alice@example.com"},
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "claude")
+		require.NoError(t, err)
+		assert.NotContains(t, string(masked), "alice@example.com")
+		assert.NotContains(t, string(masked), "cache_control")
+		assert.NotContains(t, string(masked), "user_id")
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		reply := map[string]any{"type": "message", "content": []any{map[string]any{"type": "tool_use", "id": "toolu_2", "name": "lookup", "input": map[string]any{"email": token}}}}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+
+		args := `{"email":"` + token + `"}`
+		split := len(token) / 2
+		start, err := json.Marshal(map[string]any{"type": "content_block_start", "index": 1, "content_block": map[string]any{"type": "tool_use", "id": "toolu_3", "name": "lookup", "input": map[string]any{}}})
+		require.NoError(t, err)
+		_, err = s.RestoreEvent(start)
+		require.NoError(t, err)
+		delta := func(fragment string) []byte {
+			raw, e := json.Marshal(map[string]any{"type": "content_block_delta", "index": 1, "delta": map[string]any{"type": "input_json_delta", "partial_json": fragment}})
+			require.NoError(t, e)
+			return raw
+		}
+		first, err := s.RestoreEvent(delta(args[:strings.Index(args, token)+split]))
+		require.NoError(t, err)
+		assert.NotContains(t, string(first), "alice@example.com")
+		second, err := s.RestoreEvent(delta(args[strings.Index(args, token)+split:]))
+		require.NoError(t, err)
+		assert.Contains(t, string(second), "alice@example.com")
+		_, err = s.RestoreEvent([]byte(`{"type":"content_block_stop","index":1}`))
+		require.NoError(t, err)
+		_, err = s.RestoreEvent([]byte(`{"type":"message_stop"}`))
+		require.NoError(t, err)
+		require.NoError(t, s.Finish())
+	})
+
+	t.Run("gemini function declarations calls and responses", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		request := map[string]any{
+			"model": "m",
+			"contents": []any{
+				map[string]any{"role": "user", "parts": []any{map[string]any{"text": "alice@example.com"}}},
+				map[string]any{"role": "model", "parts": []any{map[string]any{"functionCall": map[string]any{"id": "fc_1", "name": "lookup", "args": map[string]any{"email": "alice@example.com"}}}}},
+				map[string]any{"role": "user", "parts": []any{map[string]any{"functionResponse": map[string]any{"name": "lookup", "response": map[string]any{"output": "alice@example.com"}}}}},
+			},
+			"tools":      []any{map[string]any{"functionDeclarations": []any{map[string]any{"name": "lookup", "description": "lookup alice@example.com", "parameters": map[string]any{"type": "OBJECT", "properties": map[string]any{"email": map[string]any{"type": "STRING"}}}}}}},
+			"toolConfig": map[string]any{"functionCallingConfig": map[string]any{"mode": "AUTO", "allowedFunctionNames": []any{"lookup"}}},
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		masked, err := s.MaskJSON(body, "gemini")
+		require.NoError(t, err)
+		assert.NotContains(t, string(masked), "alice@example.com")
+		token := s.forward["alice@example.com"]
+		require.NotEmpty(t, token)
+
+		reply := map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{map[string]any{"functionCall": map[string]any{"id": "fc_2", "name": "lookup", "args": map[string]any{"email": token}}}}}}}}
+		raw, err := json.Marshal(reply)
+		require.NoError(t, err)
+		restored, err := s.RestoreJSON(raw)
+		require.NoError(t, err)
+		assert.Contains(t, string(restored), "alice@example.com")
+
+		chunk, err := json.Marshal(map[string]any{"candidates": []any{map[string]any{"index": 0, "content": map[string]any{"parts": []any{map[string]any{"functionCall": map[string]any{"name": "lookup", "args": map[string]any{"email": token}}}}}}}})
+		require.NoError(t, err)
+		out, err := s.RestoreEvent(chunk)
+		require.NoError(t, err)
+		assert.Contains(t, string(out), "alice@example.com")
+		_, err = s.RestoreEvent([]byte(`{"candidates":[{"index":0,"finishReason":"STOP"}]}`))
+		require.NoError(t, err)
+		require.NoError(t, s.Finish())
+
+		signed, err := New()
+		require.NoError(t, err)
+		defer signed.Close()
+		_, err = signed.RestoreJSON([]byte(`{"candidates":[{"content":{"parts":[{"text":"secret","thoughtSignature":"sig"}]}}]}`))
+		require.ErrorIs(t, err, ErrUnsupported)
+	})
+
+	t.Run("agent shapes that still fail closed", func(t *testing.T) {
+		s, err := New()
+		require.NoError(t, err)
+		defer s.Close()
+		cases := []struct{ protocol, body string }{
+			{"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"web_search"}]}`},
+			{"chat", `{"model":"m","messages":[{"role":"tool","tool_call_id":"c","content":[{"type":"image_url","image_url":{"url":"https://x"}}]}]}`},
+			{"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object","properties":{"email":{"type":"string","enum":["alice@example.com"]}}}}}]}`},
+			{"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object","properties":{"email":{"type":"string","description":"alice@example.com"}}}}}]}`},
+			{"chat", `{"model":"m","messages":[{"role":"assistant","content":null,"tool_calls":[{"id":"c","type":"function","function":{"name":"lookup","arguments":"not-json"}}]}]}`},
+			{"chat", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function","function":{"name":"` + string(GatewayMarker) + `x]]","parameters":{"type":"object"}}}]}`},
+			{"responses", `{"model":"m","input":"x","include":["reasoning.summary"]}`},
+			{"responses", `{"model":"m","input":"x","max_tool_calls":-1}`},
+			{"responses", `{"model":"m","input":[{"type":"function_call","call_id":"c","name":"lookup","arguments":"not-json"}]}`},
+			{"responses", `{"model":"m","input":[{"type":"function_call_output","call_id":"c","output":[{"type":"input_image","image_url":"https://x"}]}]}`},
+			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":"sig"}]}]}`},
+			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":[{"type":"image","source":{"data":"x"}}]}]}]}`},
+			{"claude", `{"model":"m","max_tokens":1,"messages":[{"role":"user","content":"x"}],"thinking":{"type":"enabled","budget_tokens":1024}}`},
+			{"gemini", `{"model":"m","contents":[{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{},"partialArgs":[{"jsonPath":"$.x"}],"willContinue":true}}]}]}`},
+		}
+		for _, tc := range cases {
+			_, err = s.MaskJSON([]byte(tc.body), tc.protocol)
+			assert.ErrorIs(t, err, ErrUnsupported, tc.body)
+		}
+	})
+
+	t.Run("local tool masking composes with gateway", func(t *testing.T) {
+		local, err := NewWithMarker(LocalMarker)
+		require.NoError(t, err)
+		defer local.Close()
+		gateway, err := New()
+		require.NoError(t, err)
+		defer gateway.Close()
+		request := map[string]any{
+			"model": "m",
+			"messages": []any{
+				map[string]any{"role": "user", "content": "alice@example.com"},
+				map[string]any{"role": "assistant", "content": nil, "tool_calls": []any{map[string]any{"id": "c1", "type": "function", "function": map[string]any{"name": "lookup", "arguments": `{"email":"alice@example.com"}`}}}},
+			},
+			"tools": []any{map[string]any{"type": "function", "function": map[string]any{"name": "lookup", "parameters": map[string]any{"type": "object"}}}},
+		}
+		body, err := json.Marshal(request)
+		require.NoError(t, err)
+		locallyMasked, err := local.MaskJSON(body, "chat")
+		require.NoError(t, err)
+		assert.Contains(t, string(locallyMasked), string(LocalMarker))
+		gatewayMasked, err := gateway.MaskJSON(locallyMasked, "chat")
+		require.NoError(t, err)
+		assert.Equal(t, 0, gateway.MaskedCount())
+		assert.JSONEq(t, string(locallyMasked), string(gatewayMasked))
+		assert.Contains(t, string(gatewayMasked), string(LocalMarker))
+	})
+}
 func TestMaskingContracts(t *testing.T) {
 	t.Run("session namespace repeated entities and false positives", func(t *testing.T) {
 		a, err := New()

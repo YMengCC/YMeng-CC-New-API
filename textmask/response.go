@@ -19,6 +19,17 @@ func streamIndex(value object, field string, fallback int) (string, error) {
 	return strconv.FormatUint(index, 10), nil
 }
 
+func (s *Session) streamItemKey(value object) (string, error) {
+	if raw, ok := value["item_id"]; ok {
+		text, err := stringValue(raw)
+		if err != nil || text == "" || len(text) > maxOpaqueBytes || strings.Contains(text, s.marker) {
+			return "", ErrUnsupported
+		}
+		return text, nil
+	}
+	return streamIndex(value, "output_index", 0)
+}
+
 func (s *Session) restoreField(value object, field, key string, stream, final bool) error {
 	raw, ok := value[field]
 	if !ok {
@@ -69,7 +80,23 @@ func (s *Session) restoreContent(value object, field, key string, stream, final 
 		case "refusal":
 			err = s.restoreField(part, "refusal", lane, stream, final)
 		case "thinking":
+			if signature, ok := part["signature"]; ok {
+				if text, e := stringValue(signature); e != nil || text != "" {
+					return ErrUnsupported
+				}
+			}
 			err = s.restoreField(part, "thinking", lane, stream, final)
+		case "tool_use":
+			if err = whitelist(part, "type id name input"); err != nil {
+				return err
+			}
+			if input, ok := part["input"]; ok {
+				restored, e := s.restoreJSONValue(input, 0)
+				if e != nil {
+					return e
+				}
+				part["input"] = restored
+			}
 		case "redacted_thinking": // Opaque signed payloads remain unchanged.
 		default:
 			return ErrUnsupported
@@ -85,18 +112,9 @@ func (s *Session) restoreContent(value object, field, key string, stream, final 
 	return setJSON(value, field, parts)
 }
 
-func noToolResponse(value object) error {
-	for _, field := range []string{"tool_calls", "function_call", "functionCall", "functionResponse"} {
-		if raw, ok := value[field]; ok && !optionalEmpty(raw) {
-			return ErrUnsupported
-		}
-	}
-	return nil
-}
-
 func (s *Session) restoreMessage(message object, key string, stream, final bool) error {
-	if err := noToolResponse(message); err != nil {
-		return err
+	if raw, ok := message["function_call"]; ok && !optionalEmpty(raw) {
+		return ErrUnsupported
 	}
 	if err := s.restoreContent(message, "content", key+"/content", stream, final); err != nil {
 		return err
@@ -105,6 +123,9 @@ func (s *Session) restoreMessage(message object, key string, stream, final bool)
 		if err := s.restoreField(message, field, key+"/"+field, stream, final); err != nil {
 			return err
 		}
+	}
+	if err := s.restoreChatToolCalls(message, key, stream, final); err != nil {
+		return err
 	}
 	// Finish may arrive in a separate delta containing no content fields.
 	if stream && final {
@@ -118,6 +139,249 @@ func (s *Session) restoreMessage(message object, key string, stream, final bool)
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func (s *Session) restoreChatToolCalls(message object, key string, stream, final bool) error {
+	raw, ok := message["tool_calls"]
+	if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	calls, err := decodeArray(raw)
+	if err != nil {
+		return err
+	}
+	for i, item := range calls {
+		call, err := decodeObject(item)
+		if err != nil {
+			return err
+		}
+		if stream {
+			if err = whitelist(call, "index id type function"); err != nil {
+				return err
+			}
+		} else if err = whitelist(call, "id type function"); err != nil {
+			return err
+		}
+		index, err := streamIndex(call, "index", i)
+		if err != nil {
+			return err
+		}
+		function, err := decodeObject(call["function"])
+		if err != nil {
+			return err
+		}
+		if err = whitelist(function, "name arguments"); err != nil {
+			return err
+		}
+		if args, ok := function["arguments"]; ok && !bytes.Equal(bytes.TrimSpace(args), []byte("null")) {
+			if stream {
+				text, e := stringValue(args)
+				if e != nil {
+					return e
+				}
+				if text != "" {
+					if e = s.restoreJSONField(function, "arguments", key+"/tool/"+index+"/arguments", true, false); e != nil {
+						return e
+					}
+				}
+			} else {
+				restored, e := s.restoreJSONString(args)
+				if e != nil {
+					return e
+				}
+				function["arguments"] = restored
+			}
+		}
+		call["function"], _ = json.Marshal(function)
+		calls[i], _ = json.Marshal(call)
+	}
+	message["tool_calls"], _ = json.Marshal(calls)
+	if stream && final {
+		prefix := key + "/tool/"
+		for lane := range s.pending {
+			if strings.HasPrefix(lane, prefix) {
+				return ErrIncomplete
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Session) restoreJSONField(value object, field, key string, stream, final bool) error {
+	raw, ok := value[field]
+	if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	text, err := stringValue(raw)
+	if err != nil {
+		return err
+	}
+	if stream {
+		text = s.restoreJSONDelta(key, text, final)
+		if s.incomplete {
+			return ErrIncomplete
+		}
+	} else {
+		restored, e := s.restoreJSONString(raw)
+		if e != nil {
+			return e
+		}
+		value[field] = restored
+		return nil
+	}
+	return setJSON(value, field, text)
+}
+
+func (s *Session) restoreSnapshot(value object, field, key string) error {
+	raw, ok := value[field]
+	if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	text, err := stringValue(raw)
+	if err != nil {
+		return err
+	}
+	if text == "" {
+		return nil
+	}
+	delete(s.pending, key)
+	restored, err := s.restoreJSONDocument([]byte(text))
+	if err != nil {
+		return err
+	}
+	return setJSON(value, field, string(restored))
+}
+
+func (s *Session) restoreGeminiPart(part object, lane string, stream, final bool) error {
+	if err := whitelist(part, "text thought thoughtSignature functionCall functionResponse"); err != nil {
+		return err
+	}
+	if err := boolSettings(part, "thought"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(part, "thoughtSignature", false); err != nil {
+		return err
+	}
+	if _, ok := part["text"]; ok {
+		if raw, has := part["thoughtSignature"]; has && !optionalEmpty(raw) {
+			return ErrUnsupported
+		}
+		return s.restoreField(part, "text", lane, stream, final)
+	}
+	if raw, ok := part["functionCall"]; ok {
+		call, err := decodeObject(raw)
+		if err != nil {
+			return err
+		}
+		if err = whitelist(call, "id name args"); err != nil {
+			return err
+		}
+		if err = s.opaqueField(call, "id", false); err != nil {
+			return err
+		}
+		if _, err = s.toolName(call, "name"); err != nil {
+			return err
+		}
+		if args, ok := call["args"]; ok {
+			restored, e := s.restoreJSONValue(args, 0)
+			if e != nil {
+				return e
+			}
+			call["args"] = restored
+		}
+		part["functionCall"], err = json.Marshal(call)
+		return err
+	}
+	if _, ok := part["functionResponse"]; ok {
+		return ErrUnsupported
+	}
+	return ErrUnsupported
+}
+
+func (s *Session) restoreResponsesReasoning(part object) error {
+	if err := whitelist(part, "type id summary content encrypted_content status"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(part, "id", false); err != nil {
+		return err
+	}
+	if err := s.opaqueField(part, "encrypted_content", false); err != nil {
+		return err
+	}
+	if err := enumSetting(part, "status", "completed incomplete in_progress"); err != nil {
+		return err
+	}
+	for _, lane := range []struct {
+		field string
+		kind  string
+	}{
+		{"summary", "summary_text"},
+		{"content", "reasoning_text"},
+	} {
+		raw, ok := part[lane.field]
+		if !ok {
+			continue
+		}
+		items, err := decodeArray(raw)
+		if err != nil {
+			return err
+		}
+		for j, item := range items {
+			text, err := decodeObject(item)
+			if err != nil {
+				return err
+			}
+			if err = whitelist(text, "type text"); err != nil {
+				return err
+			}
+			kind, err := stringValue(text["type"])
+			if err != nil || kind != lane.kind {
+				return ErrUnsupported
+			}
+			if err = s.restoreField(text, "text", "", false, true); err != nil {
+				return err
+			}
+			items[j], _ = json.Marshal(text)
+		}
+		part[lane.field], _ = json.Marshal(items)
+	}
+	return nil
+}
+
+func responseItemKey(part object) string {
+	for _, field := range []string{"id", "call_id"} {
+		if raw, ok := part[field]; ok {
+			if text, err := stringValue(raw); err == nil && text != "" {
+				return text
+			}
+		}
+	}
+	return "unknown"
+}
+
+func (s *Session) restoreResponsesFunctionCall(part object) error {
+	if err := whitelist(part, "type id call_id name arguments status"); err != nil {
+		return err
+	}
+	if err := s.opaqueField(part, "id", false); err != nil {
+		return err
+	}
+	if err := s.opaqueField(part, "call_id", false); err != nil {
+		return err
+	}
+	if _, err := s.toolName(part, "name"); err != nil {
+		return err
+	}
+	if err := enumSetting(part, "status", "completed incomplete in_progress"); err != nil {
+		return err
+	}
+	key := "responses/fn/" + responseItemKey(part) + "/args"
+	if args, ok := part["arguments"]; ok && !bytes.Equal(bytes.TrimSpace(args), []byte("null")) {
+		if err := s.restoreSnapshot(part, "arguments", key); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -165,9 +429,6 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 					}
 				}
 			}
-			if err = noToolResponse(choice); err != nil {
-				return err
-			}
 			choices[i], _ = json.Marshal(choice)
 		}
 		if err = setJSON(value, "choices", choices); err != nil {
@@ -203,17 +464,11 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 				}
 				for j, item := range parts {
 					part, e := decodeObject(item)
-					if e != nil || noToolResponse(part) != nil {
-						return ErrUnsupported
-					}
-					if _, ok := part["inlineData"]; ok {
-						return ErrUnsupported
-					}
-					if _, ok := part["fileData"]; ok {
-						return ErrUnsupported
+					if e != nil {
+						return e
 					}
 					lane := "gemini/" + index + "/" + strconv.Itoa(j)
-					if e = s.restoreField(part, "text", lane, stream, final); e != nil {
+					if e = s.restoreGeminiPart(part, lane, stream, final); e != nil {
 						return e
 					}
 					parts[j], _ = json.Marshal(part)
@@ -252,22 +507,12 @@ func (s *Session) restoreResponse(value object, stream bool) error {
 					return err
 				}
 			case "reasoning":
-				if raw, ok := part["summary"]; ok {
-					summary, e := decodeArray(raw)
-					if e != nil {
-						return e
-					}
-					for j, item := range summary {
-						text, e := decodeObject(item)
-						if e != nil {
-							return e
-						}
-						if e = s.restoreField(text, "text", "", false, true); e != nil {
-							return e
-						}
-						summary[j], _ = json.Marshal(text)
-					}
-					part["summary"], _ = json.Marshal(summary)
+				if err = s.restoreResponsesReasoning(part); err != nil {
+					return err
+				}
+			case "function_call":
+				if err = s.restoreResponsesFunctionCall(part); err != nil {
+					return err
 				}
 			default:
 				return ErrUnsupported
@@ -318,12 +563,16 @@ func (s *Session) RestoreJSON(body []byte) ([]byte, error) {
 	if err != nil {
 		return nil, ErrUnsupported
 	}
+	if bytes.Contains(result, []byte(s.prefix)) {
+		return nil, ErrIncomplete
+	}
 	return result, nil
 }
 
 // RestoreEvent accepts one SSE data payload, not its event:/data: framing.
 // The caller must call Finish at EOF and must not emit DONE after any error.
-// Tool events are unsupported, matching the text-only request contract.
+// Function-tool argument deltas use a dedicated lane and snapshots are applied
+// without appending to that lane.
 func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -342,6 +591,7 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 	}
 	s.restoreBudget = maxRestoredTextBytes
 	kind, _ := stringValue(value["type"])
+	terminal := false
 	switch kind {
 	case "response.output_text.delta", "response.refusal.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
 		output, e := streamIndex(value, "output_index", 0)
@@ -399,9 +649,10 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		switch deltaType {
 		case "text_delta":
 			err = s.restoreField(delta, "text", "claude/"+index+"/text", true, false)
-		case "thinking_delta":
-			err = s.restoreField(delta, "thinking", "claude/"+index+"/thinking", true, false)
-		case "signature_delta": // A signature is opaque protocol metadata.
+		case "input_json_delta":
+			err = s.restoreJSONField(delta, "partial_json", "claude/"+index+"/input_json", true, false)
+		case "thinking_delta", "signature_delta":
+			return nil, ErrUnsupported
 		default:
 			return nil, ErrUnsupported
 		}
@@ -422,8 +673,19 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 		switch blockType {
 		case "text":
 			err = s.restoreField(block, "text", "claude/"+index+"/text", true, false)
+		case "tool_use":
+			if err = whitelist(block, "type id name input"); err != nil {
+				return nil, err
+			}
+			if input, ok := block["input"]; ok {
+				restored, e := s.restoreJSONValue(input, 0)
+				if e != nil {
+					return nil, e
+				}
+				block["input"] = restored
+			}
 		case "thinking":
-			err = s.restoreField(block, "thinking", "claude/"+index+"/thinking", true, false)
+			return nil, ErrUnsupported
 		case "redacted_thinking":
 		default:
 			return nil, ErrUnsupported
@@ -442,19 +704,64 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 				return nil, ErrIncomplete
 			}
 		}
-	case "message_stop", "response.completed", "response.failed", "response.incomplete":
+	case "message_stop":
 		if err = s.finish(); err != nil {
 			return nil, err
 		}
-	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
-		return nil, ErrUnsupported
+	case "response.completed", "response.failed", "response.incomplete":
+		// The full response snapshot may complete a tool-argument lane, so
+		// finish only after restoreResponse has processed it.
+		terminal = true
+	case "response.function_call_arguments.delta":
+		item, e := s.streamItemKey(value)
+		if e != nil {
+			return nil, e
+		}
+		if err = s.restoreJSONField(value, "delta", "responses/fn/"+item+"/args", true, false); err != nil {
+			return nil, err
+		}
+	case "response.function_call_arguments.done":
+		item, e := s.streamItemKey(value)
+		if e != nil {
+			return nil, e
+		}
+		if err = s.restoreSnapshot(value, "arguments", "responses/fn/"+item+"/args"); err != nil {
+			return nil, err
+		}
+	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		part, e := decodeObject(value["part"])
+		if e != nil {
+			return nil, e
+		}
+		if e = whitelist(part, "type text"); e != nil {
+			return nil, e
+		}
+		partType, e := stringValue(part["type"])
+		if e != nil || partType != "summary_text" {
+			return nil, ErrUnsupported
+		}
+		if e = s.restoreField(part, "text", "", false, true); e != nil {
+			return nil, e
+		}
+		value["part"], _ = json.Marshal(part)
+		if kind == "response.reasoning_summary_part.done" {
+			output, e := streamIndex(value, "output_index", 0)
+			if e != nil {
+				return nil, e
+			}
+			summary, e := streamIndex(value, "summary_index", 0)
+			if e != nil {
+				return nil, e
+			}
+			delete(s.pending, "response.reasoning_summary_text/"+output+"/0/"+summary)
+		}
 	case "response.output_item.added", "response.output_item.done":
 		item, e := decodeObject(value["item"])
 		if e != nil {
 			return nil, e
 		}
 		itemType, _ := stringValue(item["type"])
-		if itemType != "message" && itemType != "reasoning" {
+		if itemType != "message" && itemType != "reasoning" && itemType != "function_call" {
 			return nil, ErrUnsupported
 		}
 		wrapper := object{}
@@ -518,6 +825,14 @@ func (s *Session) RestoreEvent(data []byte) ([]byte, error) {
 	result, err := json.Marshal(value)
 	if err != nil {
 		return nil, ErrUnsupported
+	}
+	if bytes.Contains(result, []byte(s.prefix)) {
+		return nil, ErrIncomplete
+	}
+	if terminal {
+		if err = s.finish(); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }

@@ -54,6 +54,42 @@ func TestTextMaskingRestoresJSONResponseFromRequestScopedToken(t *testing.T) {
 	assert.Contains(t, recorder.Body.String(), "Contact alice@example.com")
 }
 
+func TestTextMaskingAllowsFunctionToolsAndRestoresArguments(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.POST("/v1/chat/completions", func(c *gin.Context) {
+		common.SetContextKey(c, constant.ContextKeyUserSetting, dto.UserSetting{TextMaskingEnabled: true})
+		c.Next()
+	}, TextMasking(), func(c *gin.Context) {
+		body, err := common.GetBodyStorage(c)
+		require.NoError(t, err)
+		masked, err := io.ReadAll(body)
+		require.NoError(t, err)
+		assert.NotContains(t, string(masked), "alice@example.com")
+		token := textMaskTokenPattern.FindString(string(masked))
+		require.NotEmpty(t, token)
+		c.Header("Content-Type", "application/json")
+		c.JSON(http.StatusOK, gin.H{"choices": []any{gin.H{
+			"index": 0,
+			"message": gin.H{"role": "assistant", "tool_calls": []any{gin.H{
+				"id": "call_2", "type": "function",
+				"function": gin.H{"name": "lookup", "arguments": `{"email":"` + token + `"}`},
+			}}},
+			"finish_reason": "tool_calls",
+		}}})
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test-model","messages":[{"role":"user","content":"mail alice@example.com"},{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"email\":\"alice@example.com\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"found alice@example.com"}],"tools":[{"type":"function","function":{"name":"lookup","description":"lookup","parameters":{"type":"object","properties":{"email":{"type":"string"}}}}}]}`))
+	request.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "alice@example.com")
+	assert.Contains(t, recorder.Body.String(), "tool_calls")
+}
+
 func TestTextMaskingRestoresPlaceholderSplitAcrossSSEEvents(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	gin.SetMode(gin.TestMode)

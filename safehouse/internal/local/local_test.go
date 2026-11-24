@@ -68,6 +68,27 @@ func TestProxyNeverSendsPlaintextUpstream(t *testing.T) {
 		assert.Equal(t, int64(1), server.stats.requests.Load())
 		assert.Equal(t, int64(1), server.stats.maskedEntities.Load())
 	})
+	t.Run("agent tool arguments are masked upstream and restored locally", func(t *testing.T) {
+		var upstreamBody string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, _ := io.ReadAll(r.Body)
+			upstreamBody = string(raw)
+			token := localToken.FindString(upstreamBody)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_2","type":"function","function":{"name":"lookup","arguments":"{\"email\":\"`+token+`\"}"}}]},"finish_reason":"tool_calls"}]}`)
+		}))
+		defer upstream.Close()
+		server := newTestServer(t, upstream.URL)
+
+		request := localRequest(http.MethodPost, "/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"mail `+secret+`"},{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"email\":\"`+secret+`\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"found `+secret+`"}],"tools":[{"type":"function","function":{"name":"lookup","description":"lookup `+secret+`","parameters":{"type":"object","properties":{"email":{"type":"string"}}}}}]}`)
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, request)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		assert.NotContains(t, upstreamBody, secret)
+		assert.Regexp(t, localToken, upstreamBody)
+		assert.Contains(t, recorder.Body.String(), secret)
+	})
 	t.Run("SSE placeholder split across chunks is restored locally", func(t *testing.T) {
 		var upstreamBody string
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +136,8 @@ func TestProxyBlocksWhatItCannotMask(t *testing.T) {
 		upstreamHits             int64
 	}{
 		{"unrecognized query is forwarded", http.MethodPost, "/v1/chat/completions?note=private", `{"model":"m","messages":[{"role":"user","content":"x"}]}`, http.StatusBadGateway, 1},
-		{"tool call stays local", http.MethodPost, "/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function"}]}`, http.StatusBadRequest, 0},
+		{"malformed tool declaration stays local", http.MethodPost, "/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"x"}],"tools":[{"type":"function"}]}`, http.StatusBadRequest, 0},
+		{"media tool result stays local", http.MethodPost, "/v1/chat/completions", `{"model":"m","messages":[{"role":"tool","tool_call_id":"call_1","content":[{"type":"image_url","image_url":{"url":"https://example.com/x.png"}}]}]}`, http.StatusBadRequest, 0},
 		{"unsupported endpoint stays local", http.MethodPost, "/v1/embeddings", `{"model":"m","input":"alice@example.com"}`, http.StatusBadRequest, 0},
 		{"redirect is not followed", http.MethodPost, "/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"x"}]}`, http.StatusBadGateway, 1},
 		{"model listing passes through", http.MethodGet, "/v1/models", "", http.StatusOK, 1},
