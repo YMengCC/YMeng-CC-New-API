@@ -20,9 +20,11 @@ import {
   CalendarCheck2,
   Gift,
   ListChecks,
+  Monitor,
   Sparkles,
   WalletCards,
 } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 
 import {
   Card,
@@ -34,11 +36,15 @@ import {
 import { IconBadge } from '@/components/ui/icon-badge'
 
 export function FeatureOverviewCard() {
+  const { t } = useTranslation()
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>功能一览</CardTitle>
-        <CardDescription>当前已上线的功能与用途</CardDescription>
+        <CardTitle>{t('Feature overview')}</CardTitle>
+        <CardDescription>
+          {t('Available bot commands and how they work')}
+        </CardDescription>
       </CardHeader>
       <CardContent className='space-y-3'>
         <div className='flex items-start gap-3 rounded-lg border px-3 py-3'>
@@ -46,13 +52,50 @@ export function FeatureOverviewCard() {
             <ListChecks />
           </IconBadge>
           <div className='min-w-0'>
-            <div className='text-sm font-medium'>帮助查询</div>
+            <div className='text-sm font-medium'>{t('Command help')}</div>
             <p className='text-muted-foreground mt-0.5 text-sm'>
-              在 QQ 群发送{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /帮助
-              </code>
-              ，机器人会返回当前全部可用指令：绑定、解绑、绑定状态、余额、签到、发红包、领取红包与帮助。
+              <Trans
+                t={t}
+                i18nKey='Send <command/> in a QQ group to list all available commands: bind, unbind, binding status, balance, sign-in, send red packet, claim red packet, status monitoring, and help.'
+                components={{
+                  command: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /帮助
+                    </code>
+                  ),
+                }}
+              />
+            </p>
+          </div>
+        </div>
+        <div className='flex items-start gap-3 rounded-lg border px-3 py-3'>
+          <IconBadge tone='info' size='stat'>
+            <Monitor />
+          </IconBadge>
+          <div className='min-w-0'>
+            <div className='text-sm font-medium'>{t('Status monitoring')}</div>
+            <p className='text-muted-foreground mt-0.5 text-sm'>
+              <Trans
+                t={t}
+                i18nKey='Send <command/> in a QQ group to capture a full-page screenshot of <site/> and post it to the group chat. No QQ binding is required, with a 30-second cooldown per group.'
+                components={{
+                  command: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /状态监控
+                    </code>
+                  ),
+                  site: (
+                    <a
+                      href='https://health.ymeng.cc/'
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      className='text-foreground hover:text-primary font-medium underline underline-offset-4'
+                    >
+                      https://health.ymeng.cc
+                    </a>
+                  ),
+                }}
+              />
             </p>
           </div>
         </div>
@@ -61,15 +104,19 @@ export function FeatureOverviewCard() {
             <CalendarCheck2 />
           </IconBadge>
           <div className='min-w-0'>
-            <div className='text-sm font-medium'>每日签到</div>
+            <div className='text-sm font-medium'>{t('Daily sign-in')}</div>
             <p className='text-muted-foreground mt-0.5 text-sm'>
-              在 QQ 群发送{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /签到
-              </code>
-              。机器人统计绑定账号北京时间昨日的消费，达到 10（站点显示货币）即可随机获得
-              1.00–5.00 额度（两位小数，金额越大抽中概率越低），直接计入 YMeng CC
-              余额；每个 YMeng CC 账号每天限一次。
+              <Trans
+                t={t}
+                i18nKey='Send <command/> in a QQ group. If your bound account spent at least 10 (in site display currency) yesterday (Beijing time), you receive a random 1.00–5.00 quota reward (two decimal places, weighted toward smaller amounts) credited directly to your YMeng CC balance. Limited to once per YMeng CC account per day.'
+                components={{
+                  command: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /签到
+                    </code>
+                  ),
+                }}
+              />
             </p>
           </div>
         </div>
@@ -78,18 +125,24 @@ export function FeatureOverviewCard() {
             <Gift />
           </IconBadge>
           <div className='min-w-0'>
-            <div className='text-sm font-medium'>发红包</div>
+            <div className='text-sm font-medium'>{t('Send red packets')}</div>
             <p className='text-muted-foreground mt-0.5 text-sm'>
-              在 QQ 群发送{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /发红包 &lt;总量&gt; &lt;个数&gt;
-              </code>
-              （例如 /发红包 10 5）。费用从发送者自己绑定的 YMeng CC
-              余额扣除；群友发送{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /领取红包 &lt;红包码&gt;
-              </code>{' '}
-              领取。
+              <Trans
+                t={t}
+                i18nKey='Send <sendCommand/> in a QQ group (for example, /发红包 10 5). The amount is deducted from the sender’s bound YMeng CC balance, and group members send <claimCommand/> to claim.'
+                components={{
+                  sendCommand: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /发红包 &lt;总量&gt; &lt;个数&gt;
+                    </code>
+                  ),
+                  claimCommand: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /领取红包 &lt;红包码&gt;
+                    </code>
+                  ),
+                }}
+              />
             </p>
           </div>
         </div>
@@ -98,24 +151,34 @@ export function FeatureOverviewCard() {
             <WalletCards />
           </IconBadge>
           <div className='min-w-0'>
-            <div className='text-sm font-medium'>余额查询</div>
+            <div className='text-sm font-medium'>{t('Balance check')}</div>
             <p className='text-muted-foreground mt-0.5 text-sm'>
-              在 QQ 群发送{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /余额
-              </code>
-              （别名{' '}
-              <code className='bg-muted rounded px-1 py-0.5 text-xs'>
-                /查询余额
-              </code>
-              ），机器人会返回当前绑定账号的余额、已用额度和原始额度，数据直接来自
-              YMeng CC。
+              <Trans
+                t={t}
+                i18nKey='Send <command/> (or alias <aliasCommand/>) in a QQ group to check the bound account’s current balance, used quota, and raw quota directly from YMeng CC.'
+                components={{
+                  command: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /余额
+                    </code>
+                  ),
+                  aliasCommand: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /查询余额
+                    </code>
+                  ),
+                }}
+              />
             </p>
           </div>
         </div>
         <div className='text-muted-foreground flex items-center gap-2 pt-1 text-xs'>
-          <Sparkles className='size-3.5' />
-          发送 /帮助 可随时查看全部指令；签到、发红包与余额查询需先完成 QQ 绑定。
+          <Sparkles className='size-3.5 shrink-0' aria-hidden='true' />
+          <span>
+            {t(
+              'Send /帮助 anytime to view all commands. Status monitoring works without binding; sign-in, red packets, and balance check require QQ binding first.'
+            )}
+          </span>
         </div>
       </CardContent>
     </Card>
