@@ -39,10 +39,11 @@ test('keeps /帮助 as the first command when the feature overview renders', () 
     '/领取红包 <红包码>',
     '/余额',
     '/查询余额',
+    '/充值 <QQ号> <金额>',
   ])
 })
 
-test('renders the /状态监控 status page link, no-binding rule, and group cooldown across locales', async () => {
+test('renders the /状态监控 and /充值 command details across locales', async () => {
   const i18n = createInstance()
   await i18n.init({
     lng: 'en',
@@ -57,19 +58,30 @@ test('renders the /状态监控 status page link, no-binding rule, and group coo
 
   expect(screen.getByText('Feature overview')).toBeVisible()
   expect(screen.getByText('Status monitoring')).toBeVisible()
+  expect(screen.getByText('Admin recharge')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()
+  expect(
+    screen.getByText('/充值 <QQ号> <金额>', { selector: 'code' })
+  ).toBeVisible()
   expect(
     screen.getByRole('link', { name: 'https://health.ymeng.cc' })
   ).toHaveAttribute('href', 'https://health.ymeng.cc/')
   expect(
     screen.getByText(/No QQ binding is required.*30-second cooldown/)
   ).toBeVisible()
+  expect(
+    screen.getByText(/Non-admins receive a permission error/)
+  ).toBeVisible()
 
   await act(() => i18n.changeLanguage('zhCN'))
 
   expect(screen.getByText('功能一览')).toBeVisible()
   expect(screen.getByText('状态监控')).toBeVisible()
+  expect(screen.getByText('管理员充值')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()
+  expect(
+    screen.getByText('/充值 <QQ号> <金额>', { selector: 'code' })
+  ).toBeVisible()
   expect(
     screen.getByRole('link', { name: 'https://health.ymeng.cc' })
   ).toHaveAttribute('href', 'https://health.ymeng.cc/')
@@ -77,12 +89,18 @@ test('renders the /状态监控 status page link, no-binding rule, and group coo
     screen.getByText(/整页截图并发送到群聊；无需绑定 QQ 即可使用.*30 秒/)
   ).toBeVisible()
   expect(
-    screen.getByText(/状态监控无需绑定，签到、发红包与余额查询需先完成 QQ 绑定/)
+    screen.getByText(
+      /状态监控无需绑定，签到、发红包与余额查询需先完成 QQ 绑定，充值仅限管理员使用/
+    )
   ).toBeVisible()
 
   await act(() => i18n.changeLanguage('zhTW'))
 
   expect(screen.getByText('功能一覽')).toBeVisible()
   expect(screen.getByText('狀態監控')).toBeVisible()
+  expect(screen.getByText('管理員儲值')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()
+  expect(
+    screen.getByText('/充值 <QQ号> <金额>', { selector: 'code' })
+  ).toBeVisible()
 })

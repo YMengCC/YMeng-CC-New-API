@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   CalendarCheck2,
+  CircleDollarSign,
   Gift,
   ListChecks,
   Monitor,
@@ -56,7 +57,7 @@ export function FeatureOverviewCard() {
             <p className='text-muted-foreground mt-0.5 text-sm'>
               <Trans
                 t={t}
-                i18nKey='Send <command/> in a QQ group to list all available commands: bind, unbind, binding status, balance, sign-in, send red packet, claim red packet, status monitoring, and help.'
+                i18nKey='Send <command/> in a QQ group to list all available commands: bind, unbind, binding status, balance, sign-in, send red packet, claim red packet, status monitoring, admin recharge, and help.'
                 components={{
                   command: (
                     <code className='bg-muted rounded px-1 py-0.5 text-xs'>
@@ -172,11 +173,32 @@ export function FeatureOverviewCard() {
             </p>
           </div>
         </div>
+        <div className='flex items-start gap-3 rounded-lg border px-3 py-3'>
+          <IconBadge tone='warning' size='stat'>
+            <CircleDollarSign />
+          </IconBadge>
+          <div className='min-w-0'>
+            <div className='text-sm font-medium'>{t('Admin recharge')}</div>
+            <p className='text-muted-foreground mt-0.5 text-sm'>
+              <Trans
+                t={t}
+                i18nKey='Admins can send <command/> to add balance directly to the YMeng CC account bound to that QQ number. Non-admins receive a permission error without modifying any balance.'
+                components={{
+                  command: (
+                    <code className='bg-muted rounded px-1 py-0.5 text-xs'>
+                      /充值 &lt;QQ号&gt; &lt;金额&gt;
+                    </code>
+                  ),
+                }}
+              />
+            </p>
+          </div>
+        </div>
         <div className='text-muted-foreground flex items-center gap-2 pt-1 text-xs'>
           <Sparkles className='size-3.5 shrink-0' aria-hidden='true' />
           <span>
             {t(
-              'Send /帮助 anytime to view all commands. Status monitoring works without binding; sign-in, red packets, and balance check require QQ binding first.'
+              'Send /帮助 anytime to view all commands. Status monitoring works without binding; sign-in, red packets, and balance check require QQ binding first; recharge is limited to admins.'
             )}
           </span>
         </div>
