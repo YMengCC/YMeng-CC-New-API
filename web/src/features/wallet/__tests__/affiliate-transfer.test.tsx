@@ -314,6 +314,70 @@ it('lays out the four referral metrics in two mobile columns and four wider colu
   expect(terms[0].closest('dl')).toHaveClass('grid-cols-2', 'sm:grid-cols-4')
 })
 
+it('highlights primary referral info and actions without repeating headings or idle notices when active', async () => {
+  const user = userEvent.setup()
+  await renderWallet(5000000)
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+
+  expect(await card.findByText('Commission rate: 10%')).toBeVisible()
+  expect(
+    card.getByText(
+      'Earn commission when your invited users spend wallet balance. Transfer commission to your balance or request a withdrawal.'
+    )
+  ).toBeVisible()
+  expect(card.getAllByText('Records')).toHaveLength(1)
+  expect(card.queryByRole('list')).toBeNull()
+
+  const textbox = await card.findByRole<HTMLInputElement>('textbox', {
+    name: 'Your referral link',
+  })
+  const copyButton = card.getByRole('button', { name: 'Copy referral link' })
+  const transferButton = card.getByRole('button', {
+    name: 'Transfer to Balance',
+  })
+  const withdrawButton = card.getByRole('button', { name: 'Withdraw' })
+
+  expect(textbox).toHaveClass('h-9')
+  expect(copyButton).toHaveClass('size-9')
+  expect(transferButton).toHaveClass('h-9', 'bg-primary')
+  expect(withdrawButton).toHaveClass('h-9')
+
+  await user.click(textbox)
+  expect(textbox.selectionStart).toBe(0)
+  expect(textbox.selectionEnd).toBe(textbox.value.length)
+})
+
+it('stacks the referral link above reward actions below desktop widths and lets record buttons wrap long labels', async () => {
+  const longCode = 'long-code-'.repeat(8)
+  await renderWallet(5000000, true, {
+    linkResponse: async () => ({ success: true, data: longCode }),
+  })
+  const card = within(screen.getByRole('region', { name: 'Referral Program' }))
+  const linkGroup = card.getByRole('group', { name: 'Your referral link' })
+  const actionsGroup = card.getByRole('group', {
+    name: 'Referral reward actions',
+  })
+
+  expect(linkGroup).toHaveClass('min-w-0', 'flex-1')
+  expect(linkGroup.parentElement).toBe(actionsGroup.parentElement)
+  expect(linkGroup.parentElement).toHaveClass('flex-col', 'lg:flex-row')
+
+  const expectedUrl = `${window.location.origin}/sign-up?aff=${encodeURIComponent(longCode)}`
+  const textbox = await within(linkGroup).findByRole('textbox', {
+    name: 'Your referral link',
+  })
+  expect(textbox).toHaveClass('min-w-0')
+  expect(textbox).toHaveValue(expectedUrl)
+
+  for (const name of [
+    'Commission records',
+    'Invited users',
+    'Withdrawal records',
+  ]) {
+    expect(card.getByRole('button', { name })).toHaveClass('whitespace-normal')
+  }
+})
+
 it('uses the commission summary in the transfer dialog when self has no invite quota', async () => {
   const user = userEvent.setup()
   const { post } = await renderWallet(1000000)
