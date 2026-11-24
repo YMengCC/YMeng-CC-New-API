@@ -8270,6 +8270,7 @@
     "Show analytics amounts": "分析欄の金額を表示",
     "Open referral analytics": "紹介分析を開く",
     "Unable to load referral analytics": "紹介分析を読み込めません",
-    "No referral activity yet": "紹介アクティビティはまだありません"
-  }
-}
+    "No referral activity yet": "紹介アクティビティはまだありません",
+    "Intelligent load balancing": "インテリジェントな負荷分散",
+    "Pay as you go, stop anytime": "従量課金、いつでも停止可能",
+    "Unified access to all AI models": "すべての AI モデルへ統合アクセス"

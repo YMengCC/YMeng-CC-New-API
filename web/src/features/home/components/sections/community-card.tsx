@@ -41,7 +41,7 @@ interface CommunityEntry {
 }
 
 // The site's group chat. From lg up it fills the corner the second seam cuts
-// off (.home-community-wedge); below lg it is a plain card. Both links come
+// off (.home-community-wedge); below lg it is a raised card. Both links come
 // from the admin settings and an entry is hidden while its link is empty.
 export function CommunityCard(props: CommunityCardProps) {
   const { t } = useTranslation()
@@ -88,110 +88,122 @@ export function CommunityCard(props: CommunityCardProps) {
 
   return (
     <div
-      data-depth-tilt='0'
       className={cn(
-        'landing-animate-fade-up w-full max-w-md rounded-xl border border-sky-500/15 bg-white/70 p-3 opacity-0 shadow-[0_16px_40px_-28px_rgba(18,183,245,0.6)] backdrop-blur-sm lg:max-w-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none dark:border-sky-400/15 dark:bg-white/[0.04] dark:lg:bg-transparent',
+        'landing-animate-fade-up w-full max-w-md opacity-0 lg:max-w-none',
         props.className
       )}
       style={{ animationDelay: '60ms' }}
     >
-      <div className='flex items-center gap-3 lg:gap-4'>
-        <span
-          data-depth-layer='3'
-          className='relative flex size-14 shrink-0 lg:size-16'
-        >
+      <div
+        data-depth-tilt='5'
+        data-depth-glare=''
+        className='relative overflow-hidden rounded-xl border border-sky-500/20 bg-white/80 p-3.5 shadow-[0_18px_42px_-28px_rgba(18,183,245,0.55)] backdrop-blur-md lg:rounded-xl lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none dark:border-sky-400/20 dark:bg-white/[0.05] dark:lg:bg-transparent'
+      >
+        <div className='flex items-center gap-3 lg:gap-4'>
           <span
-            aria-hidden
-            className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40'
-          />
-          <span
-            aria-hidden
-            className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40 [animation-delay:1.2s]'
-          />
-          <span
-            data-relief='plate'
-            className={cn(
-              'home-qq-float relative flex size-full items-center justify-center rounded-2xl bg-gradient-to-br text-white',
-              primary.avatarClassName
-            )}
+            data-depth-layer='3'
+            className='relative flex size-14 shrink-0 lg:size-16'
           >
-            <PrimaryIcon className='size-8 lg:size-9' aria-hidden />
             <span
-              className='absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-emerald-500 dark:border-[#0e1520]'
               aria-hidden
+              className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40'
             />
-          </span>
-          {secondary && (
+            <span
+              aria-hidden
+              className='home-qq-ring absolute inset-0 rounded-2xl border border-sky-400/40 [animation-delay:1.2s]'
+            />
             <span
               data-relief='plate'
               className={cn(
-                'absolute -right-2 -bottom-2 flex size-7 items-center justify-center rounded-xl border-2 border-white bg-gradient-to-br text-white lg:size-8 dark:border-[#0e1520]',
-                secondary.avatarClassName
+                'home-qq-float relative flex size-full items-center justify-center rounded-2xl bg-gradient-to-br text-white',
+                primary.avatarClassName
               )}
             >
-              <secondary.icon className='size-4 lg:size-5' aria-hidden />
+              <PrimaryIcon className='size-8 lg:size-9' aria-hidden />
+              <span
+                className='absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-white bg-emerald-500 dark:border-[#0e1520]'
+                aria-hidden
+              />
             </span>
-          )}
-        </span>
+            {secondary && (
+              <span
+                data-relief='plate'
+                className={cn(
+                  'absolute -right-2 -bottom-2 flex size-7 items-center justify-center rounded-xl border-2 border-white bg-gradient-to-br text-white lg:size-8 dark:border-[#0e1520]',
+                  secondary.avatarClassName
+                )}
+              >
+                <secondary.icon className='size-4 lg:size-5' aria-hidden />
+              </span>
+            )}
+          </span>
 
-        <div data-depth-layer='1' className='flex min-w-0 flex-col'>
-          <span className='flex flex-wrap items-center gap-1.5 font-mono text-[10px] font-semibold tracking-[0.2em] text-sky-600 uppercase dark:text-sky-400'>
-            {entries.map((entry, index) => {
-              const Icon = entry.icon
-              return (
-                <span key={entry.name} className='flex items-center gap-1'>
-                  {index > 0 && <span aria-hidden>·</span>}
-                  <Icon className='size-3' aria-hidden />
-                  {entry.name}
-                </span>
-              )
-            })}
-          </span>
-          <span className='text-foreground text-base font-semibold break-words lg:text-lg'>
-            {t('Join the {{name}} community group', { name: systemName })}
-          </span>
-          <span className='text-muted-foreground mt-0.5 text-xs'>
-            {t('Q&A, feedback and new model updates')}
+          <div data-depth-layer='1' className='flex min-w-0 flex-col'>
+            <span className='flex flex-wrap items-center gap-1.5 font-mono text-[10px] font-semibold tracking-[0.2em] text-sky-600 uppercase dark:text-sky-400'>
+              {entries.map((entry, index) => {
+                const Icon = entry.icon
+                return (
+                  <span key={entry.name} className='flex items-center gap-1'>
+                    {index > 0 && <span aria-hidden>·</span>}
+                    <Icon className='size-3' aria-hidden />
+                    {entry.name}
+                  </span>
+                )
+              })}
+            </span>
+            <span className='text-foreground text-base font-semibold break-words lg:text-lg'>
+              {t('Join the {{name}} community group', { name: systemName })}
+            </span>
+            <span className='text-muted-foreground mt-0.5 text-xs'>
+              {t('Q&A, feedback and new model updates')}
+            </span>
+          </div>
+        </div>
+
+        <div
+          data-depth-group
+          className='mt-3 flex flex-wrap items-center gap-2'
+        >
+          {entries.map((entry) => {
+            const Icon = entry.icon
+            return (
+              <Button
+                key={entry.href}
+                size='sm'
+                data-relief='primary'
+                className={cn(
+                  'home-qq-shine group relative h-8 overflow-hidden rounded-lg px-3.5 text-xs font-medium text-white',
+                  entry.buttonClassName
+                )}
+                render={
+                  <a
+                    href={entry.href}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  />
+                }
+              >
+                <Icon className='size-3.5' aria-hidden />
+                {entry.label}
+                <ArrowUpRight className='ml-0.5 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5' />
+              </Button>
+            )
+          })}
+          <span
+            data-depth-group
+            className='hidden items-center gap-1.5 xl:flex'
+          >
+            {topics.map((topic) => (
+              <span
+                key={topic}
+                data-relief='plate'
+                className='rounded-full border border-sky-500/15 bg-sky-500/5 px-2 py-0.5 text-[11px] text-sky-700 dark:border-sky-400/15 dark:bg-sky-400/5 dark:text-sky-300'
+              >
+                #{topic}
+              </span>
+            ))}
           </span>
         </div>
-      </div>
-
-      <div data-depth-group className='mt-3 flex flex-wrap items-center gap-2'>
-        {entries.map((entry) => {
-          const Icon = entry.icon
-          return (
-            <Button
-              key={entry.href}
-              size='sm'
-              className={cn(
-                'home-qq-shine group relative h-8 overflow-hidden rounded-lg px-3.5 text-xs font-medium text-white',
-                entry.buttonClassName
-              )}
-              render={
-                <a
-                  href={entry.href}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
-              }
-            >
-              <Icon className='size-3.5' aria-hidden />
-              {entry.label}
-              <ArrowUpRight className='ml-0.5 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5' />
-            </Button>
-          )
-        })}
-        <span data-depth-group className='hidden items-center gap-1.5 xl:flex'>
-          {topics.map((topic) => (
-            <span
-              key={topic}
-              data-relief='plate'
-              className='rounded-full border border-sky-500/15 bg-sky-500/5 px-2 py-0.5 text-[11px] text-sky-700 dark:border-sky-400/15 dark:bg-sky-400/5 dark:text-sky-300'
-            >
-              #{topic}
-            </span>
-          ))}
-        </span>
       </div>
     </div>
   )

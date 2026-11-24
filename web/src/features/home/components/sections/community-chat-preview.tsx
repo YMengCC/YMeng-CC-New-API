@@ -84,9 +84,9 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
       data-relief='raised'
       data-depth-tilt='6'
       data-depth-float='3'
-      data-depth-glare
+      data-depth-glare=''
       className={cn(
-        'w-full rounded-xl border border-sky-500/15 bg-white/75 p-2 shadow-[0_18px_40px_-30px_rgba(18,183,245,0.8)] backdrop-blur-sm dark:border-sky-400/15 dark:bg-[#0b0f17]/80',
+        'relative w-full rounded-xl border border-sky-500/20 bg-white/80 p-2.5 shadow-[0_18px_42px_-28px_rgba(18,183,245,0.75)] backdrop-blur-md dark:border-sky-400/20 dark:bg-[#0b0f17]/85',
         props.className
       )}
     >
@@ -109,7 +109,7 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
               )}
               <span className='size-1.5 rounded-full bg-emerald-500' />
               <Icon className='size-3.5 text-slate-500 dark:text-slate-400' />
-              <span className='font-mono text-[10px] tracking-[0.16em] text-sky-600 uppercase dark:text-sky-400'>
+              <span className='font-mono text-[10px] font-semibold tracking-[0.16em] text-sky-600 uppercase dark:text-sky-400'>
                 {round.name}
               </span>
             </span>
@@ -129,7 +129,7 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
             <div
               key={round.name}
               className={cn(
-                'home-qq-round col-start-1 row-start-1 flex w-full min-w-0 flex-col gap-1 pt-2',
+                'home-qq-round col-start-1 row-start-1 flex w-full min-w-0 flex-col gap-1.5 pt-2',
                 rotating &&
                   round.name === rounds[1].name &&
                   'home-qq-round-late'
@@ -159,7 +159,7 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
                       className={cn(
                         'min-w-0 max-w-[calc(100%-1.625rem)] rounded-lg px-2 py-1 text-[11px] leading-relaxed break-words',
                         own
-                          ? 'rounded-tr-sm bg-[#12b7f5]/12 text-sky-800 dark:text-sky-200'
+                          ? 'rounded-tr-sm bg-[#12b7f5]/14 text-sky-800 dark:text-sky-200'
                           : 'rounded-tl-sm bg-slate-500/10 text-slate-600 dark:text-slate-300'
                       )}
                     >

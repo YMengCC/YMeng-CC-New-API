@@ -31,7 +31,7 @@ export function HowItWorks() {
       desc: t(
         'Add your API keys, set up channels and configure access permissions'
       ),
-      icon: <Settings className='size-6' strokeWidth={1.5} />,
+      icon: <Settings className='size-6' strokeWidth={1.6} />,
     },
     {
       num: '2',
@@ -39,70 +39,86 @@ export function HowItWorks() {
       desc: t(
         'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
       ),
-      icon: <Zap className='size-6' strokeWidth={1.5} />,
+      icon: <Zap className='size-6' strokeWidth={1.6} />,
     },
     {
       num: '3',
       title: t('Monitor'),
       desc: t('Track usage, costs and performance with real-time analytics'),
-      icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
+      icon: <BarChart3 className='size-6' strokeWidth={1.6} />,
     },
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
+    <section className='border-border/45 relative z-10 border-t px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
           <p
             data-depth='1'
-            className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'
+            className='text-primary/80 mb-3 font-mono text-xs font-semibold tracking-[0.2em] uppercase'
           >
             {t('How It Works')}
           </p>
           <h2
             data-depth='2'
-            className='text-2xl font-bold tracking-tight md:text-3xl'
+            className='text-2xl font-extrabold tracking-tight md:text-4xl'
           >
             {t('Three steps to get started')}
           </h2>
         </AnimateInView>
 
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
+        <div className='relative grid gap-6 md:grid-cols-3 md:gap-8'>
+          {/* Decorative connecting light beam on desktop */}
+          <div
+            aria-hidden
+            className='via-primary/30 pointer-events-none absolute top-16 right-[16%] left-[16%] -z-10 hidden h-px bg-gradient-to-r from-transparent to-transparent md:block'
+          />
+
           {steps.map((step, i) => (
             <AnimateInView
               key={step.num}
-              delay={i * 150}
+              delay={i * 140}
               animation='fade-up'
-              className='relative flex flex-col items-center text-center'
+              className='h-full'
             >
               <div
-                data-depth-tilt='14'
-                data-depth-float={String(i + 1)}
-                className='relative mb-6'
+                data-relief='raised'
+                data-depth-tilt='7'
+                data-depth-glare=''
+                className='border-border/55 bg-card/60 group hover:border-primary/30 hover:bg-card/85 relative flex h-full flex-col items-center overflow-hidden rounded-2xl border px-6 py-8 text-center backdrop-blur-sm transition-colors duration-300'
               >
                 <div
-                  data-relief='plate'
-                  className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'
+                  data-depth-layer='3'
+                  data-depth-float={String(i + 1)}
+                  className='relative mb-6'
                 >
-                  {step.icon}
+                  <div
+                    data-relief='plate'
+                    className='text-muted-foreground border-border/60 bg-background/85 group-hover:border-primary/35 group-hover:text-primary flex size-16 items-center justify-center rounded-2xl border transition-colors duration-300'
+                  >
+                    {step.icon}
+                  </div>
+                  <div
+                    data-depth-layer='5'
+                    data-relief='primary'
+                    className='bg-primary text-primary-foreground absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'
+                  >
+                    {step.num}
+                  </div>
                 </div>
-                <div
-                  data-depth-layer='4'
-                  data-relief='plate'
-                  className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'
+                <h3
+                  data-depth-layer='2'
+                  className='mb-2 text-base font-semibold tracking-tight md:text-lg'
                 >
-                  {step.num}
-                </div>
+                  {step.title}
+                </h3>
+                <p
+                  data-depth-layer='1'
+                  className='text-muted-foreground max-w-[250px] text-sm leading-relaxed'
+                >
+                  {step.desc}
+                </p>
               </div>
-              <h3 data-depth='1' className='mb-2 text-base font-semibold'>
-                {step.title}
-              </h3>
-              <p
-                data-depth='1'
-                className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'
-              >
-                {step.desc}
-              </p>
             </AnimateInView>
           ))}
         </div>

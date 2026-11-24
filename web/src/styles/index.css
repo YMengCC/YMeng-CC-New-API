@@ -796,40 +796,46 @@ For commercial licensing, please contact support@quantumnous.com
   --seam-width: 2px;
 }
 .home-paper {
-  --paper: #ffffff;
-  --paper-tint: #f6f4ef;
-  --paper-ink: #1b1a17;
+  --paper: #fbfaf6;
+  --paper-tint: #f3efe6;
+  --paper-ink: #181613;
   --paper-ink-hover: #000000;
-  --paper-body: #2f2d29;
-  --paper-muted: #6f6b63;
-  --paper-faint: #a9a49a;
-  --paper-rule: #e7e3da;
-  --paper-sand: rgba(226, 179, 115, 0.75);
-  --paper-pill-ink: #7a4e14;
-  --paper-pill-bg: #f8ead2;
-  --paper-pill-border: #edcf9e;
+  --paper-body: #2c2925;
+  --paper-muted: #666159;
+  --paper-faint: #9e988d;
+  --paper-rule: #e5dfd3;
+  --paper-sand: rgba(214, 160, 86, 0.85);
+  --paper-pill-ink: #784b10;
+  --paper-pill-bg: #f9ecd4;
+  --paper-pill-border: #e8c790;
   --paper-serif:
     Charter, 'Iowan Old Style', 'Source Serif 4', Cambria, Georgia, 'Songti SC',
     'Noto Serif SC', serif;
 }
 .dark .home-paper {
-  --paper: #1a1915;
-  --paper-tint: #211f1a;
-  --paper-ink: #f3efe7;
+  --paper: #161512;
+  --paper-tint: #1f1d18;
+  --paper-ink: #f5f1e8;
   --paper-ink-hover: #ffffff;
-  --paper-body: #d9d4ca;
-  --paper-muted: #a39e94;
-  --paper-faint: #6f6b63;
-  --paper-rule: #34312b;
-  --paper-pill-ink: #edcf9e;
-  --paper-pill-bg: rgba(226, 179, 115, 0.12);
-  --paper-pill-border: rgba(226, 179, 115, 0.32);
+  --paper-body: #ded8cd;
+  --paper-muted: #a6a095;
+  --paper-faint: #706b62;
+  --paper-rule: #302d27;
+  --paper-pill-ink: #f0d3a2;
+  --paper-pill-bg: rgba(226, 179, 115, 0.13);
+  --paper-pill-border: rgba(226, 179, 115, 0.34);
 }
 .home-paper-clip-lg {
   clip-path: polygon(0 0, var(--seam-top) 0, var(--seam-bottom) 100%, 0 100%);
 }
 .home-seam-lg {
-  background: var(--paper-sand, rgba(226, 179, 115, 0.75));
+  background: linear-gradient(
+    180deg,
+    rgba(226, 179, 115, 0.22) 0%,
+    rgba(218, 162, 86, 0.9) 35%,
+    rgba(235, 194, 130, 0.95) 65%,
+    rgba(226, 179, 115, 0.22) 100%
+  );
   clip-path: polygon(
     var(--seam-top) 0,
     calc(var(--seam-top) + var(--seam-width)) 0,
@@ -839,16 +845,29 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .home-seam-badge {
   left: var(--seam-middle);
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.875rem;
+  height: 2.875rem;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--paper-pill-border);
   border-radius: 9999px;
-  background: var(--paper);
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--paper) 0%,
+    var(--paper-tint) 100%
+  );
   color: var(--paper-pill-ink);
   font: 400 1.375rem/1 var(--paper-serif);
-  box-shadow: 0 6px 20px -8px rgba(122, 78, 20, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 0 0 4px rgba(226, 179, 115, 0.12),
+    0 10px 26px -8px rgba(122, 78, 20, 0.42);
+}
+.dark .home-seam-badge {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 4px rgba(226, 179, 115, 0.08),
+    0 12px 28px -8px rgba(0, 0, 0, 0.65);
 }
 /* The community corner: a second seam from behind the paper side (40% wide,
    19rem down) rising to the right edge 13rem down. It is decoration only and
@@ -865,7 +884,7 @@ For commercial licensing, please contact support@quantumnous.com
     linear-gradient(
       100deg,
       rgba(18, 183, 245, 0.12),
-      rgba(18, 183, 245, 0.04) 70%
+      rgba(18, 183, 245, 0.03) 70%
     );
   clip-path: polygon(0 0, 100% 0, 100% 13rem, 40% 19rem, 0 19rem);
 }
@@ -880,7 +899,12 @@ For commercial licensing, please contact support@quantumnous.com
     );
 }
 .home-community-seam {
-  background: rgba(226, 179, 115, 0.75);
+  background: linear-gradient(
+    90deg,
+    rgba(226, 179, 115, 0.4),
+    rgba(226, 179, 115, 0.85) 50%,
+    rgba(56, 189, 248, 0.45)
+  );
   clip-path: polygon(
     40% 19rem,
     100% 13rem,
@@ -892,7 +916,12 @@ For commercial licensing, please contact support@quantumnous.com
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 3.5rem), 0 100%);
 }
 .home-seam-sm {
-  background: rgba(226, 179, 115, 0.75);
+  background: linear-gradient(
+    90deg,
+    rgba(226, 179, 115, 0.35),
+    rgba(218, 162, 86, 0.92) 50%,
+    rgba(226, 179, 115, 0.35)
+  );
   clip-path: polygon(
     0 calc(100% - 2px),
     100% calc(100% - 3.5rem - 2px),
@@ -917,8 +946,8 @@ For commercial licensing, please contact support@quantumnous.com
   transform-origin: 50% 50%;
   mask-image: radial-gradient(
     ellipse 70% 60% at 30% 50%,
-    rgba(0, 0, 0, 0.15) 0%,
-    rgba(0, 0, 0, 0.9) 100%
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.85) 100%
   );
   animation: home-paper-grid-zoom 48s linear infinite alternate;
 }
@@ -945,28 +974,30 @@ For commercial licensing, please contact support@quantumnous.com
    ring utilities keep working; the vars fall back to transparent because they
    may be unset on elements that carry no shadow utility. */
 :root[data-home-depth] {
-  --home-hi: rgb(255 255 255 / 0.92);
-  --home-hi-soft: rgb(255 255 255 / 0.5);
-  --home-lo: rgb(15 23 42 / 0.07);
-  --home-shade: rgb(15 23 42 / 0.045);
-  --home-cast: rgb(15 23 42 / 0.1);
-  --home-cast-far: rgb(15 23 42 / 0.16);
-  --home-glow: color-mix(in oklch, var(--primary) 38%, transparent);
-  --home-text-hi: rgb(255 255 255 / 0.7);
-  --home-text-lo: rgb(15 23 42 / 0.1);
-  --home-light-wash: color-mix(in oklch, var(--primary) 6%, transparent);
+  --home-hi: rgb(255 255 255 / 0.94);
+  --home-hi-soft: rgb(255 255 255 / 0.56);
+  --home-lo: rgb(15 23 42 / 0.08);
+  --home-shade: rgb(15 23 42 / 0.05);
+  --home-cast: rgb(15 23 42 / 0.09);
+  --home-cast-far: rgb(15 23 42 / 0.18);
+  --home-glow: color-mix(in oklch, var(--primary) 42%, transparent);
+  --home-text-hi: rgb(255 255 255 / 0.75);
+  --home-text-lo: rgb(15 23 42 / 0.08);
+  --home-light-wash: color-mix(in oklch, var(--primary) 7%, transparent);
+  --home-cursor-glow: color-mix(in oklch, var(--primary) 8.5%, transparent);
 }
 :root.dark[data-home-depth] {
-  --home-hi: rgb(255 255 255 / 0.14);
-  --home-hi-soft: rgb(255 255 255 / 0.08);
-  --home-lo: rgb(0 0 0 / 0.45);
-  --home-shade: rgb(0 0 0 / 0.25);
-  --home-cast: rgb(0 0 0 / 0.35);
-  --home-cast-far: rgb(0 0 0 / 0.5);
-  --home-glow: color-mix(in oklch, var(--primary) 45%, transparent);
-  --home-text-hi: rgb(255 255 255 / 0.1);
-  --home-text-lo: rgb(0 0 0 / 0.55);
-  --home-light-wash: color-mix(in oklch, var(--primary) 10%, transparent);
+  --home-hi: rgb(255 255 255 / 0.16);
+  --home-hi-soft: rgb(255 255 255 / 0.09);
+  --home-lo: rgb(0 0 0 / 0.5);
+  --home-shade: rgb(0 0 0 / 0.3);
+  --home-cast: rgb(0 0 0 / 0.42);
+  --home-cast-far: rgb(0 0 0 / 0.62);
+  --home-glow: color-mix(in oklch, var(--primary) 52%, transparent);
+  --home-text-hi: rgb(255 255 255 / 0.08);
+  --home-text-lo: rgb(0 0 0 / 0.45);
+  --home-light-wash: color-mix(in oklch, var(--primary) 12%, transparent);
+  --home-cursor-glow: color-mix(in oklch, var(--primary) 14%, transparent);
 }
 
 :root[data-home-depth] [data-relief] {
@@ -980,15 +1011,17 @@ For commercial licensing, please contact support@quantumnous.com
 :root[data-home-depth] [data-relief='raised'] {
   --tw-inset-shadow:
     inset 0 1px 0 var(--home-hi), inset 1px 0 0 var(--home-hi-soft),
-    inset -1px 0 0 var(--home-shade), inset 0 -1px 0 var(--home-lo);
+    inset -1px 0 0 var(--home-shade), inset 0 -1.5px 0 var(--home-lo);
   --tw-shadow:
-    0 1px 2px var(--home-cast), 0 10px 24px -14px var(--home-cast-far);
+    0 2px 5px -1px var(--home-cast), 0 10px 22px -8px var(--home-cast),
+    0 22px 44px -14px var(--home-cast-far);
 }
 :root[data-home-depth] [data-relief='plate'] {
   --tw-inset-shadow:
     inset 0 1px 0 var(--home-hi), inset 1px 0 0 var(--home-hi-soft),
-    inset 0 -1px 0 var(--home-lo);
-  --tw-shadow: 0 1px 2px var(--home-cast);
+    inset 0 -1.5px 0 var(--home-lo);
+  --tw-shadow:
+    0 1px 3px var(--home-cast), 0 8px 18px -10px var(--home-cast-far);
 }
 :root[data-home-depth] [data-relief='inset'] {
   --tw-inset-shadow:
@@ -997,32 +1030,48 @@ For commercial licensing, please contact support@quantumnous.com
 }
 :root[data-home-depth] [data-relief='primary'] {
   --tw-inset-shadow:
-    inset 0 1px 0 var(--home-hi), inset 0 -1px 0 var(--home-lo);
+    inset 0 1px 0 rgb(255 255 255 / 0.32), inset 0 -1px 0 var(--home-lo);
   --tw-shadow:
-    0 1px 2px var(--home-cast), 0 14px 26px -16px var(--home-glow),
-    0 2px 8px -4px var(--home-glow);
+    0 2px 4px var(--home-cast), 0 14px 28px -12px var(--home-glow),
+    0 4px 12px -4px var(--home-glow);
 }
 :root[data-home-depth] [data-relief='band'] {
   --tw-inset-shadow:
     inset 0 1px 0 var(--home-hi-soft), inset 0 -1px 0 var(--home-lo);
 }
-/* Lifting deepens the cast; pressing sinks the surface into its well. */
-:root[data-home-motion]
-  :is([data-relief='raised'], [data-relief='primary'])[data-depth-active] {
+/* Lifting deepens and shifts the 3D cast shadow opposite the tilt; pressing sinks into its well. */
+:root[data-home-motion] [data-relief='raised'][data-depth-active] {
   --tw-shadow:
-    0 2px 4px var(--home-cast), 0 26px 48px -22px var(--home-cast-far);
+    0 4px 10px -2px var(--home-cast),
+    var(--depth-sx, 0px) var(--depth-sy, 24px) 44px -16px var(--home-cast-far),
+    0 0 0 1px color-mix(in oklch, var(--primary) 16%, transparent);
+}
+:root[data-home-motion] [data-relief='primary'][data-depth-active] {
+  --tw-shadow:
+    0 4px 10px -2px var(--home-cast),
+    var(--depth-sx, 0px) var(--depth-sy, 20px) 36px -12px var(--home-glow),
+    0 4px 14px -2px var(--home-glow);
+}
+:root[data-home-motion] [data-relief='plate'][data-depth-active] {
+  --tw-shadow:
+    0 2px 6px -1px var(--home-cast),
+    var(--depth-sx, 0px) var(--depth-sy, 14px) 26px -10px var(--home-cast-far);
 }
 :root[data-home-motion]
-  :is([data-relief='raised'], [data-relief='primary'])[data-depth-pressed] {
+  :is(
+    [data-relief='raised'],
+    [data-relief='primary'],
+    [data-relief='plate']
+  )[data-depth-pressed] {
   --tw-inset-shadow:
     inset 0 2px 6px var(--home-shade), inset 0 -1px 0 var(--home-hi-soft);
-  --tw-shadow: 0 1px 1px var(--home-cast);
+  --tw-shadow: 0 1px 2px var(--home-cast);
 }
 
 /* Icons and logos read as cut out of the page and lit from the same corner. */
 :root[data-home-depth] [data-relief='float'] {
   filter: drop-shadow(-1px -1px 0 var(--home-hi-soft))
-    drop-shadow(1px 2px 2px var(--home-cast));
+    drop-shadow(1px 3px 4px var(--home-cast));
 }
 
 /* Every button on the page gets a rounded edge; the ones we tag above keep
@@ -1031,7 +1080,7 @@ For commercial licensing, please contact support@quantumnous.com
   --tw-inset-shadow:
     inset 0 1px 0 var(--home-hi), inset 0 -1px 0 var(--home-lo);
   --tw-shadow:
-    0 1px 2px var(--home-cast), 0 6px 14px -10px var(--home-cast-far);
+    0 1px 2px var(--home-cast), 0 8px 18px -12px var(--home-cast-far);
   box-shadow:
     var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
@@ -1043,31 +1092,23 @@ For commercial licensing, please contact support@quantumnous.com
   --tw-shadow: 0 1px 1px var(--home-cast);
 }
 
-/* Text is embossed by the same light: a hairline highlight under the glyphs
-   and a soft shade over them. text-shadow inherits, so one value covers all
-   copy, while headings sink a little deeper. */
-:root[data-home-depth] :is([data-home-scene], header) {
+/* Display headings catch subtle directional embossing while body copy and
+   monospace code stay razor-sharp. */
+:root[data-home-depth] [data-home-scene] :is(h1, h2) {
   text-shadow:
     0 1px 0 var(--home-text-hi),
-    0 1px 1px var(--home-text-lo);
-}
-:root[data-home-depth] :is([data-home-scene], header) :is(h1, h2, h3, h4) {
-  text-shadow:
-    0 1px 0 var(--home-text-hi),
-    0 2px 5px var(--home-text-lo);
+    0 2px 6px var(--home-text-lo);
 }
 /* Gradient headings are clipped to their glyphs, so a text-shadow is erased;
    the filter shades the painted result instead. */
 :root[data-home-depth] .bg-clip-text {
-  /* The inherited text-shadow would paint glyph-shaped copies over the
-     clipped gradient and wash it out. */
   text-shadow: none;
-  filter: drop-shadow(0 1px 0 var(--home-text-hi))
-    drop-shadow(0 2px 5px var(--home-text-lo));
+  filter: drop-shadow(0 2px 8px var(--home-text-lo));
 }
 
-/* The page itself sits in one lit room: a fixed wash from the top-left and a
-   faint cool bounce from the far corner, behind every section. */
+/* The page itself sits in one lit room: a fixed wash from the top-left, a
+   faint cool bounce from the far corner, and a smooth cursor-following
+   ambient spotlight on desktop fine-pointer devices. */
 :root[data-home-depth] [data-home-scene] {
   position: relative;
 }
@@ -1085,39 +1126,49 @@ For commercial licensing, please contact support@quantumnous.com
     ),
     radial-gradient(
       60rem 40rem at 108% 112%,
-      color-mix(in oklch, var(--primary) 4%, transparent),
+      color-mix(in oklch, var(--primary) 5%, transparent),
       transparent 70%
     );
+}
+:root[data-home-motion][data-home-pointer] [data-home-scene]::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--home-spot-opacity, 0);
+  background: radial-gradient(
+    540px circle at var(--home-spot-x, -999px) var(--home-spot-y, -999px),
+    var(--home-cursor-glow),
+    transparent 68%
+  );
+  will-change: opacity;
 }
 /* Paper panels catch the same light across both hero columns. */
 :root[data-home-depth] :is(.home-paper-clip-lg, .home-paper-clip-sm) {
   background-image: linear-gradient(
-    160deg,
+    155deg,
     var(--home-hi-soft) 0%,
-    transparent 45%,
+    transparent 48%,
     var(--home-shade) 100%
   );
 }
 
 /* ── Home depth: 3D motion over the landing page ──
    Gated by data-home-motion, which useHomeDepth only sets when the reader
-   has not asked for reduced motion. The static relief below does not need it.
+   has not asked for reduced motion. The static relief above does not need it.
    Switched on by useHomeDepth (features/home/hooks/use-home-depth.ts), which
    sets data-home-depth on <html> and writes the --depth-* values below. Only
    paint-time properties are used (translate, transform, scale, opacity), so
    no element moves in the layout.
-   - data-depth="n": parallax with the pointer, n px steps (negative = behind)
+   - data-depth="n": parallax with the pointer, n steps (negative = behind)
    - data-depth-tilt="deg": tilts toward the pointer and lifts on hover; "0"
      only tracks the pointer, for elements whose transform is animated
    - data-depth-group: every direct child behaves like data-depth-tilt
    - data-depth-layer="n": moves with the pointer inside its tilted ancestor
+   - data-depth-magnetic: gently pulls primary controls toward the pointer
    - data-depth-float="1..4": slow idle float, the value picks the phase
-   - data-depth-glare: a light sheen following the pointer while hovered
-   Tilted elements use `transform`, so they must not carry a transform
-   animation; the others use `translate`, so they must not carry Tailwind
-   translate utilities. The float animates `translate` on the compositor, so
-   a floating element must neither carry Tailwind translate utilities nor be
-   a parallax or layer element without a tilt. */
+   - data-depth-glare: a specular light sheen following the pointer while hovered */
 @property --depth-x {
   syntax: '<length>';
   inherits: false;
@@ -1139,6 +1190,31 @@ For commercial licensing, please contact support@quantumnous.com
   initial-value: 0px;
 }
 @property --depth-z {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-lift {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-sx {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-sy {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 14px;
+}
+@property --depth-mx {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --depth-my {
   syntax: '<length>';
   inherits: false;
   initial-value: 0px;
@@ -1203,28 +1279,36 @@ For commercial licensing, please contact support@quantumnous.com
     [data-depth-tilt]:not([data-depth-tilt='0']),
     [data-depth-group] > *
   )[data-depth-active] {
-  transform: perspective(800px)
-    translate3d(var(--depth-x), var(--depth-y), var(--depth-z))
+  transform: perspective(950px)
+    translate3d(
+      calc(var(--depth-x) + var(--depth-mx, 0px)),
+      calc(var(--depth-y) + var(--depth-my, 0px) - var(--depth-lift, 0px)),
+      var(--depth-z)
+    )
     rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) scale(var(--depth-scale));
+  will-change: transform;
 }
 :root[data-home-motion] [data-depth-glare][data-depth-active]::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 2;
   border-radius: inherit;
   pointer-events: none;
   background: radial-gradient(
-    circle at var(--depth-glare-x) var(--depth-glare-y),
-    rgb(255 255 255 / 0.16),
-    transparent 60%
+    280px circle at var(--depth-glare-x) var(--depth-glare-y),
+    rgb(255 255 255 / 0.28),
+    color-mix(in oklch, var(--primary) 8%, transparent) 38%,
+    transparent 68%
   );
   opacity: var(--depth-glare);
 }
 :root.dark[data-home-motion] [data-depth-glare][data-depth-active]::after {
   background: radial-gradient(
-    circle at var(--depth-glare-x) var(--depth-glare-y),
-    rgb(255 255 255 / 0.06),
-    transparent 60%
+    300px circle at var(--depth-glare-x) var(--depth-glare-y),
+    rgb(255 255 255 / 0.13),
+    color-mix(in oklch, var(--primary) 16%, transparent) 38%,
+    transparent 68%
   );
 }
 
@@ -1485,6 +1569,329 @@ For commercial licensing, please contact support@quantumnous.com
   .terminal-demo-pulse {
     animation: none !important;
   }
+}
+
+/* ── Hero brand kinetic title & typewriter showcase ── */
+.home-brand-title {
+  font-family:
+    'Public Sans Variable', 'Public Sans', -apple-system, BlinkMacSystemFont,
+    'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  font-weight: 860;
+  font-variation-settings: 'wght' 860;
+  font-kerning: normal;
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1,
+    'calt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+[data-theme-font='serif'] .home-brand-title {
+  font-weight: 860;
+  letter-spacing: -0.024em;
+}
+
+.home-brand-subtitle {
+  font-family:
+    'Public Sans Variable', 'Public Sans', -apple-system, BlinkMacSystemFont,
+    'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei UI', 'Segoe UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.home-brand-lt {
+  display: inline-block;
+  will-change: transform;
+}
+
+.home-brand-lt:not(.home-brand-lt-space) {
+  transition:
+    translate 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    scale 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.home-brand-lt:not(.home-brand-lt-space):hover {
+  translate: 0 -5px;
+  scale: 1.06;
+}
+
+.home-brand-lt-y {
+  margin-right: -0.028em;
+  transform-origin: 55% 88%;
+  animation: home-brand-y-tilt 5.2s cubic-bezier(0.42, 0, 0.2, 1) 0s infinite;
+}
+
+.home-brand-lt-m {
+  transform-origin: center 85%;
+  animation: home-brand-m-wave 6s cubic-bezier(0.42, 0, 0.2, 1) 0.9s infinite;
+}
+
+.home-brand-lt-e,
+.home-brand-lt-n,
+.home-brand-lt-g {
+  letter-spacing: -0.012em;
+  transform-origin: center 85%;
+}
+
+.home-brand-lt-e {
+  animation: home-brand-bounce 4.2s cubic-bezier(0.42, 0, 0.2, 1) 0.15s infinite;
+}
+
+.home-brand-lt-n {
+  animation: home-brand-bounce 4.2s cubic-bezier(0.42, 0, 0.2, 1) 0.31s infinite;
+}
+
+.home-brand-lt-g {
+  animation: home-brand-bounce 4.2s cubic-bezier(0.42, 0, 0.2, 1) 0.47s infinite;
+}
+
+.home-brand-lt-space {
+  width: 0.3em;
+  letter-spacing: 0;
+}
+
+.home-brand-lt-accent {
+  background-image: linear-gradient(
+    135deg,
+    #2563eb 0%,
+    #4f46e5 48%,
+    #7c3aed 100%
+  );
+  background-size: 180% 180%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 10px rgb(79 70 229 / 0.18));
+}
+
+.dark .home-brand-lt-accent {
+  background-image: linear-gradient(
+    135deg,
+    #7dd3fc 0%,
+    #818cf8 50%,
+    #c084fc 100%
+  );
+  filter: drop-shadow(0 2px 14px rgb(129 140 248 / 0.26));
+}
+
+.home-brand-lt-c1 {
+  transform-origin: center 75%;
+  animation: home-brand-c1-spread 6s cubic-bezier(0.42, 0, 0.2, 1) 2s infinite;
+}
+
+.home-brand-lt-c2 {
+  transform-origin: center 75%;
+  animation: home-brand-c2-spread 6s cubic-bezier(0.42, 0, 0.2, 1) 2s infinite;
+}
+
+@keyframes home-brand-y-tilt {
+  0%,
+  54%,
+  100% {
+    transform: rotate(0deg) translateY(0) scale(1);
+  }
+  57% {
+    transform: rotate(2deg) translateY(1px) scaleY(0.97);
+  }
+  62% {
+    transform: rotate(-13deg) translateY(-7px) scale(1.03);
+  }
+  69% {
+    transform: rotate(4deg) translateY(-1.5px) scale(1);
+  }
+  75% {
+    transform: rotate(-4.5deg) translateY(-2.5px) scale(1);
+  }
+  82% {
+    transform: rotate(0deg) translateY(0) scale(1);
+  }
+}
+
+@keyframes home-brand-bounce {
+  0%,
+  68%,
+  100% {
+    transform: translateY(0) scale3d(1, 1, 1);
+  }
+  71% {
+    transform: translateY(1.5px) scale3d(1.03, 0.96, 1);
+  }
+  76% {
+    transform: translateY(-13px) scale3d(0.98, 1.05, 1);
+  }
+  83% {
+    transform: translateY(2px) scale3d(1.03, 0.96, 1);
+  }
+  88% {
+    transform: translateY(-4px) scale3d(0.99, 1.015, 1);
+  }
+  93% {
+    transform: translateY(0) scale3d(1, 1, 1);
+  }
+}
+
+@keyframes home-brand-m-wave {
+  0%,
+  58%,
+  100% {
+    transform: scale3d(1, 1, 1);
+  }
+  64% {
+    transform: scale3d(1.065, 0.965, 1);
+  }
+  70% {
+    transform: scale3d(0.975, 1.025, 1);
+  }
+  76% {
+    transform: scale3d(1.015, 0.99, 1);
+  }
+  82% {
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+@keyframes home-brand-c1-spread {
+  0%,
+  55%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  61% {
+    transform: translateX(-0.09em) rotate(-3deg);
+  }
+  73% {
+    transform: translateX(0.018em) rotate(0.8deg);
+  }
+  81% {
+    transform: translateX(-0.02em) rotate(-0.5deg);
+  }
+  88% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes home-brand-c2-spread {
+  0%,
+  55%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  61% {
+    transform: translateX(0.11em) rotate(3deg);
+  }
+  73% {
+    transform: translateX(-0.018em) rotate(-0.8deg);
+  }
+  81% {
+    transform: translateX(0.02em) rotate(0.5deg);
+  }
+  88% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@media (max-width: 640px) {
+  @keyframes home-brand-y-tilt {
+    0%,
+    55%,
+    100% {
+      transform: rotate(0deg);
+    }
+    61% {
+      transform: rotate(-8.5deg) translateY(-3.5px);
+    }
+    75% {
+      transform: rotate(0deg);
+    }
+  }
+  @keyframes home-brand-bounce {
+    0%,
+    70%,
+    100% {
+      transform: translateY(0);
+    }
+    76% {
+      transform: translateY(-7.5px);
+    }
+    85% {
+      transform: translateY(0);
+    }
+  }
+  @keyframes home-brand-c1-spread {
+    0%,
+    55%,
+    100% {
+      transform: translateX(0);
+    }
+    62% {
+      transform: translateX(-0.065em) rotate(-2deg);
+    }
+    80% {
+      transform: translateX(0);
+    }
+  }
+  @keyframes home-brand-c2-spread {
+    0%,
+    55%,
+    100% {
+      transform: translateX(0);
+    }
+    62% {
+      transform: translateX(0.08em) rotate(2deg);
+    }
+    80% {
+      transform: translateX(0);
+    }
+  }
+}
+
+@keyframes home-type-char-enter {
+  from {
+    opacity: 0.25;
+    transform: translateY(2.5px);
+    filter: blur(1.2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.home-type-char-enter {
+  display: inline-block;
+  white-space: pre;
+  animation: home-type-char-enter 115ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-type-cursor {
+  background: linear-gradient(180deg, #2563eb 0%, #6366f1 55%, #8b5cf6 100%);
+  box-shadow: 0 0 10px rgb(99 102 241 / 0.45);
+}
+
+.dark .home-type-cursor {
+  background: linear-gradient(180deg, #38bdf8 0%, #818cf8 55%, #c084fc 100%);
+  box-shadow: 0 0 12px rgb(129 140 248 / 0.55);
+}
+
+@keyframes home-type-cursor-blink {
+  0%,
+  46%,
+  100% {
+    opacity: 1;
+  }
+  56%,
+  90% {
+    opacity: 0.08;
+  }
+}
+
+.home-type-cursor-blink {
+  animation: home-type-cursor-blink 1s ease-in-out infinite;
 }
 
 /* ── Auto group flowing border ── */

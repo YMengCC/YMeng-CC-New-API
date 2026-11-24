@@ -193,10 +193,26 @@ it('titles the community card with the configured system name', async () => {
     qqGroupLink: 'https://qm.qq.com/q/example',
   })
 
-  expect(
-    screen.getByText('Join the Test Site community group')
-  ).toBeInTheDocument()
-  expect(screen.queryByText(/YMeng CC/)).toBeNull()
+  const community = screen
+    .getByText('Join the Test Site community group')
+    .closest('.landing-animate-fade-up')
+  expect(community).not.toBeNull()
+  expect(within(community as HTMLElement).queryByText(/YMeng CC/)).toBeNull()
+})
+
+it('replaces the static console headline with the dynamic YMeng CC showcase', async () => {
+  await renderHero({ isAuthenticated: false })
+
+  const showcaseHeading = screen.getByRole('heading', {
+    level: 2,
+    name: 'YMeng CC',
+  })
+  expect(showcaseHeading.textContent?.replaceAll('\u00A0', ' ')).toBe(
+    'YMeng CC'
+  )
+  expect(document.querySelector('[data-home-typewriter]')).not.toBeNull()
+  expect(screen.queryByText('Unified API Gateway for')).toBeNull()
+  expect(screen.queryByText('Vast Range of AI Models')).toBeNull()
 })
 
 it('hides the community card and the example chat when no group links are configured', async () => {
@@ -209,9 +225,20 @@ it('hides the community card and the example chat when no group links are config
   ).toBeNull()
   expect(screen.queryByText('How do I connect this model?')).toBeNull()
   expect(document.querySelector('[data-community-emblem]')).toBeNull()
+  expect(document.querySelector('.home-community-wedge')).toBeNull()
+  expect(document.querySelector('.home-community-slice')).toHaveClass('mb-0')
   expect(
     document.querySelector('.home-community-content')
   ).toBeEmptyDOMElement()
+})
+
+it('mounts the decorative particle backdrop behind hero content without blocking pointer interaction', async () => {
+  await renderHero({ isAuthenticated: false })
+
+  const particles = document.querySelector('canvas[data-home-particles]')
+  expect(particles).not.toBeNull()
+  expect(particles).toHaveAttribute('aria-hidden', 'true')
+  expect(particles).toHaveClass('pointer-events-none')
 })
 
 it('shows the example chat at every width the community card shows at', async () => {

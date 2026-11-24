@@ -54,45 +54,50 @@ export function BaoCodeAdvantages() {
   return (
     <div
       data-relief='raised'
-      data-depth-tilt='5'
+      data-depth-tilt='6'
       data-depth-float='4'
-      data-depth-glare
-      className='w-full max-w-md rounded-xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/80 p-4 shadow-[0_18px_40px_-28px_rgba(122,78,20,0.45)] backdrop-blur-[2px]'
+      data-depth-glare=''
+      className='relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/85 p-4 shadow-[0_20px_44px_-28px_rgba(122,78,20,0.42)] backdrop-blur-xs'
     >
+      <div
+        aria-hidden
+        className='pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--paper-sand)] to-transparent'
+      />
+
       <p
         data-depth-layer='1'
         className='flex flex-wrap items-baseline gap-x-2 font-[family-name:var(--paper-serif)] text-base leading-snug font-semibold text-[var(--paper-ink)]'
       >
-        <span className='font-sans text-[10px] font-semibold tracking-[0.18em] text-[var(--paper-faint)] uppercase'>
+        <span className='rounded-md bg-[var(--paper-pill-bg)] px-1.5 py-0.5 font-sans text-[10px] font-bold tracking-[0.16em] text-[var(--paper-pill-ink)] uppercase'>
           {t('Why BaoCode')}
         </span>
         {t('Smoother than Codex, Claude Code and Cursor')}
       </p>
 
-      <dl className='mt-3 grid grid-cols-2 gap-2'>
+      <dl className='mt-3.5 grid grid-cols-2 gap-2.5'>
         {BENCHMARKS.map((item) => (
           <div
             key={item.labelKey}
             data-relief='plate'
             data-depth-layer='2'
-            className='rounded-lg border border-[var(--paper-rule)] bg-[var(--paper)]/70 px-3 py-2'
+            className='rounded-xl border border-[var(--paper-rule)] bg-[var(--paper)]/85 px-3 py-2.5'
           >
-            <dt className='text-[11px] text-[var(--paper-muted)]'>
+            <dt className='text-[11px] font-medium text-[var(--paper-muted)]'>
               {t(item.labelKey)}
             </dt>
-            <dd>
+            <dd className='mt-0.5'>
               <div className='flex flex-wrap items-baseline gap-x-1.5'>
-                <span className='font-mono text-lg font-semibold whitespace-nowrap text-[var(--paper-ink)] tabular-nums'>
+                <span className='font-mono text-lg font-bold whitespace-nowrap text-[var(--paper-ink)] tabular-nums'>
                   {item.baocode}
                 </span>
                 <span className='font-mono text-[11px] whitespace-nowrap text-[var(--paper-faint)] tabular-nums'>
                   vs Cursor {item.cursor}
                 </span>
               </div>
-              <span className='mt-1 block h-1 overflow-hidden rounded-full bg-[var(--paper-faint)]/40'>
+              <span className='mt-1.5 block h-1.5 overflow-hidden rounded-full bg-[var(--paper-faint)]/25'>
                 <span
-                  className='block h-full rounded-full bg-[var(--paper-sand)]'
-                  style={{ width: `${Math.max(item.ratio * 100, 4)}%` }}
+                  className='block h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400'
+                  style={{ width: `${Math.max(item.ratio * 100, 6)}%` }}
                 />
               </span>
             </dd>
@@ -100,18 +105,19 @@ export function BaoCodeAdvantages() {
         ))}
       </dl>
 
-      <ul data-depth-group className='mt-2 grid grid-cols-3 gap-2'>
+      <ul data-depth-group className='mt-2.5 grid grid-cols-3 gap-2'>
         {rivals.map((rival) => (
           <li
             key={rival.name}
             data-relief='plate'
-            className='flex min-w-0 flex-col gap-0.5 rounded-lg border border-[var(--paper-pill-border)] bg-[var(--paper-pill-bg)] px-2.5 py-1.5'
+            data-depth-glare=''
+            className='relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-xl border border-[var(--paper-pill-border)]/85 bg-[var(--paper-pill-bg)] px-2.5 py-2'
           >
-            <span className='flex items-center gap-1 text-[11px] text-[var(--paper-pill-ink)]'>
+            <span className='flex items-center gap-1 text-[11px] font-medium text-[var(--paper-pill-ink)]'>
               <rival.icon className='size-3 shrink-0' aria-hidden />
               <span className='truncate'>vs {rival.name}</span>
             </span>
-            <span className='text-xs leading-snug font-medium text-[var(--paper-ink)]'>
+            <span className='text-xs leading-snug font-semibold text-[var(--paper-ink)]'>
               {rival.text}
             </span>
           </li>

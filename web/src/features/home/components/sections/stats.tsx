@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
+
 interface CounterProps {
   end: number
   suffix?: string
@@ -94,7 +96,7 @@ interface StatItem {
   decimals?: number
 }
 
-export function Stats(_props: StatsProps) {
+export function Stats(props: StatsProps) {
   const { t } = useTranslation()
 
   const stats: StatItem[] = [
@@ -107,29 +109,38 @@ export function Stats(_props: StatsProps) {
   return (
     <div
       data-relief='band'
-      className='border-border/40 bg-muted/10 relative z-10 border-y'
+      className={cn(
+        'border-border/50 bg-muted/15 relative z-10 overflow-hidden border-y',
+        props.className
+      )}
     >
-      <div className='mx-auto max-w-6xl px-6 py-10 md:py-12'>
+      <div
+        aria-hidden
+        className='via-primary/30 pointer-events-none absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent to-transparent'
+      />
+      <div className='mx-auto max-w-6xl px-6 py-10 md:py-14'>
         <div
           data-depth-reveal
-          className='grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12'
+          className='grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6'
         >
           {stats.map((s, index) => (
             <div
               key={s.label}
-              data-depth-tilt='10'
+              data-relief='raised'
+              data-depth-tilt='8'
               data-depth-float={String(index + 1)}
-              className='flex flex-col items-center text-center'
+              data-depth-glare=''
+              className='border-border/55 bg-card/65 hover:border-primary/30 hover:bg-card/85 relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border px-4 py-6 text-center backdrop-blur-md transition-colors duration-300'
             >
               <span
-                data-depth-layer='2'
-                className='text-2xl font-bold tracking-tight md:text-3xl'
+                data-depth-layer='3'
+                className='from-foreground to-foreground/75 bg-gradient-to-b bg-clip-text text-3xl font-extrabold tracking-tight text-transparent md:text-4xl'
               >
                 <Counter end={s.end} suffix={s.suffix} decimals={s.decimals} />
               </span>
               <span
                 data-depth-layer='1'
-                className='text-muted-foreground mt-1.5 text-xs'
+                className='text-muted-foreground mt-2 text-xs font-medium md:text-[13px]'
               >
                 {s.label}
               </span>

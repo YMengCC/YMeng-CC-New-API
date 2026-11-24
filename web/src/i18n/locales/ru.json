@@ -8270,6 +8270,7 @@
     "Show analytics amounts": "Показать суммы в аналитике",
     "Open referral analytics": "Открыть аналитику рекомендаций",
     "Unable to load referral analytics": "Не удалось загрузить аналитику рекомендаций",
-    "No referral activity yet": "Активности рекомендаций пока нет"
-  }
-}
+    "No referral activity yet": "Активности рекомендаций пока нет",
+    "Intelligent load balancing": "Интеллектуальная балансировка нагрузки",
+    "Pay as you go, stop anytime": "Оплата по мере использования, остановка в любой момент",
+    "Unified access to all AI models": "Единый доступ ко всем моделям ИИ"

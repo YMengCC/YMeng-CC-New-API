@@ -57,26 +57,38 @@ export function BaoCodePanel() {
   return (
     <div className='home-paper flex w-full min-w-0 flex-col items-start text-left text-[var(--paper-body)]'>
       <div
-        className='landing-animate-fade-up mb-6 w-full opacity-0'
+        className='landing-animate-fade-up mb-5 w-full opacity-0'
         style={{ animationDelay: '0ms' }}
       >
         <BaoCodeAdvantages />
       </div>
 
       <div
-        data-relief='plate'
-        data-depth='1'
-        className='landing-animate-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--paper-pill-border)] bg-[var(--paper-pill-bg)] px-3 py-1 text-xs font-semibold tracking-wide text-[var(--paper-pill-ink)] opacity-0'
+        className='landing-animate-fade-up mb-4 opacity-0'
         style={{ animationDelay: '40ms' }}
       >
-        <span>{t('Beginner friendly')}</span>
-        <span aria-hidden>·</span>
-        <span>{t('Partner channel')}</span>
+        <div
+          data-relief='plate'
+          data-depth='1'
+          data-depth-tilt='10'
+          data-depth-glare=''
+          className='relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-[var(--paper-pill-border)] bg-[var(--paper-pill-bg)] px-3.5 py-1 text-xs font-semibold tracking-wide text-[var(--paper-pill-ink)]'
+        >
+          <span
+            aria-hidden
+            className='size-1.5 rounded-full bg-amber-600/80 dark:bg-amber-300/80'
+          />
+          <span>{t('Beginner friendly')}</span>
+          <span aria-hidden className='opacity-60'>
+            ·
+          </span>
+          <span>{t('Partner channel')}</span>
+        </div>
       </div>
 
       <h1
         data-depth='2'
-        className='landing-animate-fade-up flex max-w-full flex-wrap items-center gap-x-[0.28em] gap-y-1 font-[family-name:var(--paper-serif)] text-[clamp(2rem,3.4vw,2.75rem)] leading-[1.15] font-semibold tracking-[-0.015em] text-[var(--paper-ink)] opacity-0'
+        className='landing-animate-fade-up flex max-w-full flex-wrap items-center gap-x-[0.28em] gap-y-1.5 font-[family-name:var(--paper-serif)] text-[clamp(2.05rem,3.4vw,2.85rem)] leading-[1.12] font-semibold tracking-[-0.02em] text-[var(--paper-ink)] opacity-0'
         style={{ animationDelay: '60ms' }}
       >
         <span className='inline-flex max-w-full min-w-0 items-center gap-[0.28em]'>
@@ -85,7 +97,7 @@ export function BaoCodePanel() {
             alt=''
             data-depth-float='1'
             data-relief='float'
-            className='h-[0.78em] w-auto shrink-0 rounded-[0.18em]'
+            className='h-[0.8em] w-auto shrink-0 rounded-[0.2em]'
           />
           <span className='min-w-0 break-words'>{systemName}</span>
           <span
@@ -101,7 +113,7 @@ export function BaoCodePanel() {
             alt=''
             data-depth-float='3'
             data-relief='float'
-            className='h-[0.78em] w-auto rounded-[0.18em]'
+            className='h-[0.8em] w-auto rounded-[0.2em]'
           />
           BaoCode
         </span>
@@ -109,7 +121,7 @@ export function BaoCodePanel() {
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-3 font-[family-name:var(--paper-serif)] text-xl leading-snug text-[var(--paper-muted)] opacity-0 md:text-[22px]'
+        className='landing-animate-fade-up mt-3.5 font-[family-name:var(--paper-serif)] text-xl leading-snug font-medium text-[var(--paper-ink)]/85 opacity-0 md:text-[22px]'
         style={{ animationDelay: '120ms' }}
       >
         {t('One gateway, multiple models. Turn ideas into code.')}
@@ -117,7 +129,7 @@ export function BaoCodePanel() {
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-5 max-w-full font-[family-name:var(--paper-serif)] text-[17px] leading-[1.7] break-words opacity-0'
+        className='landing-animate-fade-up mt-4 max-w-md font-[family-name:var(--paper-serif)] text-[16.5px] leading-[1.72] break-words text-[var(--paper-muted)] opacity-0'
         style={{ animationDelay: '180ms' }}
       >
         {t(
@@ -128,32 +140,41 @@ export function BaoCodePanel() {
 
       <ol
         data-depth-group
-        className='landing-animate-fade-up mt-6 flex flex-col gap-3 opacity-0'
+        className='landing-animate-fade-up mt-5 flex w-full max-w-md flex-col gap-2 opacity-0'
         style={{ animationDelay: '240ms' }}
       >
         {steps.map((step, index) => (
-          <li key={step.text} className='flex items-center gap-3 text-[15px]'>
-            <span className='w-4 text-right text-sm text-[var(--paper-faint)] tabular-nums'>
+          <li
+            key={step.text}
+            data-relief='plate'
+            data-depth-glare=''
+            className='relative flex items-center gap-3 overflow-hidden rounded-xl border border-[var(--paper-rule)]/90 bg-[var(--paper)]/75 px-3.5 py-2 text-[14.5px] backdrop-blur-[2px] transition-colors duration-200 hover:border-[var(--paper-pill-border)] hover:bg-[var(--paper)]'
+          >
+            <span className='flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--paper-pill-border)]/70 bg-[var(--paper-pill-bg)] text-xs font-semibold text-[var(--paper-pill-ink)] tabular-nums'>
               {index + 1}
             </span>
             <step.icon
               data-depth-layer='3'
-              className='size-4 shrink-0 text-[var(--paper-muted)]'
+              className='size-4 shrink-0 text-[var(--paper-pill-ink)]'
               aria-hidden
             />
-            <span className='min-w-0 break-words'>{step.text}</span>
+            <span className='min-w-0 font-medium break-words text-[var(--paper-ink)]/90'>
+              {step.text}
+            </span>
           </li>
         ))}
       </ol>
 
       <div
-        className='landing-animate-fade-up mt-8 flex flex-wrap items-center gap-3 opacity-0'
+        className='landing-animate-fade-up mt-6 flex flex-wrap items-center gap-3.5 opacity-0'
         style={{ animationDelay: '300ms' }}
       >
         <Button
           data-relief='primary'
-          data-depth-tilt='10'
-          className='group h-10 rounded-md border border-[var(--paper-ink)] bg-[var(--paper-ink)] px-4 text-[15px] font-medium text-[var(--paper)] hover:bg-[var(--paper-ink-hover)]'
+          data-depth-tilt='8'
+          data-depth-magnetic=''
+          data-depth-glare=''
+          className='group relative h-11 overflow-hidden rounded-xl border border-[var(--paper-ink)] bg-[var(--paper-ink)] px-5.5 text-[15px] font-semibold text-[var(--paper)] hover:bg-[var(--paper-ink-hover)]'
           render={
             <a href={baocodeLink} target='_blank' rel='noopener noreferrer' />
           }
@@ -161,14 +182,14 @@ export function BaoCodePanel() {
           {t('Get BaoCode')}
           <ArrowUpRight className='ml-1 size-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5' />
         </Button>
-        <span className='text-[13.5px] text-[var(--paper-muted)]'>
+        <span className='rounded-full border border-[var(--paper-rule)] bg-[var(--paper-tint)]/70 px-3 py-1 text-[13px] font-medium text-[var(--paper-muted)]'>
           {t('Free and open source')}
         </span>
       </div>
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-6 text-[13.5px] text-[var(--paper-muted)] opacity-0'
+        className='landing-animate-fade-up mt-5 text-[13px] font-medium tracking-wide text-[var(--paper-muted)] opacity-0'
         style={{ animationDelay: '360ms' }}
       >
         {['macOS', 'Windows', 'Linux', t('No API key needed')].map(

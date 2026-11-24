@@ -8270,6 +8270,7 @@
     "Show analytics amounts": "显示看板金额",
     "Open referral analytics": "打开推荐看板",
     "Unable to load referral analytics": "无法加载推荐看板",
-    "No referral activity yet": "暂无推荐活动"
-  }
-}
+    "No referral activity yet": "暂无推荐活动",
+    "Intelligent load balancing": "智能负载均衡",
+    "Pay as you go, stop anytime": "按量付费，随用随停",
+    "Unified access to all AI models": "统一接入所有 AI 模型"

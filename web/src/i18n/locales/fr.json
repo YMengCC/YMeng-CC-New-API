@@ -8270,6 +8270,7 @@
     "Show analytics amounts": "Afficher les montants des statistiques",
     "Open referral analytics": "Ouvrir l'analytique des parrainages",
     "Unable to load referral analytics": "Impossible de charger l'analytique des parrainages",
-    "No referral activity yet": "Aucune activité de parrainage pour le moment"
-  }
-}
+    "No referral activity yet": "Aucune activité de parrainage pour le moment",
+    "Intelligent load balancing": "Équilibrage de charge intelligent",
+    "Pay as you go, stop anytime": "Paiement à l'usage, arrêt à tout moment",
+    "Unified access to all AI models": "Accès unifié à tous les modèles d'IA"

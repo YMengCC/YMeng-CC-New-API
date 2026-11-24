@@ -42,31 +42,36 @@ const ACCENT_CLASSES: Record<
     activeText: string
     activeBorder: string
     badge: string
+    halo: string
   }
 > = {
   emerald: {
     activeText: 'text-emerald-600 dark:text-emerald-400',
     activeBorder: 'border-emerald-500 dark:border-emerald-400',
     badge:
-      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400',
+      'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/12 dark:text-emerald-300',
+    halo: 'from-emerald-500/18 via-sky-500/10 to-indigo-500/14',
   },
   amber: {
     activeText: 'text-amber-600 dark:text-amber-400',
     activeBorder: 'border-amber-500 dark:border-amber-400',
     badge:
-      'bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-400',
+      'bg-amber-500/12 text-amber-700 dark:bg-amber-400/12 dark:text-amber-300',
+    halo: 'from-amber-500/18 via-orange-500/10 to-indigo-500/14',
   },
   blue: {
     activeText: 'text-blue-600 dark:text-blue-400',
     activeBorder: 'border-blue-500 dark:border-blue-400',
     badge:
-      'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400',
+      'bg-blue-500/12 text-blue-700 dark:bg-blue-400/12 dark:text-blue-300',
+    halo: 'from-blue-500/20 via-indigo-500/14 to-violet-500/16',
   },
   violet: {
     activeText: 'text-violet-600 dark:text-violet-400',
     activeBorder: 'border-violet-500 dark:border-violet-400',
     badge:
-      'bg-violet-500/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400',
+      'bg-violet-500/12 text-violet-700 dark:bg-violet-400/12 dark:text-violet-300',
+    halo: 'from-violet-500/20 via-fuchsia-500/12 to-sky-500/14',
   },
 }
 
@@ -207,26 +212,50 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
   const accent = ACCENT_CLASSES[demo.accent]
 
   return (
-    <div className={cn('mx-auto w-full max-w-2xl', props.className)}>
+    <div className={cn('relative mx-auto w-full max-w-2xl', props.className)}>
+      {/* Ambient protocol-tinted backlight */}
+      <div
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute -inset-3 -z-10 rounded-3xl bg-gradient-to-tr opacity-70 blur-2xl transition-colors duration-700 dark:opacity-55',
+          accent.halo
+        )}
+      />
+
       <div
         data-relief='raised'
         data-depth='2'
-        data-depth-tilt='4'
+        data-depth-tilt='5'
         data-depth-float='1'
-        data-depth-glare
+        data-depth-glare=''
         className={cn(
-          'overflow-hidden rounded-2xl border backdrop-blur-sm',
-          'border-border/60 bg-white/95 shadow-[0_20px_50px_-25px_rgba(15,23,42,0.18)]',
-          'dark:border-white/[0.06] dark:bg-[#0b0f17]/95 dark:shadow-[0_20px_60px_-25px_rgba(0,0,0,0.7)]'
+          'relative overflow-hidden rounded-2xl border backdrop-blur-md xl:[transform:perspective(1200px)_rotateY(-3deg)_rotateX(1.5deg)]',
+          'border-border/80 bg-white/95 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.22)]',
+          'dark:border-white/[0.1] dark:bg-[#0b0f19]/95 dark:shadow-[0_28px_70px_-20px_rgba(0,0,0,0.82)]'
         )}
       >
-        {/* Tab strip */}
+        {/* Top specular hairline */}
+        <div
+          aria-hidden
+          className='via-primary/40 pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent to-transparent'
+        />
+
+        {/* Window chrome + protocol tab strip */}
         <div
           className={cn(
-            'flex items-center gap-1 border-b px-2 sm:gap-1.5 sm:px-3',
-            'border-border/50 dark:border-white/[0.05]'
+            'flex items-center gap-1 border-b px-2.5 sm:gap-1.5 sm:px-3.5',
+            'border-border/50 bg-muted/20 dark:border-white/[0.06] dark:bg-white/[0.015]'
           )}
         >
+          <div
+            aria-hidden
+            className='mr-1.5 hidden items-center gap-1.5 pl-1 sm:flex'
+          >
+            <span className='size-2.5 rounded-full bg-rose-400/75 dark:bg-rose-400/60' />
+            <span className='size-2.5 rounded-full bg-amber-400/75 dark:bg-amber-400/60' />
+            <span className='size-2.5 rounded-full bg-emerald-400/75 dark:bg-emerald-400/60' />
+          </div>
+
           {API_DEMOS.map((item, index) => {
             const tone = ACCENT_CLASSES[item.accent]
             const isActive = index === activeIndex
@@ -236,19 +265,19 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
                 type='button'
                 onClick={() => handleSelect(index)}
                 className={cn(
-                  'relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-medium tracking-wide transition-colors sm:px-3 sm:text-xs',
+                  'relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-semibold tracking-wide transition-colors sm:px-3 sm:text-xs',
                   isActive
                     ? `${tone.activeBorder} ${tone.activeText}`
-                    : 'text-foreground/40 hover:text-foreground/70 border-transparent'
+                    : 'text-foreground/45 hover:text-foreground/75 border-transparent'
                 )}
               >
                 {item.label}
               </button>
             )
           })}
-          <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
-            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]' />
-            <span className='text-foreground/40 font-mono text-[10px] tracking-wider uppercase'>
+          <div className='ml-auto flex items-center gap-2 pr-1.5 sm:pr-2.5'>
+            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.55)]' />
+            <span className='text-foreground/50 font-mono text-[10px] font-medium tracking-wider uppercase'>
               200 ok
             </span>
           </div>
@@ -257,9 +286,10 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
         {/* Endpoint row */}
         <div
           data-relief='inset'
+          data-depth-layer='2'
           className={cn(
-            'flex items-center gap-2.5 border-b px-5 py-3',
-            'border-border/40 dark:border-white/[0.04]'
+            'flex items-center gap-2.5 border-b px-4 py-3 sm:px-5',
+            'border-border/40 dark:border-white/[0.05]'
           )}
         >
           <span
@@ -273,7 +303,7 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
           </span>
           <code
             className={cn(
-              'text-foreground/75 truncate font-mono text-[12.5px] transition-opacity duration-200',
+              'text-foreground/80 truncate font-mono text-xs transition-opacity duration-200 sm:text-[12.5px]',
               transitioning ? 'opacity-0' : 'opacity-100'
             )}
           >
@@ -281,10 +311,10 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
           </code>
         </div>
 
-        {/* Body — fixed rows so neither block shifts when switching demos */}
+        {/* Body — responsive height on small screens, fixed rows from sm up so neither block shifts */}
         <div
           data-relief='inset'
-          className='grid h-[400px] grid-rows-[235px_minmax(0,1fr)] font-mono text-[12.5px] leading-[1.55]'
+          className='grid min-h-[360px] grid-rows-[auto_auto] font-mono text-xs leading-[1.55] sm:h-[400px] sm:grid-rows-[235px_minmax(0,1fr)] sm:text-[12.5px]'
         >
           {/* Request */}
           <RequestBlock demo={demo} transitioning={transitioning} />
@@ -296,30 +326,35 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
         {/* Footer metrics */}
         <div
           data-relief='plate'
+          data-depth-layer='1'
           className={cn(
-            'flex items-center justify-between border-t px-5 py-2.5',
-            'border-border/40 bg-muted/30 dark:border-white/[0.05] dark:bg-white/[0.02]'
+            'flex items-center justify-between border-t px-4 py-2.5 sm:px-5',
+            'border-border/40 bg-muted/35 dark:border-white/[0.06] dark:bg-white/[0.025]'
           )}
         >
-          <div className='text-foreground/40 flex items-center gap-3 text-[10px] tabular-nums'>
+          <div className='text-foreground/50 flex flex-wrap items-center gap-2.5 text-[10px] tabular-nums sm:gap-3'>
             <span className='flex items-center gap-1'>
-              <span className='font-mono'>{demo.latency}</span>
+              <span className='text-foreground/75 font-mono font-medium'>
+                {demo.latency}
+              </span>
               <span className='tracking-wider uppercase'>ms</span>
             </span>
-            <span className='bg-foreground/15 size-1 rounded-full' />
+            <span className='bg-foreground/20 size-1 rounded-full' />
             <span className='flex items-center gap-1'>
-              <span className='font-mono'>{demo.tokens}</span>
+              <span className='text-foreground/75 font-mono font-medium'>
+                {demo.tokens}
+              </span>
               <span className='tracking-wider uppercase'>tokens</span>
             </span>
-            <span className='bg-foreground/15 size-1 rounded-full' />
+            <span className='bg-foreground/20 size-1 rounded-full' />
             <span className='flex items-center gap-1'>
               <span className='tracking-wider uppercase'>cost</span>
-              <span className='font-mono'>
+              <span className='text-foreground/75 font-mono font-medium'>
                 ${(demo.tokens * 0.00003).toFixed(5)}
               </span>
             </span>
           </div>
-          <span className='text-foreground/30 font-mono text-[10px] tracking-wider uppercase'>
+          <span className='text-foreground/40 font-mono text-[10px] tracking-wider uppercase'>
             stream · sse
           </span>
         </div>
@@ -329,23 +364,21 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
 }
 
 function RequestBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
-  const { demo, transitioning } = props
-
   return (
-    <div className='relative px-5 py-4'>
+    <div className='relative px-4 py-4 sm:px-5'>
       <SectionLabel>Request</SectionLabel>
       <div
         className={cn(
           'mt-2 transition-opacity duration-200',
-          transitioning ? 'opacity-0' : 'opacity-100'
+          props.transitioning ? 'opacity-0' : 'opacity-100'
         )}
       >
         <CodeLine>
           <Command>curl</Command> <Flag>-X</Flag> <Flag>POST</Flag>{' '}
-          <StringText>&quot;{demo.endpoint}&quot;</StringText>{' '}
+          <StringText>&quot;{props.demo.endpoint}&quot;</StringText>{' '}
           <Muted>{'\\'}</Muted>
         </CodeLine>
-        {demo.headers.map((header) => (
+        {props.demo.headers.map((header) => (
           <CodeLine key={header} indent={2}>
             <Flag>-H</Flag> <StringText>{header}</StringText>{' '}
             <Muted>{'\\'}</Muted>
@@ -354,7 +387,7 @@ function RequestBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
         <CodeLine indent={2}>
           <Flag>-d</Flag> <StringText>&apos;{'{'}</StringText>
         </CodeLine>
-        {demo.request.map((line) => (
+        {props.demo.request.map((line) => (
           <CodeLine key={line} indent={4}>
             {renderJsonLine(line)}
           </CodeLine>
@@ -368,12 +401,10 @@ function RequestBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
 }
 
 function ResponseBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
-  const { demo, transitioning } = props
-
   return (
     <div
       className={cn(
-        'relative border-t px-5 py-4',
+        'relative border-t px-4 py-4 sm:px-5',
         'border-border/40 bg-muted/20 dark:border-white/[0.05] dark:bg-white/[0.015]'
       )}
     >
@@ -381,11 +412,11 @@ function ResponseBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
       <div
         className={cn(
           'mt-2 transition-opacity duration-200',
-          transitioning ? 'opacity-0' : 'opacity-100'
+          props.transitioning ? 'opacity-0' : 'opacity-100'
         )}
       >
-        {demo.response.map((line) => (
-          <CodeLine key={line}>{renderResponseLine(line, demo)}</CodeLine>
+        {props.demo.response.map((line) => (
+          <CodeLine key={line}>{renderResponseLine(line, props.demo)}</CodeLine>
         ))}
       </div>
     </div>
@@ -394,7 +425,7 @@ function ResponseBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
 
 function SectionLabel(props: { children: ReactNode }) {
   return (
-    <span className='text-foreground/30 font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
+    <span className='text-foreground/40 font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
       {props.children}
     </span>
   )

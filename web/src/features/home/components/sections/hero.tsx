@@ -22,6 +22,7 @@ import { RiQqLine } from 'react-icons/ri'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
+import { HeroParticles } from '../hero-particles'
 import { BaoCodePanel } from './baocode-panel'
 import { CommunityCard } from './community-card'
 import { CommunityChatPreview } from './community-chat-preview'
@@ -45,54 +46,75 @@ export function Hero(props: HeroProps) {
   const telegramLink = (
     (status?.community_telegram_link as string | undefined) ?? ''
   ).trim()
+  const hasCommunity = Boolean(qqLink || telegramLink)
 
   return (
-    <section className='home-split relative isolate overflow-hidden'>
-      {/* Console side: radial glow and grid */}
+    <section
+      className={cn(
+        'home-split relative isolate overflow-hidden',
+        props.className
+      )}
+    >
+      {/* Console side: layered aurora glow and architectural grid */}
       <div
         aria-hidden
         data-depth='-3'
         data-depth-breathe
-        className='pointer-events-none absolute inset-0 -z-20 opacity-25 dark:opacity-[0.12]'
+        className='pointer-events-none absolute inset-0 -z-20 opacity-45 dark:opacity-30'
         style={{
           background: [
-            'radial-gradient(ellipse 45% 50% at 78% 25%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 35% 40% at 95% 10%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 35% 35% at 70% 85%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 48% 52% at 78% 22%, oklch(0.72 0.19 252 / 65%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 38% 42% at 94% 12%, oklch(0.68 0.16 205 / 50%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 42% 40% at 72% 84%, oklch(0.68 0.16 288 / 42%) 0%, transparent 72%)',
           ].join(', '),
         }}
       />
       <div
         aria-hidden
         data-depth='-2'
-        className='absolute inset-0 -z-20 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_45%_55%_at_75%_35%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.1]'
+        className='pointer-events-none absolute inset-0 -z-20 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_50%_60%_at_76%_38%,black_22%,transparent_100%)] bg-[size:3.5rem_3.5rem] opacity-[0.16] dark:opacity-[0.1]'
       />
 
-      {/* Community corner, cut off by a second seam; the paper side covers
-          its left end, so it shows from the main seam rightwards */}
-      <div
-        aria-hidden
-        className='home-community-wedge absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
-      />
-      <div
-        aria-hidden
-        className='home-community-seam absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
-      />
+      {/* Community corner, cut off by a second seam when group links are configured */}
+      {hasCommunity && (
+        <>
+          <div
+            aria-hidden
+            className='home-community-wedge pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
+          />
+          <div
+            aria-hidden
+            className='home-community-seam pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
+          />
+        </>
+      )}
 
-      {/* Paper side, seam and badge from lg up */}
+      {/* Paper side, seam and medallion badge from lg up */}
       <div
         aria-hidden
-        className='home-paper home-paper-clip-lg absolute inset-0 -z-10 hidden bg-[var(--paper)] lg:block'
+        className='home-paper home-paper-clip-lg pointer-events-none absolute inset-0 -z-10 hidden bg-[var(--paper)] lg:block'
       >
         <div className='home-paper-grid' />
+        <div
+          className='absolute inset-0 opacity-60 dark:opacity-35'
+          style={{
+            background:
+              'radial-gradient(ellipse 55% 45% at 18% 24%, rgba(226, 179, 115, 0.22) 0%, transparent 70%)',
+          }}
+        />
       </div>
       <div
         aria-hidden
-        className='home-seam-lg absolute inset-0 -z-10 hidden lg:block'
+        className='home-seam-lg pointer-events-none absolute inset-0 -z-10 hidden lg:block'
       />
+
+      {/* Lightweight ambient particle field behind both hero columns */}
+      <HeroParticles />
+
       <div
         aria-hidden
         data-depth-tilt='14'
+        data-depth-magnetic=''
         data-depth-breathe='fast'
         data-relief='plate'
         className='home-paper home-seam-badge absolute top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 lg:flex'
@@ -105,11 +127,21 @@ export function Hero(props: HeroProps) {
       <div className='home-hero-grid mx-auto grid max-w-7xl grid-cols-1 lg:min-h-[100svh] lg:grid-cols-2 lg:gap-x-0 lg:px-8'>
         {/* The gap between the community region and the developer entry sits
             on the region itself, so an empty region leaves no stray gap. */}
-        <div className='relative flex flex-col items-start px-6 pt-24 pb-20 md:px-10 lg:col-start-2 lg:row-start-1 lg:min-w-0 lg:px-0 lg:pt-24 lg:pb-24 lg:pl-16 xl:pl-20'>
+        <div
+          className={cn(
+            'relative flex flex-col items-start px-6 pt-24 pb-20 md:px-10 lg:col-start-2 lg:row-start-1 lg:min-w-0 lg:px-0 lg:pt-20 lg:pb-20 lg:pl-16 xl:pl-20',
+            !hasCommunity && 'lg:justify-center'
+          )}
+        >
           {/* The community region: the join card and the chat example share
               one row from lg up, both on top of the faint group emblems. */}
-          <div className='home-community-slice relative mb-10 w-full min-w-0 empty:mb-0 lg:mb-16'>
-            {(qqLink || telegramLink) && (
+          <div
+            className={cn(
+              'home-community-slice relative w-full min-w-0 empty:mb-0',
+              hasCommunity ? 'mb-10 lg:mb-10' : 'mb-0'
+            )}
+          >
+            {hasCommunity && (
               // Above the transparent card text on lg, behind it below lg.
               <div
                 aria-hidden
@@ -143,17 +175,22 @@ export function Hero(props: HeroProps) {
           <ConsolePanel isAuthenticated={props.isAuthenticated} />
         </div>
 
-        <div className='relative flex items-center px-6 pt-20 pb-24 md:px-10 lg:col-start-1 lg:row-start-1 lg:items-start lg:px-0 lg:pt-24 lg:pr-20 lg:pb-24'>
+        <div
+          className={cn(
+            'relative flex items-center px-6 pt-20 pb-24 md:px-10 lg:col-start-1 lg:row-start-1 lg:px-0 lg:pt-20 lg:pr-20 lg:pb-20',
+            hasCommunity ? 'lg:items-start' : 'lg:items-center'
+          )}
+        >
           {/* Paper side below lg: its own background with a slanted bottom */}
           <div
             aria-hidden
-            className='home-paper home-paper-clip-sm absolute inset-0 -z-10 bg-[var(--paper)] lg:hidden'
+            className='home-paper home-paper-clip-sm pointer-events-none absolute inset-0 -z-10 bg-[var(--paper)] lg:hidden'
           >
             <div className='home-paper-grid' />
           </div>
           <div
             aria-hidden
-            className='home-seam-sm absolute inset-0 -z-10 lg:hidden'
+            className='home-seam-sm pointer-events-none absolute inset-0 -z-10 lg:hidden'
           />
           <div
             aria-hidden

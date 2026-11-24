@@ -26,6 +26,7 @@ import { useStatus } from '@/hooks/use-status'
 import { isHttpUrl } from '@/lib/content-format'
 
 import { BAOCODE_ICON_URL, DEFAULT_BAOCODE_URL } from '../../constants'
+import { HeroBrandShowcase } from '../hero-brand-showcase'
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface ConsolePanelProps {
@@ -33,10 +34,10 @@ interface ConsolePanelProps {
 }
 
 const APP_PILL_CLASSES =
-  'group border-border/40 bg-background/60 text-foreground/80 hover:border-border hover:bg-muted/40 hover:text-foreground flex items-center gap-2.5 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-xs transition-all duration-300 hover:-translate-y-0.5'
+  'group relative border-border/60 bg-card/70 text-foreground/85 hover:border-primary/35 hover:bg-card/95 hover:text-foreground flex items-center gap-2.5 overflow-hidden rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors duration-300'
 
 const OUTLINE_BUTTON_CLASSES =
-  'group border-border/60 bg-background/60 hover:border-border hover:bg-muted/50 inline-flex h-11 items-center gap-1.5 rounded-lg px-5 text-sm font-medium backdrop-blur-xs'
+  'group relative border-border/70 bg-card/65 hover:border-primary/35 hover:bg-card/90 inline-flex h-11 items-center gap-2 overflow-hidden rounded-xl px-5 text-sm font-medium backdrop-blur-md'
 
 export function ConsolePanel(props: ConsolePanelProps) {
   const { t } = useTranslation()
@@ -47,11 +48,13 @@ export function ConsolePanel(props: ConsolePanelProps) {
       ? configuredLink.trim()
       : DEFAULT_BAOCODE_URL
   const docsIcon = (
-    <BookOpen className='text-muted-foreground/80 group-hover:text-foreground size-4 transition-colors duration-200' />
+    <BookOpen className='text-muted-foreground group-hover:text-foreground size-4 transition-colors duration-200' />
   )
   const docsButton = (
     <Button
       variant='outline'
+      data-relief='plate'
+      data-depth-glare=''
       className={OUTLINE_BUTTON_CLASSES}
       render={<Link to='/docs' />}
     >
@@ -64,56 +67,40 @@ export function ConsolePanel(props: ConsolePanelProps) {
     <div className='flex w-full min-w-0 flex-col items-start text-left'>
       <div
         data-depth='1'
-        className='landing-animate-fade-up mb-6 flex flex-wrap items-center gap-3 opacity-0'
+        className='landing-animate-fade-up mb-5 flex flex-wrap items-center gap-3 opacity-0'
         style={{ animationDelay: '120ms' }}
       >
-        <span className='text-muted-foreground/70 font-mono text-[11px] tracking-[0.2em] uppercase'>
+        <span className='text-muted-foreground/80 font-mono text-[11px] font-semibold tracking-[0.22em] uppercase'>
           {t('For developers')}
         </span>
-        <span className='bg-border h-px w-8' aria-hidden />
+        <span className='bg-border/80 h-px w-8' aria-hidden />
         <span
           data-relief='plate'
-          data-depth-tilt='12'
-          className='inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/5 px-3 py-1 text-[11px] font-medium text-blue-600 dark:border-blue-400/20 dark:bg-blue-400/5 dark:text-blue-400'
+          data-depth-tilt='10'
+          data-depth-glare=''
+          className='relative inline-flex items-center gap-2 overflow-hidden rounded-full border border-blue-500/25 bg-blue-500/8 px-3.5 py-1 text-[11.5px] font-medium text-blue-700 backdrop-blur-xs dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300'
         >
           <span className='relative flex size-1.5'>
             <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75' />
-            <span className='relative inline-flex size-1.5 rounded-full bg-blue-500 dark:bg-blue-400' />
+            <span className='relative inline-flex size-1.5 rounded-full bg-blue-600 dark:bg-sky-400' />
           </span>
           {t('AI Application Infrastructure Foundation')}
         </span>
       </div>
 
-      <h2
-        data-depth='2'
-        className='landing-animate-fade-up text-[clamp(2rem,3.6vw,3rem)] leading-[1.12] font-bold tracking-tight opacity-0'
-        style={{ animationDelay: '180ms' }}
-      >
-        {t('Unified API Gateway for')}
-        <br />
-        <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-          {t('Vast Range of AI Models')}
-        </span>
-      </h2>
-      <p
-        data-depth='1'
-        className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-[15px]'
-        style={{ animationDelay: '240ms' }}
-      >
-        {t(
-          'Access a vast selection of models via a standard, unified API protocol. Power AI applications, manage digital assets, and connect the Future.'
-        )}
-      </p>
+      <HeroBrandShowcase />
 
       <div
         data-depth-group
-        className='landing-animate-fade-up mt-8 flex flex-wrap items-center gap-3 opacity-0'
+        className='landing-animate-fade-up mt-6 flex flex-wrap items-center gap-3 opacity-0'
         style={{ animationDelay: '300ms' }}
       >
         {props.isAuthenticated ? (
           <Button
             data-relief='primary'
-            className='group h-12 rounded-lg px-7 text-base font-semibold'
+            data-depth-magnetic=''
+            data-depth-glare=''
+            className='group relative h-11 overflow-hidden rounded-xl px-7 text-base font-semibold'
             render={<Link to='/dashboard' />}
           >
             {t('Sign in')}
@@ -123,7 +110,9 @@ export function ConsolePanel(props: ConsolePanelProps) {
           <>
             <Button
               data-relief='primary'
-              className='group h-11 rounded-lg px-5 text-sm font-medium'
+              data-depth-magnetic=''
+              data-depth-glare=''
+              className='group relative h-11 overflow-hidden rounded-xl px-6 text-sm font-semibold'
               render={<Link to='/sign-up' />}
             >
               {t('Get Started')}
@@ -131,6 +120,8 @@ export function ConsolePanel(props: ConsolePanelProps) {
             </Button>
             <Button
               variant='outline'
+              data-relief='plate'
+              data-depth-glare=''
               className={OUTLINE_BUTTON_CLASSES}
               render={<Link to='/pricing' />}
             >
@@ -142,14 +133,17 @@ export function ConsolePanel(props: ConsolePanelProps) {
       </div>
 
       <div
-        className='landing-animate-fade-up mt-9 w-full max-w-xl opacity-0'
+        className='landing-animate-fade-up mt-7 w-full max-w-xl opacity-0'
         style={{ animationDelay: '360ms' }}
       >
-        <div data-depth='1' className='mb-3 flex items-baseline gap-3'>
-          <span className='text-muted-foreground/60 text-[10px] font-bold tracking-[0.15em] uppercase'>
+        <div data-depth='1' className='mb-3 flex items-center gap-3'>
+          <span className='text-muted-foreground/75 text-[10.5px] font-bold tracking-[0.16em] uppercase'>
             {t('Supported Applications')}
           </span>
-          <span className='bg-border/70 h-px flex-1' aria-hidden />
+          <span
+            className='via-border from-border/80 h-px flex-1 bg-gradient-to-r to-transparent'
+            aria-hidden
+          />
         </div>
         <div data-depth-group className='flex flex-wrap items-center gap-2.5'>
           <a
@@ -157,6 +151,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
             target='_blank'
             rel='noopener noreferrer'
             data-relief='plate'
+            data-depth-glare=''
             className={APP_PILL_CLASSES}
           >
             <img
@@ -171,6 +166,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
             target='_blank'
             rel='noopener noreferrer'
             data-relief='plate'
+            data-depth-glare=''
             className={APP_PILL_CLASSES}
           >
             <CherryStudio.Color size={20} className='shrink-0' />
@@ -181,6 +177,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
             target='_blank'
             rel='noopener noreferrer'
             data-relief='plate'
+            data-depth-glare=''
             className={APP_PILL_CLASSES}
           >
             <img
@@ -204,17 +201,17 @@ export function ConsolePanel(props: ConsolePanelProps) {
             </span>
             <span>CC Switch</span>
           </a>
-          <span className='text-muted-foreground/60 px-2 text-sm'>
+          <span className='text-muted-foreground/70 px-2 text-sm font-medium'>
             {t('More Apps')}
           </span>
         </div>
       </div>
 
       <div
-        className='landing-animate-fade-up mt-10 w-full opacity-0'
+        className='landing-animate-fade-up mt-8 w-full opacity-0'
         style={{ animationDelay: '420ms' }}
       >
-        <HeroTerminalDemo className='max-w-xl lg:mx-0 xl:rotate-[-1.2deg]' />
+        <HeroTerminalDemo className='max-w-xl lg:mx-0' />
       </div>
     </div>
   )
