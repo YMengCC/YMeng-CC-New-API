@@ -54,6 +54,25 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     go build -pgo="$(go list -m -f '{{.Dir}}' github.com/Calcium-Ion/moejs)/default.pgo" -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o new-api
 
+# Office worker for the playground office mode: Node and the Codex CLI. It is a
+# separate build target (`--target office-worker`) so the gateway image keeps its
+# current runtime. The Codex bubblewrap sandbox needs user namespaces, which the
+# compose files enable for this service only.
+FROM node:22-bookworm-slim@sha256:be979e5523c76fa4d5ca4ebd3099078f220aa47ec39c48ad5b5df9314debd6eb AS office-worker
+
+ENV NODE_ENV=production
+WORKDIR /opt/office
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+COPY office/package.json office/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && npm cache clean --force
+COPY office/src ./src
+
+EXPOSE 8090
+ENTRYPOINT ["node", "src/server.mjs"]
+
 FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
 
 RUN apt-get update \

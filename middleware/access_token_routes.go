@@ -379,6 +379,18 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /pg/videos/:task_id/content": accessTokenSessionRule,
 	"POST /pg/files":                  accessTokenSessionRule,
 	"DELETE /pg/files/:id":            accessTokenSessionRule,
+
+	// router/api-router.go: /api/office (playground office mode; admin only)
+	"GET /api/office/status":              accessTokenSessionRule,
+	"GET /api/office/sessions":            accessTokenSessionRule,
+	"POST /api/office/sessions":           accessTokenSessionRule,
+	"DELETE /api/office/sessions/:id":     accessTokenSessionRule,
+	"GET /api/office/sessions/:id/events": accessTokenSessionRule,
+	"GET /api/office/files/:id":           accessTokenSessionRule,
+	"POST /api/office/files/:id":          accessTokenSessionRule,
+	"GET /api/office/files/:id/content":   accessTokenSessionRule,
+	"POST /api/office/turns/:id":          accessTokenSessionRule,
+	"POST /api/office/turns/:id/stop":     accessTokenSessionRule,
 }
 
 var (

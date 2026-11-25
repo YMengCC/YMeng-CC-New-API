@@ -19,7 +19,9 @@ func SetApiRouter(router *gin.Engine) {
 	apiRouter.Use(middleware.RouteTag("api"))
 	// Safe house downloads are already compressed or are executables; the
 	// trailing slash keeps the JSON listing itself compressed.
-	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/user/safehouse/downloads/"})))
+	// Turn streams and file transfers are not compressed: the office events
+	// must reach the browser as they arrive and files are downloaded as is.
+	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/user/safehouse/downloads/", "/api/office/turns", "/api/office/files"})))
 	apiRouter.Use(middleware.AccessTokenAudit())
 	apiRouter.Use(middleware.BodyStorageCleanup()) // 清理请求体存储
 	apiRouter.Use(middleware.GlobalAPIRateLimit())
@@ -518,6 +520,25 @@ func SetApiRouter(router *gin.Engine) {
 			modelsRoute.POST("/", controller.CreateModelMeta)
 			modelsRoute.PUT("/", controller.UpdateModelMeta)
 			modelsRoute.DELETE("/:id", controller.DeleteModelMeta)
+		}
+
+		// Playground office mode: admin only, browser sessions only. The
+		// office worker is an optional service, so the console first asks
+		// /status whether the mode is available.
+		officeRoute := apiRouter.Group("/office")
+		officeRoute.Use(middleware.SessionCookieOriginGuard(), middleware.AdminAuth())
+		{
+			officeRoute.GET("/status", controller.OfficeStatus)
+			officeRoute.GET("/sessions", controller.ListOfficeSessions)
+			officeRoute.POST("/sessions", controller.CreateOfficeSession)
+
+			officeRoute.DELETE("/sessions/:id", controller.DeleteOfficeSession)
+			officeRoute.GET("/sessions/:id/events", controller.GetOfficeSessionEvents)
+			officeRoute.GET("/files/:id", controller.ListOfficeSessionFiles)
+			officeRoute.POST("/files/:id", controller.UploadOfficeSessionFile)
+			officeRoute.GET("/files/:id/content", controller.DownloadOfficeSessionFile)
+			officeRoute.POST("/turns/:id", controller.StartOfficeTurn)
+			officeRoute.POST("/turns/:id/stop", controller.StopOfficeTurn)
 		}
 
 		// Deployments (model deployment management)

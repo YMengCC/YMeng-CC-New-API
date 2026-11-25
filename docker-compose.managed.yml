@@ -54,6 +54,9 @@ services:
       UPDATE_CONTROLLER_URL: http://update-controller:8080
       UPDATE_ASSET_DIR: /var/lib/new-api/assets
       BATCH_UPDATE_ENABLED: ${BATCH_UPDATE_ENABLED:-false}
+      # Playground office mode; empty values keep the mode hidden.
+      OFFICE_WORKER_URL: ${OFFICE_WORKER_URL:-}
+      OFFICE_WORKER_TOKEN: ${OFFICE_WORKER_TOKEN:-}
     volumes:
       - ./data:/data
       - ./logs:/app/logs
@@ -88,6 +91,8 @@ services:
       UPDATE_CONTROLLER_URL: http://update-controller:8080
       UPDATE_ASSET_DIR: /var/lib/new-api/assets
       BATCH_UPDATE_ENABLED: "false"
+      OFFICE_WORKER_URL: ${OFFICE_WORKER_URL:-}
+      OFFICE_WORKER_TOKEN: ${OFFICE_WORKER_TOKEN:-}
     volumes:
       - ./data:/data
       - ./logs:/app/logs
@@ -99,6 +104,40 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  # Playground office mode (opt-in: start with `--profile office`). The Codex
+  # sandbox needs user namespaces, which stock container profiles block, so
+  # this service alone drops seccomp/AppArmor and adds SYS_ADMIN and
+  # NET_ADMIN. It holds no site secrets: the gateway hands over a short-lived
+  # user token for each turn. Build it with `--target office-worker`.
+  office-worker:
+    profiles: ["office"]
+    image: ${OFFICE_WORKER_IMAGE:?set OFFICE_WORKER_IMAGE to the office worker image}
+    restart: always
+    expose:
+      - "8090"
+    environment:
+      OFFICE_WORKER_TOKEN: ${OFFICE_WORKER_TOKEN:?set a private office worker token}
+      OFFICE_CALLBACK_BASE_URL: ${OFFICE_CALLBACK_BASE_URL:-http://update-proxy:3000/v1}
+    volumes:
+      - office_workspaces:/var/lib/new-api/office
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    pids_limit: 1024
+    networks:
+      - new-api-managed
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   update-controller:
     build:
@@ -135,6 +174,7 @@ volumes:
   update_assets:
   update_proxy_socket:
   update_controller_state:
+  office_workspaces:
 
 networks:
   new-api-managed:

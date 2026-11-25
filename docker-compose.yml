@@ -48,6 +48,8 @@ services:
 #      - USER_SESSION_ISSUANCE_WINDOW_SECONDS=86400  # 不得大于 revoked 保留期 (must not exceed revoked retention)
 #      - USER_SESSION_REVOKED_RETENTION_DAYS=7
 #      - USER_SESSION_HOURLY_ALERT_THRESHOLD=5000  # 仅告警，不做全局拒绝 (alert only; never globally rejects login)
+      # - OFFICE_WORKER_URL=http://office-worker:8090  # 游乐场办公模式的办公服务地址；配合下方 office-worker 服务与 OFFICE_WORKER_TOKEN 启用 (office worker URL for the playground office mode; start the office-worker service with `--profile office` and set OFFICE_WORKER_TOKEN to enable)
+      # - OFFICE_WORKER_TOKEN=change_me  # 办公服务共享密钥，必须修改 (shared office worker token, change it in production)
 #      - SYNC_FREQUENCY=60  # Uncomment if regular database syncing is needed
 #      - GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX  # Google Analytics 的测量 ID (Google Analytics Measurement ID)
 #      - UMAMI_WEBSITE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # Umami 网站 ID (Umami Website ID)
@@ -65,6 +67,35 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Playground office mode (opt-in: start with `docker compose --profile office up -d --build`).
+  # The Codex sandbox needs user namespaces, which stock container profiles block,
+  # so this service alone drops seccomp/AppArmor and adds SYS_ADMIN and NET_ADMIN.
+  # It holds no site secrets: new-api hands over a short-lived user token per turn.
+  office-worker:
+    profiles: ["office"]
+    build:
+      context: .
+      target: office-worker
+    image: ${OFFICE_WORKER_IMAGE:-new-api-office-worker:local}
+    restart: always
+    environment:
+      - OFFICE_WORKER_TOKEN=${OFFICE_WORKER_TOKEN:?set a private office worker token}
+      - OFFICE_CALLBACK_BASE_URL=${OFFICE_CALLBACK_BASE_URL:-http://new-api:3000/v1}
+    volumes:
+      - office_workspaces:/var/lib/new-api/office
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    pids_limit: 1024
+    networks:
+      - new-api-network
 
   redis:
     image: redis:latest
@@ -122,6 +153,7 @@ services:
 
 volumes:
   pg_data:
+  office_workspaces:
 #  mysql_data:
 #  clickhouse_data:
 

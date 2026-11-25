@@ -1,0 +1,17 @@
+{
+  "name": "new-api-office-worker",
+  "private": true,
+  "type": "module",
+  "description": "Runs Codex CLI turns for the playground office mode inside its bubblewrap sandbox.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@openai/codex": "0.172.0",
+    "@openai/codex-sdk": "0.172.0"
+  }
+}

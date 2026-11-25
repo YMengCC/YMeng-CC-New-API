@@ -17,10 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { z } from 'zod'
 
 import { Main } from '@/components/layout'
 import { Playground } from '@/features/playground'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
+
+const playgroundSearchSchema = z.object({
+  mode: z.enum(['chat', 'office']).optional(),
+})
 
 export const Route = createFileRoute('/_authenticated/playground/')({
   beforeLoad: () => {
@@ -28,13 +33,22 @@ export const Route = createFileRoute('/_authenticated/playground/')({
       throw redirect({ to: '/dashboard' })
     }
   },
+  validateSearch: playgroundSearchSchema,
   component: PlaygroundPage,
 })
 
 function PlaygroundPage() {
+  const { mode = 'chat' } = Route.useSearch()
+  const navigate = Route.useNavigate()
+
   return (
     <Main className='p-0'>
-      <Playground />
+      <Playground
+        mode={mode}
+        onModeChange={(nextMode) =>
+          void navigate({ search: { mode: nextMode }, replace: true })
+        }
+      />
     </Main>
   )
 }
