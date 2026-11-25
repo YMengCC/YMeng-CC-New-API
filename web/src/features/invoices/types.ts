@@ -66,6 +66,7 @@ export type InvoiceApplication = {
   username?: string
   title: string
   tax_id: string
+  remark?: string
   gross_amount: number
   refund_amount: number
   net_amount: number

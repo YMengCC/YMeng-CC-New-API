@@ -18,6 +18,7 @@ import (
 type createInvoiceRequest struct {
 	Title    string `json:"title"`
 	TaxId    string `json:"tax_id"`
+	Remark   string `json:"remark"`
 	TopUpIds []int  `json:"top_up_ids"`
 }
 
@@ -40,7 +41,7 @@ func CreateInvoiceApplication(c *gin.Context) {
 		common.ApiErrorMsg(c, "invalid invoice request")
 		return
 	}
-	application, err := model.CreateInvoiceApplication(c.GetInt("id"), request.Title, request.TaxId, request.TopUpIds)
+	application, err := model.CreateInvoiceApplication(c.GetInt("id"), request.Title, request.TaxId, request.Remark, request.TopUpIds)
 	if err != nil {
 		common.ApiError(c, err)
 		return

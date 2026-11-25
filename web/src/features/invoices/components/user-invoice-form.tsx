@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 import { createInvoice } from '../api'
 import { formatInvoiceAmount } from '../lib'
@@ -45,7 +46,7 @@ export function UserInvoiceForm(props: {
   const schema = getInvoiceFormSchema(t)
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', taxId: '' },
+    defaultValues: { title: '', taxId: '', remark: '' },
   })
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function UserInvoiceForm(props: {
     form.reset({
       title: props.eligibility.profile.title,
       taxId: props.eligibility.profile.tax_id,
+      remark: '',
     })
   }, [form, props.eligibility.profile])
 
@@ -78,6 +80,7 @@ export function UserInvoiceForm(props: {
       const response = await createInvoice({
         title: values.title.trim(),
         tax_id: values.taxId.trim(),
+        remark: values.remark.trim(),
         top_up_ids: selectedOrders.map((order) => order.id),
       })
       if (!response.success) throw new Error(response.message)
@@ -127,6 +130,22 @@ export function UserInvoiceForm(props: {
             </p>
           )}
         </div>
+      </div>
+
+      <div className='space-y-2'>
+        <Label htmlFor='invoice-remark'>{t('Invoice remark')}</Label>
+        <Textarea
+          id='invoice-remark'
+          rows={3}
+          placeholder={t('Optional remark for the issuer')}
+          aria-invalid={Boolean(form.formState.errors.remark)}
+          {...form.register('remark')}
+        />
+        {form.formState.errors.remark && (
+          <p className='text-destructive text-sm'>
+            {form.formState.errors.remark.message}
+          </p>
+        )}
       </div>
 
       <div className='bg-muted/30 grid gap-3 rounded-lg border p-4 sm:grid-cols-3'>

@@ -26,6 +26,7 @@ const (
 	InvoiceMaxTitleLength              = 200
 	InvoiceMaxTaxIdLength              = 64
 	InvoiceMaxRejectReasonLength       = 500
+	InvoiceMaxRemarkLength             = 500
 )
 
 var (
@@ -33,6 +34,7 @@ var (
 	ErrInvoiceOrderInvalid        = errors.New("invoice order is invalid or already in an invoice process")
 	ErrInvoiceStatusInvalid       = errors.New("invoice status transition is invalid")
 	ErrInvoiceRejectReasonInvalid = errors.New("invoice rejection reason is required and must be 500 characters or fewer")
+	ErrInvoiceRemarkInvalid       = errors.New("invoice remark must be 500 characters or fewer")
 	ErrInvoiceNotFound            = errors.New("invoice application not found")
 	ErrInvoiceProfileInvalid      = errors.New("invoice title and tax identifier are required")
 	invoiceEligiblePaymentMethod  = []string{
@@ -76,6 +78,7 @@ type InvoiceApplication struct {
 	UserId       int                       `json:"user_id" gorm:"index;not null"`
 	Title        string                    `json:"title" gorm:"type:varchar(200);not null"`
 	TaxId        string                    `json:"tax_id" gorm:"type:varchar(64);not null"`
+	Remark       string                    `json:"remark,omitempty" gorm:"type:varchar(500);not null;default:''"`
 	GrossAmount  int64                     `json:"gross_amount" gorm:"type:bigint;not null"`
 	RefundAmount int64                     `json:"refund_amount" gorm:"type:bigint;not null"`
 	NetAmount    int64                     `json:"net_amount" gorm:"type:bigint;not null"`
@@ -404,11 +407,15 @@ func GetInvoiceEligibility(userId int) (*InvoiceEligibility, error) {
 	return eligibility, nil
 }
 
-func CreateInvoiceApplication(userId int, title, taxId string, topUpIds []int) (*InvoiceApplication, error) {
+func CreateInvoiceApplication(userId int, title, taxId, remark string, topUpIds []int) (*InvoiceApplication, error) {
 	title = strings.TrimSpace(title)
 	taxId = strings.TrimSpace(taxId)
+	remark = strings.TrimSpace(remark)
 	if title == "" || taxId == "" || len([]rune(title)) > InvoiceMaxTitleLength || len([]rune(taxId)) > InvoiceMaxTaxIdLength {
 		return nil, ErrInvoiceProfileInvalid
+	}
+	if len([]rune(remark)) > InvoiceMaxRemarkLength {
+		return nil, ErrInvoiceRemarkInvalid
 	}
 	if len(topUpIds) == 0 {
 		return nil, ErrInvoiceOrderInvalid
@@ -483,6 +490,7 @@ func CreateInvoiceApplication(userId int, title, taxId string, topUpIds []int) (
 			UserId:       userId,
 			Title:        title,
 			TaxId:        taxId,
+			Remark:       remark,
 			GrossAmount:  grossAmount,
 			RefundAmount: refundAmount,
 			NetAmount:    netAmount,

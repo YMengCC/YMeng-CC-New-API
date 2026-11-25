@@ -83,11 +83,18 @@ export function InvoiceHistory(props: { applications: InvoiceApplication[] }) {
                 <TableCell className='tabular-nums'>
                   #{application.id}
                 </TableCell>
-                <TableCell
-                  className='max-w-64 truncate'
-                  title={application.title}
-                >
-                  {application.title}
+                <TableCell className='max-w-64'>
+                  <div className='truncate' title={application.title}>
+                    {application.title}
+                  </div>
+                  {application.remark ? (
+                    <div
+                      className='text-muted-foreground truncate text-xs'
+                      title={application.remark}
+                    >
+                      {t('Invoice remark')}: {application.remark}
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell className='tabular-nums'>
                   {formatInvoiceAmount(application.net_amount)}

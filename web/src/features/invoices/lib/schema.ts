@@ -31,6 +31,13 @@ export function getInvoiceFormSchema(t: TFunction) {
       .trim()
       .min(1, t('Tax identifier is required'))
       .max(64, t('Tax identifier must be 64 characters or fewer')),
+    remark: z
+      .string()
+      .trim()
+      .refine(
+        (value) => [...value].length <= 500,
+        t('Invoice remark must be 500 characters or fewer')
+      ),
   })
 }
 

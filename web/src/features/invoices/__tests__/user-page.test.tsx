@@ -131,6 +131,24 @@ test('shows preview and download only for issued applications with files', () =>
   }
 })
 
+test('shows the invoice remark under the title only when present', () => {
+  const withRemark = {
+    ...invoiceApplication,
+    id: 10,
+    remark: 'Please issue a special VAT invoice',
+  }
+  renderHistory([withRemark, invoiceApplication])
+
+  const remarkRow = screen.getByText('#10').closest('tr') as HTMLElement
+  const plainRow = screen.getByText('#7').closest('tr') as HTMLElement
+  expect(
+    within(remarkRow).getByText(
+      'Invoice remark: Please issue a special VAT invoice'
+    )
+  ).toBeVisible()
+  expect(within(plainRow).queryByText(/Invoice remark/)).not.toBeInTheDocument()
+})
+
 test('shows the empty state when every order has an issued invoice', () => {
   const eligibility: InvoiceEligibility = {
     profile: null,

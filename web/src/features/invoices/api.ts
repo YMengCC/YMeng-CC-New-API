@@ -47,6 +47,7 @@ export async function getUserInvoices(page = 1, pageSize = 50) {
 export async function createInvoice(payload: {
   title: string
   tax_id: string
+  remark: string
   top_up_ids: number[]
 }) {
   const response = await api.post<ApiResponse<InvoiceApplication>>(

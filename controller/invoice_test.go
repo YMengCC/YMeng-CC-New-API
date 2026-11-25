@@ -74,6 +74,42 @@ func TestRejectInvoiceApplicationAPIRequiresAndPersistsReason(t *testing.T) {
 	assert.Equal(t, "Incorrect tax identifier", stored.RejectReason)
 }
 
+func TestCreateInvoiceApplicationAPIPersistsRemark(t *testing.T) {
+	db := setupInvoiceControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.TopUp{}, &model.InvoiceProfile{}, &model.InvoiceApplicationItem{}))
+	originalQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 100
+	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
+	topUp := &model.TopUp{
+		UserId:          42,
+		TradeNo:         "remark-api",
+		PaymentProvider: model.PaymentProviderEpay,
+		Status:          common.TopUpStatusSuccess,
+		Amount:          600,
+		CreateTime:      100,
+		CompleteTime:    100,
+	}
+	require.NoError(t, db.Create(topUp).Error)
+
+	create := func(body string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodPost, "/api/invoice/", strings.NewReader(body))
+		ctx.Set("id", 42)
+		CreateInvoiceApplication(ctx)
+		return recorder
+	}
+
+	tooLong := create(fmt.Sprintf(`{"title":"Example Company","tax_id":"91350000TEST","remark":%q,"top_up_ids":[%d]}`, strings.Repeat("备", model.InvoiceMaxRemarkLength+1), topUp.Id))
+	assert.Contains(t, tooLong.Body.String(), `"success":false`)
+
+	recorder := create(fmt.Sprintf(`{"title":"Example Company","tax_id":"91350000TEST","remark":"  请开具增值税专用发票  ","top_up_ids":[%d]}`, topUp.Id))
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+	var stored model.InvoiceApplication
+	require.NoError(t, db.Where("user_id = ?", 42).First(&stored).Error)
+	assert.Equal(t, "请开具增值税专用发票", stored.Remark)
+}
+
 func TestGetAllInvoiceApplicationsAPIRejectsInvalidFilters(t *testing.T) {
 	setupInvoiceControllerTestDB(t)
 	for _, query := range []string{

@@ -152,7 +152,7 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 		eligibility, err := GetInvoiceEligibility(userID)
 		require.NoError(t, err)
 		assert.Empty(t, eligibility.Orders, state+" orders are not completed recharges")
-		_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", []int{order.TopUpID})
+		_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID})
 		require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 	}
 	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
@@ -172,15 +172,16 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 	other, err := GetInvoiceEligibility(userID + 1)
 	require.NoError(t, err)
 	assert.Empty(t, other.Orders)
-	_, err = CreateInvoiceApplication(userID+1, "Other Company", "TAX-OTHER", []int{order.TopUpID})
+	_, err = CreateInvoiceApplication(userID+1, "Other Company", "TAX-OTHER", "", []int{order.TopUpID})
 	require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
-	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", []int{order.TopUpID})
+	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID})
 	require.ErrorIs(t, err, ErrInvoiceAmountTooLow)
 	regular := insertInvoiceTestTopUp(t, userID, "invoice-regular", PaymentProviderEpay, common.TopUpStatusSuccess, 600)
-	application, err := CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", []int{order.TopUpID, regular.Id})
+	application, err := CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "  请开具增值税专用发票  ", []int{order.TopUpID, regular.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(605*InvoiceAmountScale), application.NetAmount)
-	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", []int{order.TopUpID, regular.Id})
+	assert.Equal(t, "请开具增值税专用发票", application.Remark)
+	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID, regular.Id})
 	require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 	eligibility, err = GetInvoiceEligibility(userID)
 	require.NoError(t, err)
@@ -263,7 +264,7 @@ func TestCreateInvoiceApplicationRequiresNetAmountGreaterThan500(t *testing.T) {
 	insertInvoiceTestUser(t, 1002, 10_000)
 	order := insertInvoiceTestTopUp(t, 1002, "exact-minimum", PaymentProviderEpay, common.TopUpStatusSuccess, 500)
 
-	_, err := CreateInvoiceApplication(1002, "Example Company", "91350000TEST", []int{order.Id})
+	_, err := CreateInvoiceApplication(1002, "Example Company", "91350000TEST", "", []int{order.Id})
 	require.ErrorIs(t, err, ErrInvoiceAmountTooLow)
 
 	order.Amount = 501
@@ -271,10 +272,28 @@ func TestCreateInvoiceApplicationRequiresNetAmountGreaterThan500(t *testing.T) {
 	order.CreditedQuota = 0
 	order.InvoiceAmount = 0
 	require.NoError(t, DB.Save(order).Error)
-	application, err := CreateInvoiceApplication(1002, "Example Company", "91350000TEST", []int{order.Id})
+	application, err := CreateInvoiceApplication(1002, "Example Company", "91350000TEST", "", []int{order.Id})
 	require.NoError(t, err)
 	assert.Equal(t, InvoiceStatusApplied, application.Status)
 	assert.Equal(t, int64(501*InvoiceAmountScale), application.NetAmount)
+}
+
+func TestCreateInvoiceApplicationRemarkIsOptionalAndLimited(t *testing.T) {
+	truncateTables(t)
+	originalQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 100
+	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
+	insertInvoiceTestUser(t, 1009, 100_000)
+	order := insertInvoiceTestTopUp(t, 1009, "remark", PaymentProviderEpay, common.TopUpStatusSuccess, 600)
+
+	_, err := CreateInvoiceApplication(1009, "Example Company", "91350000TEST", strings.Repeat("备", InvoiceMaxRemarkLength+1), []int{order.Id})
+	require.ErrorIs(t, err, ErrInvoiceRemarkInvalid)
+
+	application, err := CreateInvoiceApplication(1009, "Example Company", "91350000TEST", strings.Repeat("备", InvoiceMaxRemarkLength), []int{order.Id})
+	require.NoError(t, err)
+	var stored InvoiceApplication
+	require.NoError(t, DB.First(&stored, application.Id).Error)
+	assert.Equal(t, strings.Repeat("备", InvoiceMaxRemarkLength), stored.Remark)
 }
 
 func TestPendingRefundsAreForcedAndConsumedOnce(t *testing.T) {
@@ -286,11 +305,11 @@ func TestPendingRefundsAreForcedAndConsumedOnce(t *testing.T) {
 	first := insertInvoiceTestTopUp(t, 1003, "first", PaymentProviderEpay, common.TopUpStatusSuccess, 600)
 	require.NoError(t, ApplyAdminQuotaDeduction(1003, 9001, 10_000, "subtract"))
 
-	_, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", []int{first.Id})
+	_, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", "", []int{first.Id})
 	require.ErrorIs(t, err, ErrInvoiceAmountTooLow)
 
 	second := insertInvoiceTestTopUp(t, 1003, "second", PaymentProviderEpay, common.TopUpStatusSuccess, 1)
-	application, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", []int{first.Id, second.Id})
+	application, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", "", []int{first.Id, second.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(100*InvoiceAmountScale), application.RefundAmount)
 	assert.Equal(t, int64(501*InvoiceAmountScale), application.NetAmount)
@@ -313,7 +332,7 @@ func TestPendingRefundsAreForcedAndConsumedOnce(t *testing.T) {
 
 	require.NoError(t, ApplyAdminQuotaDeduction(1003, 9001, 100, "subtract"))
 	third := insertInvoiceTestTopUp(t, 1003, "third", PaymentProviderEpay, common.TopUpStatusSuccess, 502)
-	next, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", []int{third.Id})
+	next, err := CreateInvoiceApplication(1003, "Example Company", "91350000TEST", "", []int{third.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(InvoiceAmountScale), next.RefundAmount)
 	assert.Equal(t, int64(501*InvoiceAmountScale), next.NetAmount)
@@ -327,9 +346,9 @@ func TestInvoiceOrderCannotBeUsedTwice(t *testing.T) {
 	insertInvoiceTestUser(t, 1004, 0)
 	order := insertInvoiceTestTopUp(t, 1004, "single-use", PaymentProviderWaffo, common.TopUpStatusSuccess, 501)
 
-	_, err := CreateInvoiceApplication(1004, "Example Company", "91350000TEST", []int{order.Id})
+	_, err := CreateInvoiceApplication(1004, "Example Company", "91350000TEST", "", []int{order.Id})
 	require.NoError(t, err)
-	_, err = CreateInvoiceApplication(1004, "Example Company", "91350000TEST", []int{order.Id})
+	_, err = CreateInvoiceApplication(1004, "Example Company", "91350000TEST", "", []int{order.Id})
 	require.True(t, errors.Is(err, ErrInvoiceOrderInvalid))
 }
 
@@ -389,7 +408,7 @@ func TestRejectedInvoiceReleasesOrdersAndRefundsForReapplication(t *testing.T) {
 	order := insertInvoiceTestTopUp(t, 1008, "reusable", PaymentProviderEpay, common.TopUpStatusSuccess, 700)
 	require.NoError(t, ApplyAdminQuotaDeduction(1008, 9001, 10_000, "subtract"))
 
-	first, err := CreateInvoiceApplication(1008, "Example Company", "91350000TEST", []int{order.Id})
+	first, err := CreateInvoiceApplication(1008, "Example Company", "91350000TEST", "", []int{order.Id})
 	require.NoError(t, err)
 	require.NoError(t, RejectInvoiceApplication(first.Id, "Please correct the invoice title"))
 
@@ -403,7 +422,7 @@ func TestRejectedInvoiceReleasesOrdersAndRefundsForReapplication(t *testing.T) {
 	assert.Empty(t, eligibility.Orders[0].InvoiceStatus)
 	require.Len(t, eligibility.PendingRefunds, 1)
 
-	second, err := CreateInvoiceApplication(1008, "Corrected Company", "91350000TEST", []int{order.Id})
+	second, err := CreateInvoiceApplication(1008, "Corrected Company", "91350000TEST", "", []int{order.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(600*InvoiceAmountScale), second.NetAmount)
 

@@ -110,13 +110,33 @@ describe('invoice management text layout', () => {
     const reason = 'InvalidTaxIdentifier'.repeat(25)
     render(
       <Fixture
-        application={{ ...application, status: 'rejected', reject_reason: reason }}
+        application={{
+          ...application,
+          status: 'rejected',
+          reject_reason: reason,
+        }}
       />
     )
 
     const paragraph = screen.getByText(reason, { exact: false })
     expect(paragraph).toHaveClass('wrap-anywhere', 'whitespace-pre-wrap')
     expect(paragraph).toHaveTextContent(reason)
+  })
+
+  test('a long invoice remark stays bounded in the invoice information cell', () => {
+    const remark = 'PleaseIssueASpecialVATInvoice'.repeat(10)
+    render(<Fixture application={{ ...application, remark }} />)
+
+    const cell = screen
+      .getByText(remark, { exact: false })
+      .closest('[tabindex="0"]')
+    expect(cell).toHaveClass('max-w-full', 'truncate', 'sm:max-w-[220px]')
+  })
+
+  test('no remark row is rendered when the application has no remark', () => {
+    render(<Fixture />)
+
+    expect(screen.queryByText(/Invoice remark/)).not.toBeInTheDocument()
   })
 
   test('an empty username keeps the fallback and user ID visible', () => {

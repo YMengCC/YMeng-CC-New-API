@@ -21,9 +21,47 @@ import assert from 'node:assert/strict'
 import type { TFunction } from 'i18next'
 import { describe, test } from 'vitest'
 
-import { getInvoiceRejectSchema } from './schema'
+import { getInvoiceFormSchema, getInvoiceRejectSchema } from './schema'
 
 const t = ((key: string) => key) as TFunction
+
+describe('invoice application form remark', () => {
+  const base = { title: 'Example Company', taxId: '91350000TEST' }
+
+  test('accepts an empty remark and trims surrounding whitespace', () => {
+    const schema = getInvoiceFormSchema(t)
+
+    const empty = schema.safeParse({ ...base, remark: '' })
+    assert.equal(empty.success, true)
+
+    const trimmed = schema.safeParse({ ...base, remark: '  增值税专用发票  ' })
+    assert.equal(trimmed.success, true)
+    if (trimmed.success) {
+      assert.equal(trimmed.data.remark, '增值税专用发票')
+    }
+  })
+
+  test('enforces the 500-character limit by code points', () => {
+    const schema = getInvoiceFormSchema(t)
+
+    assert.equal(
+      schema.safeParse({ ...base, remark: '备'.repeat(500) }).success,
+      true
+    )
+    assert.equal(
+      schema.safeParse({ ...base, remark: '备'.repeat(501) }).success,
+      false
+    )
+    assert.equal(
+      schema.safeParse({ ...base, remark: '🙂'.repeat(500) }).success,
+      true
+    )
+    assert.equal(
+      schema.safeParse({ ...base, remark: '🙂'.repeat(501) }).success,
+      false
+    )
+  })
+})
 
 describe('invoice rejection form', () => {
   test('requires a non-empty reason and enforces the length limit', () => {

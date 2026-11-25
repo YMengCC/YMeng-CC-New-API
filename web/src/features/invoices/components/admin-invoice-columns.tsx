@@ -72,6 +72,14 @@ export function useAdminInvoiceColumns(
             >
               {row.original.tax_id}
             </TruncatedCell>
+            {row.original.remark ? (
+              <TruncatedCell
+                className='text-muted-foreground text-xs sm:max-w-[220px]'
+                tabIndex={0}
+              >
+                {t('Invoice remark')}: {row.original.remark}
+              </TruncatedCell>
+            ) : null}
           </div>
         ),
       },

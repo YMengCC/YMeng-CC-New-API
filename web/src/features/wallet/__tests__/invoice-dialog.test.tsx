@@ -247,6 +247,48 @@ test('submits only eligible selected orders and deducts mandatory refunds', asyn
     expect(post).toHaveBeenCalledWith('/api/invoice/', {
       title: 'Example Company',
       tax_id: '91310000MA12345678',
+      remark: '',
+      top_up_ids: [1],
+    })
+  )
+})
+
+test('submits the trimmed optional invoice remark with the application', async () => {
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/invoice/eligibility') {
+      return { data: { success: true, data: eligibility } }
+    }
+    return { data: { success: true, data: { items: [], total: 0 } } }
+  })
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue({ data: { success: true, data: {} } })
+  renderDialog()
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'Select order AVAILABLE-ORDER',
+    })
+  )
+  await userEvent.type(
+    screen.getByLabelText('Invoice title'),
+    'Example Company'
+  )
+  await userEvent.type(
+    screen.getByLabelText('Tax number / Unified Social Credit Code'),
+    '91310000MA12345678'
+  )
+  await userEvent.type(
+    screen.getByLabelText('Invoice remark'),
+    '  Please issue a special VAT invoice  '
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Submit invoice application' })
+  )
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith('/api/invoice/', {
+      title: 'Example Company',
+      tax_id: '91310000MA12345678',
+      remark: 'Please issue a special VAT invoice',
       top_up_ids: [1],
     })
   )
