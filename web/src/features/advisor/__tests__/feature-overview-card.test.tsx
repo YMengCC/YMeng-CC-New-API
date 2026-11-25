@@ -60,7 +60,9 @@ test('renders the /状态监控 and /充值 command details across locales', asy
   expect(screen.getByText('Status monitoring')).toBeVisible()
   expect(screen.getByText('Failure alerts')).toBeVisible()
   expect(
-    screen.getByText(/fails 3 consecutive checks.*Only one alert per outage/)
+    screen.getByText(
+      /fails 3 consecutive checks.*Only one alert per outage.*recovery notice is posted/
+    )
   ).toBeVisible()
   expect(screen.getByText('Admin recharge')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()
@@ -83,7 +85,9 @@ test('renders the /状态监控 and /充值 command details across locales', asy
   expect(screen.getByText('状态监控')).toBeVisible()
   expect(screen.getByText('故障告警')).toBeVisible()
   expect(
-    screen.getByText(/连续 3 次检查失败.*同一次故障只推送一条/)
+    screen.getByText(
+      /连续 3 次检查失败.*同一次故障只推送一条.*恢复后推送恢复通知/
+    )
   ).toBeVisible()
   expect(screen.getByText('管理员充值')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()
@@ -108,7 +112,9 @@ test('renders the /状态监控 and /充值 command details across locales', asy
   expect(screen.getByText('狀態監控')).toBeVisible()
   expect(screen.getByText('故障告警')).toBeVisible()
   expect(
-    screen.getByText(/連續 3 次檢查失敗.*同一故障只推送一則/)
+    screen.getByText(
+      /連續 3 次檢查失敗.*同一故障只推送一則.*恢復後推送恢復通知/
+    )
   ).toBeVisible()
   expect(screen.getByText('管理員儲值')).toBeVisible()
   expect(screen.getByText('/状态监控', { selector: 'code' })).toBeVisible()

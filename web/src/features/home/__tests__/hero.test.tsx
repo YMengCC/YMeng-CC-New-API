@@ -211,6 +211,10 @@ it('replaces the static console headline with the dynamic YMeng CC showcase', as
     'YMeng CC'
   )
   expect(document.querySelector('[data-home-typewriter]')).not.toBeNull()
+  expect(screen.queryByText('For developers')).toBeNull()
+  expect(
+    screen.queryByText('AI Application Infrastructure Foundation')
+  ).toBeNull()
   expect(screen.queryByText('Unified API Gateway for')).toBeNull()
   expect(screen.queryByText('Vast Range of AI Models')).toBeNull()
 })
@@ -278,7 +282,10 @@ it('keeps the developer entry after the community region without an absolute gap
   })
 
   const community = document.querySelector('.home-community-content')
-  const developerEntry = screen.getByText('For developers')
+  const developerEntry = screen.getByRole('heading', {
+    level: 2,
+    name: 'YMeng CC',
+  })
   const slice = document.querySelector('.home-community-slice')
   if (!community || !slice) throw new Error('Expected community content')
   expect(community).not.toHaveClass('absolute')
@@ -483,7 +490,10 @@ it.each([['https://docs.example.com/guide'], ['/about']])(
 it('stacks the developer entry above the BaoCode entry below lg', async () => {
   await renderHero({ isAuthenticated: false })
 
-  const developerEntry = screen.getByText('For developers')
+  const developerEntry = screen.getByRole('heading', {
+    level: 2,
+    name: 'YMeng CC',
+  })
   const baocodeEntry = screen.getByRole('button', { name: /Get BaoCode/ })
   expect(
     developerEntry.compareDocumentPosition(baocodeEntry) &

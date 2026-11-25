@@ -109,7 +109,7 @@ export function FeatureOverviewCard() {
             <div className='text-sm font-medium'>{t('Failure alerts')}</div>
             <p className='text-muted-foreground mt-0.5 text-sm'>
               {t(
-                'When a status monitor fails 3 consecutive checks, an alert is automatically posted to the admin-configured QQ groups, showing the group, monitor name, failure count, and latest failure time. Only one alert per outage; recovery is not announced.'
+                'When a status monitor fails 3 consecutive checks, an alert is automatically posted to the admin-configured QQ groups, showing the group, monitor name, failure count, and latest failure time. Only one alert per outage, and a recovery notice is posted when the monitor passes again.'
               )}
             </p>
           </div>
