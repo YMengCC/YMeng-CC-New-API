@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  BellRing,
   CalendarCheck2,
   CircleDollarSign,
   Gift,
@@ -97,6 +98,19 @@ export function FeatureOverviewCard() {
                   ),
                 }}
               />
+            </p>
+          </div>
+        </div>
+        <div className='flex items-start gap-3 rounded-lg border px-3 py-3'>
+          <IconBadge tone='destructive' size='stat'>
+            <BellRing />
+          </IconBadge>
+          <div className='min-w-0'>
+            <div className='text-sm font-medium'>{t('Failure alerts')}</div>
+            <p className='text-muted-foreground mt-0.5 text-sm'>
+              {t(
+                'When a status monitor fails 3 consecutive checks, an alert is automatically posted to the admin-configured QQ groups, showing the group, monitor name, failure count, and latest failure time. Only one alert per outage; recovery is not announced.'
+              )}
             </p>
           </div>
         </div>
