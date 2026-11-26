@@ -21,12 +21,13 @@ import {
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
+  Trash2Icon,
   UploadIcon,
 } from 'lucide-react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -42,47 +43,53 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
+import { useFileDropZone } from '../hooks/use-file-drop-zone'
 import { formatFileSize } from '../lib/office-file-size'
 import type { OfficeFile } from '../types'
 
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-
 export type OfficeFilesProps = {
   files: OfficeFile[]
+  /** Deletion waits while a task is working in the workspace. */
+  isDeleteDisabled?: boolean
+  isDeleting?: boolean
   isLoading?: boolean
   isUploading?: boolean
   /** Desktop context sidebar or the compact-screen drawer. */
   variant?: 'panel' | 'sheet'
   onDownload: (path: string) => void
-  onUpload: (file: File) => void
+  /** Removes a file or folder of the workspace for good. */
+  onRemove: (path: string) => void
+  /** Picked or dropped files are uploaded into the workspace. */
+  onUpload: (files: File[]) => void
 }
 
 type OfficeFileItemProps = {
   file: OfficeFile
+  isDeleteDisabled?: boolean
+  onDelete: () => void
   onDownload: () => void
 }
 
-/** Workspace files of the open session: upload inputs, download results. */
+/** Workspace files of the open session: upload, download and remove. */
 export function OfficeFiles(props: OfficeFilesProps) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
+  const dropZone = useFileDropZone(props.onUpload)
+  const [pendingDelete, setPendingDelete] = useState<OfficeFile | null>(null)
 
-  const handleFile = (list: FileList | null) => {
-    const file = list?.[0]
-    if (!file) return
-    if (file.size > MAX_UPLOAD_BYTES) {
-      toast.error(t('Each file must not exceed 20 MiB'))
-      return
-    }
-    props.onUpload(file)
+  const confirmDelete = () => {
+    if (pendingDelete) props.onRemove(pendingDelete.path)
+    setPendingDelete(null)
   }
 
   const uploadControls = (
     <>
       <input
         className='hidden'
+        multiple
         onChange={(event) => {
-          handleFile(event.target.files)
+          const files = [...(event.target.files ?? [])]
+          if (files.length > 0) props.onUpload(files)
           event.target.value = ''
         }}
         ref={inputRef}
@@ -105,28 +112,62 @@ export function OfficeFiles(props: OfficeFilesProps) {
     </>
   )
   const fileList = (
-    <ScrollArea className='min-h-0 flex-1'>
-      <OfficeFileList
-        files={props.files}
-        isLoading={props.isLoading}
-        onDownload={props.onDownload}
+    <>
+      <ScrollArea className='min-h-0 flex-1'>
+        <OfficeFileList
+          files={props.files}
+          isDeleteDisabled={props.isDeleteDisabled}
+          isLoading={props.isLoading}
+          onDelete={setPendingDelete}
+          onDownload={props.onDownload}
+        />
+      </ScrollArea>
+      <ConfirmDialog
+        destructive
+        confirmText={t('Delete')}
+        desc={t('It will be removed from the workspace for good.')}
+        disabled={props.isDeleteDisabled}
+        handleConfirm={confirmDelete}
+        isLoading={props.isDeleting}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+        open={pendingDelete !== null}
+        title={t('Delete "{{name}}"?', {
+          name: pendingDelete?.path ?? '',
+          interpolation: { escapeValue: false },
+        })}
       />
-    </ScrollArea>
+    </>
   )
 
   if (props.variant === 'panel') {
     return (
       <section
         aria-label={t('Workspace files')}
-        className='flex min-h-0 flex-1 flex-col'
+        className={cn(
+          'flex min-h-0 flex-1 flex-col transition-colors',
+          dropZone.isDragActive &&
+            'bg-primary/5 ring-primary/40 ring-2 ring-inset'
+        )}
+        {...dropZone.handlers}
       >
         <div className='border-b px-4 py-3'>
           <h2 className='text-xs font-semibold'>{t('Workspace files')}</h2>
           <p className='text-muted-foreground mt-1 text-xs leading-5'>
-            {t('Upload files for the task and download what Codex produced.')}
+            {dropZone.isDragActive
+              ? t('Drop files to upload them to the workspace')
+              : t(
+                  'Upload files for the task and download what Codex produced.'
+                )}
           </p>
         </div>
-        <div className='p-3'>{uploadControls}</div>
+        <div className='p-3'>
+          {uploadControls}
+          <p className='text-muted-foreground mt-2 text-[11px] leading-4'>
+            {t('You can also drag files here or into the task box.')}
+          </p>
+        </div>
         {fileList}
       </section>
     )
@@ -142,7 +183,14 @@ export function OfficeFiles(props: OfficeFilesProps) {
           </Button>
         }
       />
-      <SheetContent className='flex w-80 flex-col gap-0 p-0' side='right'>
+      <SheetContent
+        className={cn(
+          'flex w-80 flex-col gap-0 p-0',
+          dropZone.isDragActive && 'bg-primary/5'
+        )}
+        side='right'
+        {...dropZone.handlers}
+      >
         <SheetHeader className='border-b'>
           <SheetTitle>{t('Workspace files')}</SheetTitle>
           <SheetDescription>
@@ -158,7 +206,9 @@ export function OfficeFiles(props: OfficeFilesProps) {
 
 type OfficeFileListProps = {
   files: OfficeFile[]
+  isDeleteDisabled?: boolean
   isLoading?: boolean
+  onDelete: (file: OfficeFile) => void
   onDownload: (path: string) => void
 }
 
@@ -185,7 +235,9 @@ function OfficeFileList(props: OfficeFileListProps) {
       {props.files.map((file) => (
         <OfficeFileItem
           file={file}
+          isDeleteDisabled={props.isDeleteDisabled}
           key={file.path}
+          onDelete={() => props.onDelete(file)}
           onDownload={() => props.onDownload(file.path)}
         />
       ))}
@@ -212,21 +264,38 @@ function OfficeFileItem(props: OfficeFileItemProps) {
       <span className='min-w-0 flex-1 truncate font-mono text-xs'>
         {props.file.path}
       </span>
-      {!isDir && (
-        <>
-          <span className='text-muted-foreground shrink-0 text-xs'>
-            {formatFileSize(props.file.size)}
-          </span>
+      <span className='text-muted-foreground shrink-0 text-xs'>
+        {isDir ? '' : formatFileSize(props.file.size)}
+      </span>
+      <div className='flex shrink-0 items-center gap-0.5'>
+        {/* A label is read as is: the path must not come out HTML-escaped. */}
+        {!isDir && (
           <Button
-            aria-label={t('Download {{name}}', { name: props.file.path })}
+            aria-label={t('Download {{name}}', {
+              name: props.file.path,
+              interpolation: { escapeValue: false },
+            })}
             onClick={props.onDownload}
             size='icon-sm'
             variant='ghost'
           >
             <DownloadIcon />
           </Button>
-        </>
-      )}
+        )}
+        <Button
+          aria-label={t('Delete {{name}}', {
+            name: props.file.path,
+            interpolation: { escapeValue: false },
+          })}
+          className='text-muted-foreground hover:text-destructive'
+          disabled={props.isDeleteDisabled}
+          onClick={props.onDelete}
+          size='icon-sm'
+          variant='ghost'
+        >
+          <Trash2Icon />
+        </Button>
+      </div>
     </li>
   )
 }

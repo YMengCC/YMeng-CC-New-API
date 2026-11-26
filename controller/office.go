@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/service/office"
 
 	"github.com/gin-gonic/gin"
@@ -81,6 +83,8 @@ func respondOfficeError(c *gin.Context, err error) {
 		common.ApiErrorStatus(c, workerError.Status, common.NewMessage(workerError.Message))
 	case errors.Is(err, office.ErrTurnRunning):
 		common.ApiErrorStatus(c, http.StatusConflict, common.NewMessage(err.Error()))
+	case errors.Is(err, office.ErrGroupDenied):
+		common.ApiErrorStatus(c, http.StatusForbidden, common.NewMessage(i18n.T(c, i18n.MsgDistributorGroupAccessDenied)))
 	case errors.As(err, &message):
 		common.ApiError(c, err)
 	default:
@@ -185,6 +189,22 @@ func UploadOfficeSessionFile(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// DeleteOfficeSessionFile removes a workspace file or folder of the session.
+func DeleteOfficeSessionFile(c *gin.Context) {
+	if !requireOffice(c) {
+		return
+	}
+	userId, sessionId, ok := officeSession(c)
+	if !ok {
+		return
+	}
+	if err := office.DeleteFile(c.Request.Context(), userId, sessionId, c.Query("path")); err != nil {
+		respondOfficeError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
 // DownloadOfficeSessionFile streams a workspace file back to the browser.
 func DownloadOfficeSessionFile(c *gin.Context) {
 	if !requireOffice(c) {
@@ -212,8 +232,9 @@ func DownloadOfficeSessionFile(c *gin.Context) {
 }
 
 // StartOfficeTurn runs one Codex turn for a session and streams its events
-// as server-sent events. Each turn runs on a short-lived token of the admin,
-// so the model calls are billed and logged as that admin's own requests.
+// as server-sent events. Each turn runs on a short-lived token of the admin
+// that is bound to the chosen group, so the model calls are billed and logged
+// as that admin's own requests and routed like a chat mode request.
 func StartOfficeTurn(c *gin.Context) {
 	if !requireOffice(c) {
 		return
@@ -225,6 +246,7 @@ func StartOfficeTurn(c *gin.Context) {
 	var request struct {
 		Prompt string `json:"prompt"`
 		Model  string `json:"model"`
+		Group  string `json:"group"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil || request.Prompt == "" || request.Model == "" || len(request.Prompt) > maxOfficePromptLength {
 		common.ApiError(c, errOfficeTurnInvalid)
@@ -239,7 +261,12 @@ func StartOfficeTurn(c *gin.Context) {
 	}
 	defer office.EndTurn(userId)
 
-	token, err := office.IssueTurnToken(userId, office.TurnTimeout())
+	group, err := office.TurnGroup(common.GetContextKeyString(c, constant.ContextKeyUserGroup), request.Group)
+	if err != nil {
+		respondOfficeError(c, err)
+		return
+	}
+	token, err := office.IssueTurnToken(userId, group, office.TurnTimeout())
 	if err != nil {
 		common.ApiError(c, err)
 		return

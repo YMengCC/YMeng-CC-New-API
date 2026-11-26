@@ -82,9 +82,12 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
       </div>
       <OfficeFiles
         files={props.files}
+        isDeleteDisabled={props.isDeleteDisabled}
+        isDeleting={props.isDeleting}
         isLoading={props.isLoading}
         isUploading={props.isUploading}
         onDownload={props.onDownload}
+        onRemove={props.onRemove}
         onUpload={props.onUpload}
         variant='panel'
       />

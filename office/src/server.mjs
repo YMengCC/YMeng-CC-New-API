@@ -92,6 +92,11 @@ export function createServer({ store, runner, token, maxUploadBytes }) {
           sendJson(res, 200, { success: true })
           return
         }
+        if (req.method === 'DELETE') {
+          await store.deleteFile(validUserId(userId), sessionId, url.searchParams.get('path') ?? '')
+          sendJson(res, 200, { success: true })
+          return
+        }
       }
       if (route.length === 4 && route[2] === 'files' && route[3] === 'content' && req.method === 'GET') {
         await sendFile(validUserId(userId), sessionId, url.searchParams.get('path') ?? '', res)

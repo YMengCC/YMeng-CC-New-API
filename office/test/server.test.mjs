@@ -144,3 +144,23 @@ test('files can be uploaded into and downloaded from the workspace only', async 
   assert.equal((await request('POST', `${base}?userId=${USER}&path=big.bin`, { raw: 'x'.repeat(17) })).status, 413)
   assert.equal((await request('GET', `${base}?userId=${USER}`)).status, 200)
 })
+
+test('workspace files can be deleted over the API only by their owner', async () => {
+  const { data } = await json(await request('POST', '/sessions', { body: { userId: USER } }))
+  const base = `/sessions/${data.id}/files`
+  await request('POST', `${base}?userId=${USER}&path=docs/brief.txt`, {
+    raw: 'quarterly brief',
+    headers: { 'content-type': 'text/plain' },
+  })
+
+  assert.equal((await request('DELETE', `${base}?userId=8&path=docs/brief.txt`)).status, 404)
+  assert.equal((await request('DELETE', `${base}?userId=${USER}&path=missing.txt`)).status, 404)
+  assert.equal((await request('DELETE', `${base}?userId=${USER}&path=../meta.json`)).status, 400)
+  assert.deepEqual((await json(await request('GET', `${base}?userId=${USER}`))).data.files, [
+    { path: 'docs', size: 0, isDir: true },
+    { path: 'docs/brief.txt', size: 15, isDir: false },
+  ])
+
+  assert.equal((await request('DELETE', `${base}?userId=${USER}&path=docs`)).status, 200)
+  assert.deepEqual((await json(await request('GET', `${base}?userId=${USER}`))).data.files, [])
+})

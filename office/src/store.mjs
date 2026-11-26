@@ -161,6 +161,27 @@ export class Store {
     return target
   }
 
+  /**
+   * Deletes a file or a whole folder of the workspace. The path is checked
+   * like every other file path, so nothing outside the workspace is reached;
+   * a symbolic link is removed itself, never what it points to.
+   * @param {string} relative
+   */
+  async deleteFile(userId, sessionId, relative) {
+    await this.getMeta(userId, sessionId)
+    const target = await this.resolveFile(userId, sessionId, relative)
+    let stat
+    try {
+      stat = await fs.lstat(target)
+    } catch (error) {
+      throw error.code === 'ENOENT' ? new OfficeError(404, 'File not found') : error
+    }
+    if (!stat.isDirectory() && !stat.isFile() && !stat.isSymbolicLink()) {
+      throw new OfficeError(400, 'Invalid file path')
+    }
+    await fs.rm(target, { recursive: true, force: true })
+  }
+
   /** @returns {Promise<Array<{path: string, size: number, isDir: boolean}>>} */
   async listFiles(userId, sessionId) {
     const workspace = this.workspace(userId, sessionId)

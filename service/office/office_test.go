@@ -52,16 +52,43 @@ func TestLoadConfigEnablesOfficeOnlyWithAConfiguredWorker(t *testing.T) {
 }
 
 func TestTurnTokenIsShortLivedAndBilledToTheWallet(t *testing.T) {
-	token := turnToken(7, 1_000, 10*time.Minute)
+	token := turnToken(7, "vip", 1_000, 10*time.Minute)
 
 	assert.Equal(t, 7, token.UserId)
 	assert.Equal(t, int64(1_000+900), token.ExpiredTime)
 	assert.Equal(t, common.TokenStatusEnabled, token.Status)
 	assert.True(t, token.UnlimitedQuota)
-	// No group and no model limit: the admin's own group routes the request.
-	assert.Empty(t, token.Group)
+	// The group of the turn routes the request; there is no model limit.
+	assert.Equal(t, "vip", token.Group)
 	assert.False(t, token.ModelLimitsEnabled)
 	assert.Empty(t, token.Key, "the key is generated when the token is issued")
+}
+
+func TestTurnGroupFollowsTheChatModeGroupRules(t *testing.T) {
+	cases := []struct {
+		name      string
+		userGroup string
+		requested string
+		group     string
+		denied    bool
+	}{
+		{name: "nothing requested keeps the user's group", userGroup: "default", requested: "", group: ""},
+		{name: "the user's own group is always allowed", userGroup: "vip", requested: "vip", group: "vip"},
+		{name: "a group the user may use is allowed", userGroup: "default", requested: "vip", group: "vip"},
+		{name: "a group the user may not use is denied", userGroup: "default", requested: "internal", denied: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			group, err := TurnGroup(tc.userGroup, tc.requested)
+
+			if tc.denied {
+				assert.ErrorIs(t, err, ErrGroupDenied)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.group, group)
+		})
+	}
 }
 
 func TestClientAuthenticatesAndUnwrapsWorkerData(t *testing.T) {
@@ -109,6 +136,25 @@ func TestClientSendsTheActingUserWhenCreatingASession(t *testing.T) {
 
 	assert.Equal(t, `{"userId":7}`, <-body)
 	assert.Equal(t, "abc", out.ID)
+}
+
+func TestClientDeletesAWorkspaceFileInTheNameOfTheUser(t *testing.T) {
+	var got *http.Request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		io.WriteString(w, `{"success":true}`)
+	}))
+	defer server.Close()
+	client := newClient(config{workerURL: server.URL, workerToken: "shared-secret", turnTimeout: defaultTurnTimeout})
+
+	require.NoError(t, client.deleteFile(context.Background(), 7, "0123456789abcdef0123456789abcdef", "docs/brief.txt"))
+
+	require.NotNil(t, got)
+	assert.Equal(t, http.MethodDelete, got.Method)
+	assert.Equal(t, "Bearer shared-secret", got.Header.Get("Authorization"))
+	assert.Equal(t, "/sessions/0123456789abcdef0123456789abcdef/files", got.URL.Path)
+	assert.Equal(t, "7", got.URL.Query().Get("userId"))
+	assert.Equal(t, "docs/brief.txt", got.URL.Query().Get("path"))
 }
 
 func TestClientMapsWorkerFailures(t *testing.T) {

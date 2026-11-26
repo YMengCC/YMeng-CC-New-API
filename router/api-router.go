@@ -536,6 +536,7 @@ func SetApiRouter(router *gin.Engine) {
 			officeRoute.GET("/sessions/:id/events", controller.GetOfficeSessionEvents)
 			officeRoute.GET("/files/:id", controller.ListOfficeSessionFiles)
 			officeRoute.POST("/files/:id", controller.UploadOfficeSessionFile)
+			officeRoute.DELETE("/files/:id", controller.DeleteOfficeSessionFile)
 			officeRoute.GET("/files/:id/content", controller.DownloadOfficeSessionFile)
 			officeRoute.POST("/turns/:id", controller.StartOfficeTurn)
 			officeRoute.POST("/turns/:id/stop", controller.StopOfficeTurn)

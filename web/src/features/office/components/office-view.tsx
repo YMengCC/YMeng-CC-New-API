@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
 import { BriefcaseBusinessIcon, HistoryIcon, PlusIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -37,13 +36,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { getUserModels } from '@/lib/api'
-import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { useOfficeFiles } from '../hooks/use-office-files'
+import { useOfficeOptions } from '../hooks/use-office-options'
 import { useOfficeSessions } from '../hooks/use-office-sessions'
 import { useOfficeTurn } from '../hooks/use-office-turn'
-import { pickOfficeModel } from '../lib/office-model'
 import { buildOfficeTurns } from '../lib/office-timeline'
 import { OfficeContextPanel } from './office-context-panel'
 import { OfficeFiles } from './office-files'
@@ -51,42 +48,14 @@ import { OfficeInput } from './office-input'
 import { OfficeSessionList } from './office-session-list'
 import { OfficeTimeline } from './office-timeline'
 
-const MODEL_STORAGE_KEY = 'office:model'
-
-function readStoredModel(): string {
-  return localStorage.getItem(MODEL_STORAGE_KEY) ?? ''
-}
-
 /** The office mode of the playground: Codex does the work, the admin watches. */
 export function OfficeView() {
   const { t } = useTranslation()
   const sessions = useOfficeSessions()
   const turn = useOfficeTurn(sessions.activeId)
   const files = useOfficeFiles(sessions.activeId)
-  const [storedModel, setStoredModel] = useState(readStoredModel)
+  const options = useOfficeOptions()
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
-
-  const modelsQuery = useQuery({
-    queryKey: ['office', 'models'],
-    queryFn: async () => {
-      const res = await getUserModels()
-      requireServerSuccess(res)
-      return res.data ?? []
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-  const models = useMemo(
-    () =>
-      (modelsQuery.data ?? []).map((model) => ({
-        label: model,
-        value: model,
-      })),
-    [modelsQuery.data]
-  )
-  const model = useMemo(
-    () => pickOfficeModel(models, storedModel),
-    [models, storedModel]
-  )
 
   const turns = useMemo(() => buildOfficeTurns(turn.events), [turn.events])
   const activeTitle =
@@ -108,10 +77,13 @@ export function OfficeView() {
 
   const fileProps = {
     files: files.files,
+    isDeleteDisabled: turn.isRunning,
+    isDeleting: files.remove.isPending,
     isLoading: files.isLoading,
     isUploading: files.upload.isPending,
     onDownload: files.download,
-    onUpload: (file: File) => files.upload.mutate({ file }),
+    onRemove: (path: string) => files.remove.mutate(path),
+    onUpload: (list: File[]) => void files.uploadFiles(list),
   }
   const hasActiveSession = sessions.activeId !== ''
 
@@ -215,23 +187,26 @@ export function OfficeView() {
                 />
               </Conversation>
               <OfficeInput
-                disabled={models.length === 0}
-                isModelLoading={modelsQuery.isLoading}
+                disabled={options.models.length === 0}
+                groupValue={options.group}
+                groups={options.groups}
+                isModelLoading={options.isLoadingModels}
                 isRunning={turn.isRunning}
-                modelValue={model}
-                models={models}
-                onModelChange={(value) => {
-                  setStoredModel(value)
-                  localStorage.setItem(MODEL_STORAGE_KEY, value)
-                }}
-                onSubmit={(text) => void turn.send(text, model)}
+                modelValue={options.model}
+                models={options.models}
+                onDropFiles={fileProps.onUpload}
+                onGroupChange={options.onGroupChange}
+                onModelChange={options.onModelChange}
+                onSubmit={(text) =>
+                  void turn.send(text, options.model, options.group)
+                }
                 onStop={turn.stop}
               />
             </div>
             <OfficeContextPanel
               {...fileProps}
               isRunning={turn.isRunning}
-              model={model}
+              model={options.model}
             />
           </div>
         )}

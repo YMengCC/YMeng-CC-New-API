@@ -19,11 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { saveBlob } from '@/lib/dom-utils'
 import { handleServerError } from '@/lib/handle-server-error'
 
-import { downloadOfficeFile, listOfficeFiles, uploadOfficeFile } from '../api'
+import {
+  deleteOfficeFile,
+  downloadOfficeFile,
+  listOfficeFiles,
+  uploadOfficeFile,
+} from '../api'
+import { splitBySizeLimit } from '../lib/office-upload'
 
 /** Files of a workspace; the agent's results are downloaded from here. */
 export function useOfficeFiles(sessionId: string) {
@@ -40,6 +47,38 @@ export function useOfficeFiles(sessionId: string) {
     mutationFn: (variables: { file: File; path?: string }) =>
       uploadOfficeFile(sessionId, variables.file, variables.path),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: filesQueryKey }),
+    onError: (error) =>
+      handleServerError(error, t('The file could not be uploaded')),
+  })
+  const { mutateAsync } = upload
+  /** Uploads picked or dropped files one after another; each reports itself. */
+  const uploadFiles = useCallback(
+    async (list: File[]) => {
+      const { accepted, hasOversized } = splitBySizeLimit(list)
+      if (hasOversized) {
+        toast.error(t('Each file must not exceed 20 MiB'))
+      }
+      for (const file of accepted) {
+        // A failed upload is reported by the mutation.
+        const isUploaded = await mutateAsync({ file }).then(
+          () => true,
+          () => false
+        )
+        if (isUploaded) {
+          toast.success(t('Uploaded {{name}}', { name: file.name }))
+        }
+      }
+    },
+    [mutateAsync, t]
+  )
+  const remove = useMutation({
+    mutationFn: (path: string) => deleteOfficeFile(sessionId, path),
+    onSuccess: (_data, path) => {
+      toast.success(t('Deleted {{name}}', { name: path.split('/').pop() }))
+      void queryClient.invalidateQueries({ queryKey: filesQueryKey })
+    },
+    onError: (error) =>
+      handleServerError(error, t('The file could not be deleted')),
   })
   const download = useCallback(
     async (path: string) => {
@@ -57,6 +96,8 @@ export function useOfficeFiles(sessionId: string) {
     files: filesQuery.data ?? [],
     isLoading: filesQuery.isLoading,
     upload,
+    uploadFiles,
+    remove,
     download,
   }
 }

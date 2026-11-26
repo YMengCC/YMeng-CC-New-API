@@ -21,6 +21,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 )
 
 // TurnRequest is the payload of POST /turns/:id on the office worker.
@@ -44,6 +45,9 @@ func (e *WorkerError) Error() string {
 
 // ErrTurnRunning reports that the user already has a turn in progress.
 var ErrTurnRunning = errors.New("You already have an office task in progress")
+
+// ErrGroupDenied reports a group the user may not run a turn in.
+var ErrGroupDenied = errors.New("No permission to access this group")
 
 var sessionIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
@@ -137,6 +141,11 @@ func UploadFile(ctx context.Context, userId int, sessionId, relative string, con
 	return current().uploadFile(ctx, userId, sessionId, relative, content)
 }
 
+// DeleteFile removes a file or folder from the workspace.
+func DeleteFile(ctx context.Context, userId int, sessionId, relative string) error {
+	return current().deleteFile(ctx, userId, sessionId, relative)
+}
+
 // DownloadFile returns the worker's file response for the caller to stream.
 func DownloadFile(ctx context.Context, userId int, sessionId, relative string) (*http.Response, error) {
 	return current().downloadFile(ctx, userId, sessionId, relative)
@@ -178,6 +187,12 @@ func (c *client) uploadFile(ctx context.Context, userId int, sessionId, relative
 	query := userQuery(userId)
 	query.Set("path", relative)
 	return c.call(ctx, http.MethodPost, "/sessions/"+sessionId+"/files", query, content, "application/octet-stream", nil)
+}
+
+func (c *client) deleteFile(ctx context.Context, userId int, sessionId, relative string) error {
+	query := userQuery(userId)
+	query.Set("path", relative)
+	return c.call(ctx, http.MethodDelete, "/sessions/"+sessionId+"/files", query, nil, "", nil)
 }
 
 func (c *client) downloadFile(ctx context.Context, userId int, sessionId, relative string) (*http.Response, error) {
@@ -301,10 +316,24 @@ func StopTurn(userId int, sessionId string) bool {
 	return false
 }
 
+// TurnGroup is the group a turn is billed and routed in, chosen the way chat
+// mode chooses it: an empty or own group keeps the user's group, any other has
+// to be one of the groups the user may use.
+func TurnGroup(userGroup, requested string) (string, error) {
+	if requested == "" || requested == userGroup {
+		return requested, nil
+	}
+	if !service.GroupInUserUsableGroups(userGroup, requested) {
+		return "", ErrGroupDenied
+	}
+	return requested, nil
+}
+
 // IssueTurnToken creates the short-lived API token the Codex CLI uses for its
-// model calls, so they are billed and logged as the user's own requests.
-func IssueTurnToken(userId int, ttl time.Duration) (*model.Token, error) {
-	token := turnToken(userId, common.GetTimestamp(), ttl)
+// model calls, so they are billed and logged as the user's own requests and
+// routed in group like a chat mode request.
+func IssueTurnToken(userId int, group string, ttl time.Duration) (*model.Token, error) {
+	token := turnToken(userId, group, common.GetTimestamp(), ttl)
 	key, err := common.GenerateKey()
 	if err != nil {
 		return nil, err
@@ -316,11 +345,12 @@ func IssueTurnToken(userId int, ttl time.Duration) (*model.Token, error) {
 	return token, nil
 }
 
-func turnToken(userId int, now int64, ttl time.Duration) *model.Token {
+func turnToken(userId int, group string, now int64, ttl time.Duration) *model.Token {
 	return &model.Token{
 		UserId:         userId,
 		Name:           "office-turn",
 		Status:         common.TokenStatusEnabled,
+		Group:          group,
 		CreatedTime:    now,
 		AccessedTime:   now,
 		ExpiredTime:    now + int64((ttl + tokenGrace).Seconds()),

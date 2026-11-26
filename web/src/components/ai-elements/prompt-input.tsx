@@ -445,6 +445,9 @@ export type PromptInputProps = Omit<
   multiple?: boolean
   // When true, accepts drops anywhere on document. Default false (opt-in).
   globalDrop?: boolean
+  // When false, files dropped on the composer are not attached: a parent that
+  // handles the drop itself (e.g. uploads the files) owns them. Default true.
+  acceptDrop?: boolean
   // Render a hidden input with given name and keep it in sync for native form posts. Default false.
   syncHiddenInput?: boolean
   // Minimal constraints
@@ -493,6 +496,7 @@ export const PromptInput = ({
   accept,
   multiple,
   globalDrop,
+  acceptDrop = true,
   syncHiddenInput,
   maxFiles,
   maxFileSize,
@@ -667,7 +671,11 @@ export const PromptInput = ({
       if (e.dataTransfer?.types?.includes('Files')) {
         e.preventDefault()
       }
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      if (
+        acceptDrop &&
+        e.dataTransfer?.files &&
+        e.dataTransfer.files.length > 0
+      ) {
         add(e.dataTransfer.files)
       }
     }
@@ -677,7 +685,7 @@ export const PromptInput = ({
       form.removeEventListener('dragover', onDragOver)
       form.removeEventListener('drop', onDrop)
     }
-  }, [add])
+  }, [acceptDrop, add])
 
   useEffect(() => {
     if (!globalDrop) return

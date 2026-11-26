@@ -97,6 +97,15 @@ export async function downloadOfficeFile(
   return res.data as Blob
 }
 
+/** Removes a file or folder from the workspace of a session. */
+export async function deleteOfficeFile(
+  id: string,
+  path: string
+): Promise<void> {
+  const res = await api.delete(`${BASE_URL}/files/${id}`, { params: { path } })
+  requireServerSuccess(res.data)
+}
+
 /** Tells the server to stop the turn running in a session. */
 export async function stopOfficeTurn(id: string): Promise<void> {
   const res = await api.post(`${BASE_URL}/turns/${id}/stop`)

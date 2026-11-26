@@ -105,6 +105,47 @@ test('a symlink created by the agent cannot expose files outside the workspace',
   assert.equal(files.some((entry) => entry.path === 'link/secret.txt'), false)
 })
 
+test('a workspace file or folder can be deleted, nothing outside it', async () => {
+  const store = await createStore()
+  const { id } = await store.createSession(USER)
+  const workspace = store.workspace(USER, id)
+  await fs.mkdir(path.join(workspace, 'out', 'drafts'), { recursive: true })
+  await fs.writeFile(path.join(workspace, 'notes.md'), 'ok')
+  await fs.writeFile(path.join(workspace, 'out', 'report.md'), '12345')
+  await fs.writeFile(path.join(workspace, 'out', 'drafts', 'report.md'), 'old')
+  const paths = async () => (await store.listFiles(USER, id)).map((entry) => entry.path)
+
+  await store.deleteFile(USER, id, 'out/drafts/report.md')
+  // Deleting a file leaves its folder in place.
+  assert.deepEqual(await paths(), ['notes.md', 'out', 'out/drafts', 'out/report.md'])
+
+  await store.deleteFile(USER, id, 'out')
+  assert.deepEqual(await paths(), ['notes.md'])
+
+  // The session files sit next to the workspace: unreachable and untouched.
+  assert.equal(await statusOf(store.deleteFile(USER, id, '../meta.json')), 400)
+  assert.equal(await statusOf(store.deleteFile(USER, id, '.')), 400)
+  assert.equal(await statusOf(store.deleteFile(USER, id, 'missing.txt')), 404)
+  assert.equal(await statusOf(store.deleteFile(USER + 1, id, 'notes.md')), 404)
+  assert.equal(await statusOf(store.getMeta(USER, id)), 'resolved')
+  assert.deepEqual(await paths(), ['notes.md'])
+})
+
+test('deleting a symbolic link removes the link, not what it points to', async () => {
+  const store = await createStore()
+  const { id } = await store.createSession(USER)
+  const workspace = store.workspace(USER, id)
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'office-outside-'))
+  tmpDirs.push(outside)
+  await fs.writeFile(path.join(outside, 'secret.txt'), 'secret')
+  await fs.symlink(outside, path.join(workspace, 'link'), process.platform === 'win32' ? 'junction' : 'dir')
+
+  await store.deleteFile(USER, id, 'link')
+
+  assert.equal(await fs.readFile(path.join(outside, 'secret.txt'), 'utf8'), 'secret')
+  assert.deepEqual(await store.listFiles(USER, id), [])
+})
+
 test('the file listing skips dependency folders and reports sizes', async () => {
   const store = await createStore()
   const { id } = await store.createSession(USER)

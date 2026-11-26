@@ -388,6 +388,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/office/sessions/:id/events": accessTokenSessionRule,
 	"GET /api/office/files/:id":           accessTokenSessionRule,
 	"POST /api/office/files/:id":          accessTokenSessionRule,
+	"DELETE /api/office/files/:id":        accessTokenSessionRule,
 	"GET /api/office/files/:id/content":   accessTokenSessionRule,
 	"POST /api/office/turns/:id":          accessTokenSessionRule,
 	"POST /api/office/turns/:id/stop":     accessTokenSessionRule,

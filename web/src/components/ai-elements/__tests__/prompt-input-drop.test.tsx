@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { afterAll, beforeAll, expect, test, vi } from 'vitest'
 
 import {
@@ -95,6 +101,32 @@ test('submitting after a drop forwards the file to onSubmit', async () => {
   expect(onSubmit.mock.calls[0][0].files[0].url).toBe(
     'data:image/png;base64,AAAA'
   )
+})
+
+test('a dropped file is not attached when the composer does not accept drops', () => {
+  const { container } = render(
+    <PromptInput acceptDrop={false} onSubmit={vi.fn()}>
+      <PromptInputAttachments>
+        {(file) => <PromptInputAttachment data={file} />}
+      </PromptInputAttachments>
+      <PromptInputTextarea placeholder='message' />
+    </PromptInput>
+  )
+  const form = container.querySelector('form')
+  if (!form) throw new Error('form is missing')
+
+  const drop = createEvent.drop(form, {
+    dataTransfer: {
+      types: ['Files'],
+      files: [new File(['pixels'], 'cat.png', { type: 'image/png' })],
+      items: [],
+    },
+  })
+  fireEvent(form, drop)
+
+  // The browser is still kept from opening the file, but nothing is attached.
+  expect(drop.defaultPrevented).toBe(true)
+  expect(screen.queryByText('cat.png')).not.toBeInTheDocument()
 })
 
 test('a long attachment name stays within the composer and truncates', async () => {

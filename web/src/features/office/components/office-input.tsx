@@ -27,29 +27,37 @@ import {
   PromptInputTextarea,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
-import { ModelSelector } from '@/components/model-group-selector'
+import { ModelGroupSelector } from '@/components/model-group-selector'
 import { Kbd } from '@/components/ui/kbd'
+import type { GroupOption, ModelOption } from '@/features/playground/types'
+import { cn } from '@/lib/utils'
 
-type OfficeModelOption = {
-  label: string
-  value: string
-}
+import { useFileDropZone } from '../hooks/use-file-drop-zone'
 
 type OfficeInputProps = {
   disabled?: boolean
+  groupValue: string
+  groups: GroupOption[]
   isModelLoading?: boolean
   isRunning?: boolean
   modelValue: string
-  models: OfficeModelOption[]
+  models: ModelOption[]
+  onDropFiles: (files: File[]) => void
+  onGroupChange: (value: string) => void
   onModelChange: (value: string) => void
   onSubmit: (text: string) => void
   onStop?: () => void
 }
 
-/** Composer of the office mode: a task, the model to run it and a stop. */
+/**
+ * Composer of the office mode: a task, the group and model to run it, a
+ * stop. Files dropped on it are uploaded into the workspace instead of being
+ * attached, because Codex reads its files from there.
+ */
 export function OfficeInput(props: OfficeInputProps) {
   const { t } = useTranslation()
   const isSelectorDisabled = props.disabled || props.isRunning
+  const dropZone = useFileDropZone(props.onDropFiles)
 
   const handleSubmit = (message: PromptInputMessage) => {
     const text = message.text?.trim() ?? ''
@@ -61,12 +69,26 @@ export function OfficeInput(props: OfficeInputProps) {
   }
 
   return (
-    <div className='mx-auto flex w-full max-w-[760px] shrink-0 flex-col gap-1.5 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:gap-2 md:pb-4'>
+    <div
+      className='mx-auto flex w-full max-w-[760px] shrink-0 flex-col gap-1.5 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:gap-2 md:pb-4'
+      {...dropZone.handlers}
+    >
       <PromptInput
+        acceptDrop={false}
         className='relative'
-        groupClassName='bg-background border-border ring-1 ring-border/40 rounded-xl overflow-hidden transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-sm'
+        groupClassName={cn(
+          'bg-background border-border ring-1 ring-border/40 rounded-xl overflow-hidden transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-sm',
+          dropZone.isDragActive && 'border-primary bg-primary/5 ring-primary/30'
+        )}
         onSubmit={handleSubmit}
       >
+        {dropZone.isDragActive && (
+          <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl'>
+            <p className='bg-background/90 text-primary rounded-md px-3 py-1.5 text-sm font-medium'>
+              {t('Drop files to upload them to the workspace')}
+            </p>
+          </div>
+        )}
         <PromptInputBody>
           <PromptInputTextarea
             autoComplete='off'
@@ -80,11 +102,14 @@ export function OfficeInput(props: OfficeInputProps) {
         </PromptInputBody>
         <PromptInputFooter className='border-border/60 flex items-center gap-1.5 border-t px-2 py-1.5 md:gap-2 md:px-3 md:py-2'>
           <div className='shrink-0 [&_button]:max-w-[7.5rem] [&_button]:px-2 md:[&_button]:max-w-[15rem] md:[&_button]:px-2.5'>
-            <ModelSelector
+            <ModelGroupSelector
               disabled={isSelectorDisabled}
-              models={props.models}
+              groups={props.groups}
+              onGroupChange={props.onGroupChange}
               onModelChange={props.onModelChange}
+              selectedGroup={props.groupValue}
               selectedModel={props.modelValue}
+              models={props.models}
             />
           </div>
           <p className='text-muted-foreground mx-1 hidden min-w-0 flex-1 truncate text-xs lg:block'>

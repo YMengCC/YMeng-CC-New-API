@@ -17,8 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { toast } from 'sonner'
 import {
   afterAll,
   afterEach,
@@ -35,6 +43,7 @@ import type { OfficeEvent, OfficeSession } from '../types'
 const mocks = vi.hoisted(() => ({
   api: {
     createOfficeSession: vi.fn(),
+    deleteOfficeFile: vi.fn(),
     deleteOfficeSession: vi.fn(),
     downloadOfficeFile: vi.fn(),
     getOfficeSessionEvents: vi.fn(),
@@ -44,8 +53,12 @@ const mocks = vi.hoisted(() => ({
     stopOfficeTurn: vi.fn(),
     uploadOfficeFile: vi.fn(),
   },
-  libApi: {
+  playgroundApi: {
+    getPricingModels: vi.fn(),
+    getUserGroups: vi.fn(),
     getUserModels: vi.fn(),
+  },
+  libApi: {
     getFreshAuthHeaders: vi.fn(),
   },
   streams: [] as Array<{
@@ -57,6 +70,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../api', () => mocks.api)
+vi.mock('@/features/playground/api', () => mocks.playgroundApi)
 vi.mock('@/lib/api', () => mocks.libApi)
 vi.mock('sse.js', () => ({
   SSE: class {
@@ -166,16 +180,26 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.streams.length = 0
   localStorage.clear()
-  mocks.libApi.getUserModels.mockResolvedValue({
-    success: true,
-    data: ['gpt-5.1-codex'],
-  })
+  // The playground option loaders return the mapped lists, not the envelope.
+  mocks.playgroundApi.getUserGroups.mockResolvedValue([
+    { label: 'default', value: 'default', ratio: 1, desc: 'Default group' },
+    { label: 'vip', value: 'vip', ratio: 2, desc: 'VIP group' },
+  ])
+  mocks.playgroundApi.getUserModels.mockImplementation(async (group: string) =>
+    (group === 'vip' ? ['o3'] : ['gpt-5.1-codex']).map((model) => ({
+      label: model,
+      value: model,
+    }))
+  )
+  mocks.playgroundApi.getPricingModels.mockResolvedValue(null)
   mocks.libApi.getFreshAuthHeaders.mockResolvedValue({})
   mocks.api.createOfficeSession.mockResolvedValue(session('b'.repeat(32)))
   mocks.api.listOfficeSessions.mockResolvedValue([])
   mocks.api.listOfficeFiles.mockResolvedValue([])
   mocks.api.getOfficeSessionEvents.mockResolvedValue([])
   mocks.api.stopOfficeTurn.mockResolvedValue(undefined)
+  mocks.api.uploadOfficeFile.mockResolvedValue(undefined)
+  mocks.api.deleteOfficeFile.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -297,6 +321,7 @@ test('a sent task streams the worker events and ends with the terminal event', a
   expect(JSON.parse(stream.payload)).toEqual({
     prompt: 'Write a report',
     model: 'gpt-5.1-codex',
+    group: 'default',
   })
   expect(
     within(screen.getByRole('log')).getByText('Working on it…')
@@ -327,6 +352,228 @@ test('a sent task streams the worker events and ends with the terminal event', a
   )
   expect(screen.queryByText('Working on it…')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+})
+
+test('a turn runs in the chosen group with a model of that group', async () => {
+  const user = userEvent.setup()
+  openSession()
+  renderView()
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+  )
+  await user.click(screen.getByRole('combobox'))
+  await user.click(await screen.findByRole('button', { name: 'vip' }))
+  await user.keyboard('{Escape}')
+
+  await waitFor(() =>
+    expect(mocks.playgroundApi.getUserModels).toHaveBeenCalledWith('vip')
+  )
+  const stream = await sendTask('Write a report')
+
+  expect(JSON.parse(stream.payload)).toEqual({
+    prompt: 'Write a report',
+    model: 'o3',
+    group: 'vip',
+  })
+  const context = screen.getByRole('complementary', { name: 'Context' })
+  expect(await within(context).findByText('o3')).toBeInTheDocument()
+})
+
+type DropEntry = { name: string; isDirectory?: boolean }
+
+/** A file drop as the browser reports it: one drag item per file. */
+function dropData(...entries: DropEntry[]) {
+  return {
+    types: ['Files'],
+    files: entries.map((entry) => new File(['x'], entry.name)),
+    items: entries.map((entry) => ({
+      kind: 'file',
+      webkitGetAsEntry: () => ({ isDirectory: entry.isDirectory ?? false }),
+    })),
+  }
+}
+
+function taskBox(container: HTMLElement) {
+  const form = container.querySelector('form')
+  if (!form) throw new Error('the task box is missing')
+  return form
+}
+
+const DROP_HINT = 'Drop files to upload them to the workspace'
+
+test('files dropped on the task box are uploaded into the workspace', async () => {
+  openSession()
+  const { container } = renderView()
+
+  fireEvent.drop(taskBox(container), {
+    dataTransfer: dropData({ name: 'notes.md' }, { name: 'report.pdf' }),
+  })
+
+  await waitFor(() =>
+    expect(mocks.api.uploadOfficeFile).toHaveBeenCalledTimes(2)
+  )
+  expect(mocks.api.uploadOfficeFile).toHaveBeenNthCalledWith(
+    1,
+    SESSION_ID,
+    expect.objectContaining({ name: 'notes.md' }),
+    undefined
+  )
+  expect(mocks.api.uploadOfficeFile).toHaveBeenNthCalledWith(
+    2,
+    SESSION_ID,
+    expect.objectContaining({ name: 'report.pdf' }),
+    undefined
+  )
+  // Uploading is not a turn: no task stream was opened.
+  expect(mocks.streams).toHaveLength(0)
+})
+
+test('files dropped on the workspace files panel are uploaded', async () => {
+  openSession()
+  renderView()
+
+  fireEvent.drop(screen.getByRole('region', { name: 'Workspace files' }), {
+    dataTransfer: dropData({ name: 'report.pdf' }),
+  })
+
+  await waitFor(() =>
+    expect(mocks.api.uploadOfficeFile).toHaveBeenCalledWith(
+      SESSION_ID,
+      expect.objectContaining({ name: 'report.pdf' }),
+      undefined
+    )
+  )
+})
+
+test('dragging files over an upload area shows the drop hint until the drag leaves', async () => {
+  openSession()
+  const { container } = renderView()
+  const box = taskBox(container)
+  const panel = screen.getByRole('region', { name: 'Workspace files' })
+  const drag = { dataTransfer: { types: ['Files'], files: [], items: [] } }
+
+  expect(screen.queryByText(DROP_HINT)).not.toBeInTheDocument()
+
+  fireEvent.dragEnter(box, drag)
+  expect(await screen.findByText(DROP_HINT)).toBeInTheDocument()
+  fireEvent.dragLeave(box, drag)
+  await waitFor(() =>
+    expect(screen.queryByText(DROP_HINT)).not.toBeInTheDocument()
+  )
+
+  fireEvent.dragEnter(panel, drag)
+  expect(await within(panel).findByText(DROP_HINT)).toBeInTheDocument()
+  // Nothing is uploaded before the files are dropped.
+  expect(mocks.api.uploadOfficeFile).not.toHaveBeenCalled()
+})
+
+test('a dropped folder is not uploaded and is reported', async () => {
+  const report = vi.spyOn(toast, 'error').mockImplementation(() => 1)
+  openSession()
+  renderView()
+
+  fireEvent.drop(screen.getByRole('region', { name: 'Workspace files' }), {
+    dataTransfer: dropData({ name: 'assets', isDirectory: true }),
+  })
+
+  await waitFor(() =>
+    expect(report).toHaveBeenCalledWith(
+      'Folders cannot be uploaded. Drop their files instead.'
+    )
+  )
+  expect(mocks.api.uploadOfficeFile).not.toHaveBeenCalled()
+  report.mockRestore()
+})
+
+const WORKSPACE = [
+  { path: 'docs', size: 0, isDir: true },
+  { path: 'docs/brief.txt', size: 15, isDir: false },
+]
+
+async function askToDelete(name: string) {
+  const user = userEvent.setup()
+  const panel = screen.getByRole('region', { name: 'Workspace files' })
+  await user.click(await within(panel).findByRole('button', { name }))
+  return { dialog: await screen.findByRole('alertdialog'), user }
+}
+
+test('a workspace file is deleted only after it is confirmed', async () => {
+  mocks.api.listOfficeFiles.mockResolvedValue(WORKSPACE)
+  openSession()
+  renderView()
+  // A path with special characters is named as it is written.
+  expect(
+    await within(
+      screen.getByRole('region', { name: 'Workspace files' })
+    ).findByRole('button', { name: 'Download docs/brief.txt' })
+  ).toBeInTheDocument()
+  const { dialog, user } = await askToDelete('Delete docs/brief.txt')
+
+  expect(
+    within(dialog).getByText('Delete "docs/brief.txt"?')
+  ).toBeInTheDocument()
+  expect(mocks.api.deleteOfficeFile).not.toHaveBeenCalled()
+
+  await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+  await waitFor(() =>
+    expect(mocks.api.deleteOfficeFile).toHaveBeenCalledWith(
+      SESSION_ID,
+      'docs/brief.txt'
+    )
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  )
+})
+
+test('a workspace folder can be deleted as well', async () => {
+  mocks.api.listOfficeFiles.mockResolvedValue(WORKSPACE)
+  openSession()
+  renderView()
+  const { dialog, user } = await askToDelete('Delete docs')
+
+  await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+  await waitFor(() =>
+    expect(mocks.api.deleteOfficeFile).toHaveBeenCalledWith(SESSION_ID, 'docs')
+  )
+})
+
+test('cancelling the deletion keeps the workspace file', async () => {
+  mocks.api.listOfficeFiles.mockResolvedValue(WORKSPACE)
+  openSession()
+  renderView()
+  const { dialog, user } = await askToDelete('Delete docs/brief.txt')
+
+  await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  )
+  expect(mocks.api.deleteOfficeFile).not.toHaveBeenCalled()
+  expect(
+    within(screen.getByRole('region', { name: 'Workspace files' })).getByText(
+      'docs/brief.txt'
+    )
+  ).toBeInTheDocument()
+})
+
+test('workspace files cannot be deleted while a task is running', async () => {
+  mocks.api.listOfficeFiles.mockResolvedValue(WORKSPACE)
+  openSession()
+  renderView()
+  const panel = screen.getByRole('region', { name: 'Workspace files' })
+  expect(
+    await within(panel).findByRole('button', { name: 'Delete docs/brief.txt' })
+  ).toBeEnabled()
+
+  await sendTask('Write a report')
+
+  expect(
+    within(panel).getByRole('button', { name: 'Delete docs/brief.txt' })
+  ).toBeDisabled()
 })
 
 test('Stop ends the running task and tells the server', async () => {

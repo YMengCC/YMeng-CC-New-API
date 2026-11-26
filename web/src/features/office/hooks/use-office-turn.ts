@@ -94,7 +94,7 @@ export function useOfficeTurn(sessionId: string) {
   }, [refreshSession, sessionId, t])
 
   const send = useCallback(
-    async (prompt: string, model: string) => {
+    async (prompt: string, model: string, group: string) => {
       if (!sessionId || runningSessionRef.current !== null) return
       runningSessionRef.current = sessionId
       setIsRunning(true)
@@ -135,7 +135,7 @@ export function useOfficeTurn(sessionId: string) {
       const source = new SSE(officeTurnStreamUrl(sessionId), {
         method: 'POST',
         headers,
-        payload: JSON.stringify({ prompt, model }),
+        payload: JSON.stringify({ prompt, model, group }),
       })
       source.addEventListener('message', (event: OfficeStreamEvent) => {
         const data = event.data ?? ''
