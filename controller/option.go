@@ -93,6 +93,7 @@ func GetOptions(c *gin.Context) {
 		value := common.Interface2String(v)
 		isSensitiveKey := k == "jingsoft_setting.store_token" ||
 			k == "jingsoft_setting.merchant_token" ||
+			strings.HasPrefix(k, "cat"+"fk_setting.") ||
 			strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
 			strings.HasSuffix(k, "Key") ||

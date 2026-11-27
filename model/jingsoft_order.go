@@ -162,12 +162,30 @@ func CreateJingSoftOrder(order *JingSoftOrder) (existing *JingSoftOrder, already
 func GetJingSoftOrderByTradeNo(tradeNo string) (*JingSoftOrder, error) {
 	order := &JingSoftOrder{}
 	err := DB.Where("trade_no = ?", tradeNo).First(order).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		_ = syncLegacyJingSoftOrders(DB)
+		err = DB.Where("trade_no = ?", tradeNo).First(order).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if mapped := remapLegacyTradeNo(tradeNo); mapped != tradeNo {
+				err = DB.Where("trade_no = ?", mapped).First(order).Error
+			}
+		}
+	}
 	return order, err
 }
 
 func GetJingSoftOrderForUser(userID int, tradeNo string) (*JingSoftOrder, error) {
 	order := &JingSoftOrder{}
 	err := DB.Where("user_id = ? AND trade_no = ?", userID, tradeNo).First(order).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		_ = syncLegacyJingSoftOrders(DB)
+		err = DB.Where("user_id = ? AND trade_no = ?", userID, tradeNo).First(order).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if mapped := remapLegacyTradeNo(tradeNo); mapped != tradeNo {
+				err = DB.Where("user_id = ? AND trade_no = ?", userID, mapped).First(order).Error
+			}
+		}
+	}
 	return order, err
 }
 
@@ -210,6 +228,10 @@ func FindJingSoftOrderForRequest(userID int, idempotencyKey string) (*JingSoftOr
 	order := &JingSoftOrder{}
 	err := DB.Where("user_id = ? AND idempotency_key = ?", userID, idempotencyKey).First(order).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		_ = syncLegacyJingSoftOrders(DB)
+		err = DB.Where("user_id = ? AND idempotency_key = ?", userID, idempotencyKey).First(order).Error
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	return order, err
@@ -220,6 +242,7 @@ func ListDueJingSoftOrders(now int64, limit int) ([]*JingSoftOrder, error) {
 	if limit <= 0 || limit > 1000 {
 		return nil, errors.New("invalid jingsoft query limit")
 	}
+	_ = syncLegacyJingSoftOrders(DB)
 	err := DB.Where("status IN ? AND next_query_at <= ? AND lease_until <= ?", []string{JingSoftOrderStatusNew, JingSoftOrderStatusSubmitting, JingSoftOrderStatusCreationUnknown, JingSoftOrderStatusPending, JingSoftOrderStatusPaid}, now, now).Order("next_query_at, id").Limit(limit).Find(&orders).Error
 	return orders, err
 }
@@ -371,8 +394,12 @@ func CompleteVerifiedJingSoftOrder(id int, version int64, redemptionKey string, 
 		if err := lockForUpdate(tx).First(topup, "id = ?", order.TopUpID).Error; err != nil {
 			return err
 		}
-		validPaymentMethod := topup.PaymentMethod == PaymentMethodJingSoft || topup.PaymentMethod == PaymentMethodJingSoftAlipay || topup.PaymentMethod == PaymentMethodJingSoftWeChat
-		if topup.UserId != order.UserID || topup.TradeNo != order.TradeNo || topup.PaymentProvider != PaymentProviderJingSoft || topup.PaymentMethod != order.PaymentMethod || !validPaymentMethod || topup.Status != common.TopUpStatusPending {
+		mappedTopUpMethod := remapLegacyPaymentMethod(topup.PaymentMethod)
+		mappedOrderMethod := remapLegacyPaymentMethod(order.PaymentMethod)
+		validPaymentMethod := mappedTopUpMethod == PaymentMethodJingSoft || mappedTopUpMethod == PaymentMethodJingSoftAlipay || mappedTopUpMethod == PaymentMethodJingSoftWeChat
+		validProvider := topup.PaymentProvider == PaymentProviderJingSoft || topup.PaymentProvider == "cat"+"fk"
+		validTrade := topup.TradeNo == order.TradeNo || remapLegacyTradeNo(topup.TradeNo) == order.TradeNo
+		if topup.UserId != order.UserID || !validTrade || !validProvider || mappedTopUpMethod != mappedOrderMethod || !validPaymentMethod || topup.Status != common.TopUpStatusPending {
 			return ErrJingSoftOrderConflict
 		}
 		now := common.GetTimestamp()
@@ -412,7 +439,14 @@ func CompleteVerifiedJingSoftOrder(id int, version int64, redemptionKey string, 
 		if err != nil {
 			return err
 		}
-		result = tx.Model(&TopUp{}).Where("id = ? AND status = ?", topup.Id, common.TopUpStatusPending).Updates(map[string]any{"status": common.TopUpStatusSuccess, "complete_time": now, "credited_quota": int64(order.ExpectedQuota), "invoice_amount": invoiceAmount})
+		result = tx.Model(&TopUp{}).Where("id = ? AND status = ?", topup.Id, common.TopUpStatusPending).Updates(map[string]any{
+			"status":           common.TopUpStatusSuccess,
+			"complete_time":    now,
+			"credited_quota":   int64(order.ExpectedQuota),
+			"invoice_amount":   invoiceAmount,
+			"payment_provider": PaymentProviderJingSoft,
+			"payment_method":   mappedOrderMethod,
+		})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -618,9 +652,104 @@ func remapLegacyTradeNo(tradeNo string) string {
 	return tradeNo
 }
 
+// syncLegacyJingSoftOrders imports any newly created legacy cat_fk_orders rows
+// and mirrors upstream binding or terminal settlement updates produced by a
+// draining v1.3.0 instance during blue-green cutover, without dropping legacy tables.
+func syncLegacyJingSoftOrders(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	legacyOrderTable := db.NamingStrategy.TableName("cat_fk_orders")
+	if !db.Migrator().HasTable(legacyOrderTable) || !db.Migrator().HasTable(&JingSoftOrder{}) {
+		return nil
+	}
+	var unmigrated []JingSoftOrder
+	if err := db.Table(legacyOrderTable).Where("top_up_id NOT IN (?)", db.Model(&JingSoftOrder{}).Select("top_up_id")).Order("id").Find(&unmigrated).Error; err != nil {
+		return err
+	}
+	for i := range unmigrated {
+		row := unmigrated[i]
+		row.ID = 0
+		row.PaymentMethod = remapLegacyPaymentMethod(row.PaymentMethod)
+		if row.CredentialCiphertext == "" {
+			oldTrade := row.TradeNo
+			row.TradeNo = remapLegacyTradeNo(row.TradeNo)
+			if row.ExpectedContact == oldTrade {
+				row.ExpectedContact = row.TradeNo
+			}
+		}
+		var count int64
+		if err := db.Model(&JingSoftOrder{}).Where("top_up_id = ? OR trade_no = ?", row.TopUpID, row.TradeNo).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			if err := db.Session(&gorm.Session{Logger: db.Logger.LogMode(gormlogger.Silent)}).Create(&row).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	var activeOrders []JingSoftOrder
+	if err := db.Where("status IN ?", []string{JingSoftOrderStatusNew, JingSoftOrderStatusSubmitting, JingSoftOrderStatusCreationUnknown, JingSoftOrderStatusPending, JingSoftOrderStatusPaid}).Find(&activeOrders).Error; err != nil || len(activeOrders) == 0 {
+		return err
+	}
+	topUpIDs := make([]int, 0, len(activeOrders))
+	for i := range activeOrders {
+		topUpIDs = append(topUpIDs, activeOrders[i].TopUpID)
+	}
+	var legacyRows []JingSoftOrder
+	if err := db.Table(legacyOrderTable).Where("top_up_id IN ?", topUpIDs).Find(&legacyRows).Error; err != nil || len(legacyRows) == 0 {
+		return err
+	}
+	legacyByTopUp := make(map[int]*JingSoftOrder, len(legacyRows))
+	for i := range legacyRows {
+		legacyByTopUp[legacyRows[i].TopUpID] = &legacyRows[i]
+	}
+	for i := range activeOrders {
+		cur := &activeOrders[i]
+		leg := legacyByTopUp[cur.TopUpID]
+		if leg == nil {
+			continue
+		}
+		if leg.Status == JingSoftOrderStatusCompleted || leg.Status == JingSoftOrderStatusExpired {
+			updates := map[string]any{
+				"status":                leg.Status,
+				"next_query_at":         0,
+				"lease_until":           0,
+				"credential_ciphertext": "",
+				"failure_code":          leg.FailureCode,
+				"updated_at":            leg.UpdatedAt,
+			}
+			if leg.RedemptionID != nil {
+				updates["redemption_id"] = *leg.RedemptionID
+			}
+			if leg.TransactionID != nil && *leg.TransactionID != "" {
+				updates["transaction_id"] = *leg.TransactionID
+			}
+			_ = db.Session(&gorm.Session{Logger: db.Logger.LogMode(gormlogger.Silent)}).Model(&JingSoftOrder{}).Where("id = ? AND status = ?", cur.ID, cur.Status).Updates(updates).Error
+			continue
+		}
+		if cur.UpstreamOrderID == nil && leg.UpstreamOrderID != nil && *leg.UpstreamOrderID != "" {
+			updates := map[string]any{
+				"upstream_order_id": *leg.UpstreamOrderID,
+				"payment_url":       leg.PaymentURL,
+				"payment_qr_code":   leg.PaymentQRCode,
+				"status":            leg.Status,
+				"updated_at":        leg.UpdatedAt,
+			}
+			if leg.CredentialCiphertext != "" {
+				updates["credential_ciphertext"] = leg.CredentialCiphertext
+			}
+			_ = db.Session(&gorm.Session{Logger: db.Logger.LogMode(gormlogger.Silent)}).Model(&JingSoftOrder{}).Where("id = ? AND upstream_order_id IS NULL", cur.ID).Updates(updates).Error
+		}
+	}
+	return nil
+}
+
 // MigrateLegacyJingSoftData upgrades pre-rename database tables, historical
-// top-up order identifiers/payment methods, and persisted options idempotently
-// across SQLite, MySQL, and PostgreSQL using GORM operations only.
+// terminal top-up order identifiers/payment methods, and persisted options
+// idempotently without dropping legacy tables or options needed by an active
+// v1.3.0 instance during blue-green cutover or rollback.
 func MigrateLegacyJingSoftData(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -631,42 +760,19 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 	var inferredBaseURL string
 
 	if db.Migrator().HasTable(legacyOrderTable) {
-		var legacyOrders []JingSoftOrder
-		if err := db.Table(legacyOrderTable).Order("id").Find(&legacyOrders).Error; err != nil {
+		if err := syncLegacyJingSoftOrders(db); err != nil {
 			return err
 		}
-		for i := range legacyOrders {
-			row := legacyOrders[i]
-			row.ID = 0
-			row.PaymentMethod = remapLegacyPaymentMethod(row.PaymentMethod)
-			if inferredBaseURL == "" && row.ShopURL != "" {
-				if parsed, err := url.Parse(row.ShopURL); err == nil && parsed.Scheme == "https" && parsed.Host != "" {
+		var legacyOrders []JingSoftOrder
+		if err := db.Table(legacyOrderTable).Where("shop_url <> ''").Order("id").Limit(20).Find(&legacyOrders).Error; err == nil {
+			for i := range legacyOrders {
+				if parsed, pErr := url.Parse(legacyOrders[i].ShopURL); pErr == nil && parsed.Scheme == "https" && parsed.Host != "" {
 					if normalized, nErr := operation_setting.NormalizeJingSoftBaseURL("https://" + parsed.Host); nErr == nil {
 						inferredBaseURL = normalized
+						break
 					}
 				}
 			}
-			// Terminal orders have empty CredentialCiphertext, so their TradeNo can
-			// safely be rewritten without invalidating AEAD associated data.
-			if row.CredentialCiphertext == "" {
-				oldTrade := row.TradeNo
-				row.TradeNo = remapLegacyTradeNo(row.TradeNo)
-				if row.ExpectedContact == oldTrade {
-					row.ExpectedContact = row.TradeNo
-				}
-			}
-			var count int64
-			if err := db.Model(&JingSoftOrder{}).Where("top_up_id = ? OR trade_no = ?", row.TopUpID, row.TradeNo).Count(&count).Error; err != nil {
-				return err
-			}
-			if count == 0 {
-				if err := db.Session(&gorm.Session{Logger: db.Logger.LogMode(gormlogger.Silent)}).Create(&row).Error; err != nil {
-					return err
-				}
-			}
-		}
-		if err := db.Migrator().DropTable(legacyOrderTable); err != nil {
-			return err
 		}
 	}
 
@@ -689,9 +795,6 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 				}
 			}
 		}
-		if err := db.Migrator().DropTable(legacySlotTable); err != nil {
-			return err
-		}
 	}
 
 	if db.Migrator().HasTable(&TopUp{}) {
@@ -703,8 +806,10 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 				encryptedTrades[t] = true
 			}
 		}
+		// Keep in-flight pending TopUp rows untouched in DB until settlement so a
+		// draining or rolled-back v1.3.0 instance can still settle them cleanly.
 		var legacyTopUps []TopUp
-		if err := db.Where("payment_provider = ? OR payment_method IN ? OR trade_no LIKE ?", legacyPrefix, []string{legacyPrefix, legacyPrefix + "_alipay", legacyPrefix + "_wxpay"}, legacyPrefix+"_%").Find(&legacyTopUps).Error; err != nil {
+		if err := db.Where("status <> ? AND (payment_provider = ? OR payment_method IN ? OR trade_no LIKE ?)", common.TopUpStatusPending, legacyPrefix, []string{legacyPrefix, legacyPrefix + "_alipay", legacyPrefix + "_wxpay"}, legacyPrefix+"_%").Find(&legacyTopUps).Error; err != nil {
 			return err
 		}
 		for i := range legacyTopUps {
@@ -735,7 +840,7 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 	if db.Migrator().HasTable(&Option{}) {
 		var legacyOpts []Option
 		settingPrefix := legacyPrefix + "_setting."
-		if err := db.Where(commonKeyCol+" LIKE ? OR "+commonKeyCol+" = ?", settingPrefix+"%", "PayMethods").Find(&legacyOpts).Error; err != nil {
+		if err := db.Where(commonKeyCol+" LIKE ?", settingPrefix+"%").Find(&legacyOpts).Error; err != nil {
 			return err
 		}
 		hadLegacySetting := false
@@ -752,38 +857,6 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 						return err
 					}
 				}
-				if err := db.Where(commonKeyCol+" = ?", opt.Key).Delete(&Option{}).Error; err != nil {
-					return err
-				}
-				continue
-			}
-			if opt.Key == "PayMethods" && strings.TrimSpace(opt.Value) != "" {
-				var methods []map[string]any
-				if common.UnmarshalJsonStr(opt.Value, &methods) == nil && methods != nil {
-					changed := false
-					for _, m := range methods {
-						if tVal, ok := m["type"].(string); ok {
-							if mapped := remapLegacyPaymentMethod(tVal); mapped != tVal {
-								m["type"] = mapped
-								changed = true
-							}
-						}
-						if nVal, ok := m["name"].(string); ok {
-							replaced := strings.NewReplacer("Cat"+"FK", "JingSoft", "Cat"+"fk", "JingSoft", legacyPrefix, "JingSoft").Replace(nVal)
-							if replaced != nVal {
-								m["name"] = replaced
-								changed = true
-							}
-						}
-					}
-					if changed {
-						if encoded, mErr := common.Marshal(methods); mErr == nil {
-							if err := db.Model(&Option{}).Where(commonKeyCol+" = ?", "PayMethods").Update("value", string(encoded)).Error; err != nil {
-								return err
-							}
-						}
-					}
-				}
 			}
 		}
 		if hadLegacySetting && inferredBaseURL != "" {
@@ -794,12 +867,5 @@ func MigrateLegacyJingSoftData(db *gorm.DB) error {
 		}
 	}
 
-	legacyPollTask := legacyPrefix + "_order_poll"
-	if db.Migrator().HasTable(&SystemTask{}) {
-		_ = db.Where("type = ?", legacyPollTask).Delete(&SystemTask{}).Error
-	}
-	if db.Migrator().HasTable(&SystemTaskLock{}) {
-		_ = db.Where("task_type = ?", legacyPollTask).Delete(&SystemTaskLock{}).Error
-	}
 	return nil
 }

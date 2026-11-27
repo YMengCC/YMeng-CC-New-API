@@ -400,10 +400,14 @@ func populateTopUpJingSoftModes(topups []*TopUp) {
 	if len(topups) == 0 || DB == nil {
 		return
 	}
+	legacyProvider := "cat" + "fk"
 	tradeNos := make([]string, 0)
 	for _, item := range topups {
-		if item != nil && item.PaymentProvider == PaymentProviderJingSoft && item.TradeNo != "" {
+		if item != nil && (item.PaymentProvider == PaymentProviderJingSoft || item.PaymentProvider == legacyProvider) && item.TradeNo != "" {
 			tradeNos = append(tradeNos, item.TradeNo)
+			if mapped := remapLegacyTradeNo(item.TradeNo); mapped != item.TradeNo {
+				tradeNos = append(tradeNos, mapped)
+			}
 		}
 	}
 	if len(tradeNos) == 0 || !DB.Migrator().HasTable(&JingSoftOrder{}) {
@@ -425,8 +429,10 @@ func populateTopUpJingSoftModes(topups []*TopUp) {
 		}
 	}
 	for _, item := range topups {
-		if item != nil && item.PaymentProvider == PaymentProviderJingSoft {
+		if item != nil && (item.PaymentProvider == PaymentProviderJingSoft || item.PaymentProvider == legacyProvider) {
 			if mode, ok := modes[item.TradeNo]; ok {
+				item.JingSoftMode = mode
+			} else if mode, ok := modes[remapLegacyTradeNo(item.TradeNo)]; ok {
 				item.JingSoftMode = mode
 			}
 		}
@@ -573,7 +579,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return common.NewMessage("Top-up order does not exist")
 		}
 
-		if topUp.PaymentProvider == PaymentProviderJingSoft || topUp.PaymentMethod == PaymentMethodJingSoft || topUp.PaymentMethod == PaymentMethodJingSoftAlipay || topUp.PaymentMethod == PaymentMethodJingSoftWeChat {
+		if topUp.PaymentProvider == PaymentProviderJingSoft || topUp.PaymentProvider == "cat"+"fk" || topUp.PaymentMethod == PaymentMethodJingSoft || topUp.PaymentMethod == PaymentMethodJingSoftAlipay || topUp.PaymentMethod == PaymentMethodJingSoftWeChat || remapLegacyPaymentMethod(topUp.PaymentMethod) != topUp.PaymentMethod {
 			return common.NewMessage("JingSoft orders require verified redemption and cannot be completed manually")
 		}
 

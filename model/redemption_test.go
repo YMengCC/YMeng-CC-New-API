@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -297,7 +298,7 @@ func TestJingSoftDatabaseMatrix(t *testing.T) {
 			common.SetDatabaseTypes(common.DatabaseType(dialect), common.DatabaseType(dialect))
 			initCol()
 			t.Cleanup(func() {
-				require.NoError(t, db.Migrator().DropTable(&JingSoftPriceSlot{}, &JingSoftOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}, &Option{}))
+				require.NoError(t, db.Migrator().DropTable(db.NamingStrategy.TableName("cat_fk_price_slots"), db.NamingStrategy.TableName("cat_fk_orders"), &JingSoftPriceSlot{}, &JingSoftOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}, &Option{}))
 				DB, LOG_DB = previousDB, previousLogDB
 				common.SetDatabaseTypes(previousMainType, previousLogType)
 				initCol()
@@ -380,8 +381,10 @@ func TestJingSoftDatabaseMatrix(t *testing.T) {
 				require.NoError(t, MigrateLegacyJingSoftData(db))
 			}
 
-			assert.False(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_orders")))
-			assert.False(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_price_slots")))
+			// Legacy tables and options stay intact in DB so an active v1.3.0 instance
+			// remains operational during blue-green cutover and rollback.
+			assert.True(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_orders")))
+			assert.True(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_price_slots")))
 			assert.Equal(t, int64(2), GetTopUpById(legacy.Id).Amount)
 
 			migratedCompletedTopUp := GetTopUpById(completedLegacyTopUp.Id)
@@ -395,13 +398,18 @@ func TestJingSoftDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, PaymentMethodJingSoftAlipay, migratedOrder1.PaymentMethod)
 			assert.Empty(t, migratedOrder1.Mode)
 			assert.Nil(t, migratedOrder1.TransactionID)
+			// Lookup by pre-rename trade_no also resolves to the migrated completed order.
+			migratedOrder1ByLegacy, err := GetJingSoftOrderByTradeNo(legacyPrefix + "_completed_1")
+			require.NoError(t, err)
+			assert.Equal(t, migratedOrder1.ID, migratedOrder1ByLegacy.ID)
 
-			// In-flight order with non-empty CredentialCiphertext retains its AEAD-bound TradeNo while upgrading provider/method.
+			// In-flight pending TopUp keeps legacy provider/method in DB until settled so v1.3.0
+			// can still complete it on drain/rollback, while JingSoft settles and upgrades it atomically.
 			migratedInFlightTopUp := GetTopUpById(inFlightLegacyTopUp.Id)
 			require.NotNil(t, migratedInFlightTopUp)
 			assert.Equal(t, legacyPrefix+"_inflight_1", migratedInFlightTopUp.TradeNo)
-			assert.Equal(t, PaymentMethodJingSoftWeChat, migratedInFlightTopUp.PaymentMethod)
-			assert.Equal(t, PaymentProviderJingSoft, migratedInFlightTopUp.PaymentProvider)
+			assert.Equal(t, legacyPrefix+"_wxpay", migratedInFlightTopUp.PaymentMethod)
+			assert.Equal(t, legacyPrefix, migratedInFlightTopUp.PaymentProvider)
 			migratedOrder2, err := GetJingSoftOrderByTradeNo(legacyPrefix + "_inflight_1")
 			require.NoError(t, err)
 			assert.Equal(t, PaymentMethodJingSoftWeChat, migratedOrder2.PaymentMethod)
@@ -410,18 +418,47 @@ func TestJingSoftDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Where("shop_id = ? AND goods_key = ?", "shop-v1", "slot-legacy").First(&migratedSlot).Error)
 			assert.Equal(t, "JingSoft_completed_1", migratedSlot.OrderTradeNo)
 
-			var baseOpt, tokenOpt, payMethodsOpt Option
+			var baseOpt, tokenOpt, legacyTokenOpt, payMethodsOpt Option
 			require.NoError(t, db.Where(commonKeyCol+" = ?", "jingsoft_setting.base_url").First(&baseOpt).Error)
 			assert.Equal(t, "https://wzyp.cn", baseOpt.Value)
 			require.NoError(t, db.Where(commonKeyCol+" = ?", "jingsoft_setting.store_token").First(&tokenOpt).Error)
 			assert.Equal(t, "shop-v1", tokenOpt.Value)
+			require.NoError(t, db.Where(commonKeyCol+" = ?", legacyPrefix+"_setting.store_token").First(&legacyTokenOpt).Error)
+			assert.Equal(t, "shop-v1", legacyTokenOpt.Value)
 			require.NoError(t, db.Where(commonKeyCol+" = ?", "PayMethods").First(&payMethodsOpt).Error)
-			assert.Contains(t, payMethodsOpt.Value, `"type":"jingsoft_alipay"`)
-			assert.Contains(t, payMethodsOpt.Value, `"name":"JingSoft Alipay"`)
+			assert.Contains(t, payMethodsOpt.Value, `"type":"`+legacyPrefix+`_alipay"`)
+			previousPayMethods := operation_setting.PayMethods
+			t.Cleanup(func() { operation_setting.PayMethods = previousPayMethods })
+			require.NoError(t, updateOptionMap("PayMethods", payMethodsOpt.Value))
+			assert.Contains(t, common.OptionMap["PayMethods"], `"type":"jingsoft_alipay"`)
+			assert.Contains(t, common.OptionMap["PayMethods"], `"name":"JingSoft Alipay"`)
+			require.NoError(t, updateOptionMap(legacyPrefix+"_setting.store_token", "shop-v1"))
+			_, leaked := common.OptionMap[legacyPrefix+"_setting.store_token"]
+			assert.False(t, leaked)
 
+			// Settling the migrated in-flight order atomically upgrades its pending TopUp row to JingSoft.
+			inFlightUser := &User{Username: "legacy-inflight-user", Password: "passwordpassword", AffCode: "legacy-aff-1", Quota: 0}
+			require.NoError(t, db.Create(inFlightUser).Error)
+			require.NoError(t, db.Model(&TopUp{}).Where("id = ?", inFlightLegacyTopUp.Id).Update("user_id", inFlightUser.Id).Error)
+			require.NoError(t, db.Model(&JingSoftOrder{}).Where("id = ?", migratedOrder2.ID).Update("user_id", inFlightUser.Id).Error)
+			inFlightRedeem := &Redemption{UserId: 1, Name: "legacy-inflight-code", Key: "30000000000000000000000000000003", Status: common.RedemptionCodeStatusEnabled, Quota: 600, CreatedTime: 1700000000}
+			require.NoError(t, db.Create(inFlightRedeem).Error)
+			alreadyDone, err := CompleteVerifiedJingSoftOrder(migratedOrder2.ID, migratedOrder2.Version, inFlightRedeem.Key, "", "")
+			require.NoError(t, err)
+			assert.False(t, alreadyDone)
+			settledInFlightTopUp := GetTopUpById(inFlightLegacyTopUp.Id)
+			require.NotNil(t, settledInFlightTopUp)
+			assert.Equal(t, common.TopUpStatusSuccess, settledInFlightTopUp.Status)
+			assert.Equal(t, PaymentProviderJingSoft, settledInFlightTopUp.PaymentProvider)
+			assert.Equal(t, PaymentMethodJingSoftWeChat, settledInFlightTopUp.PaymentMethod)
+
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).Where("1 = 1").Delete(&jingSoftOrderLegacyV1{}).Error)
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_price_slots")).Where("1 = 1").Delete(&jingSoftPriceSlotLegacyV1{}).Error)
 			require.NoError(t, db.Delete(&JingSoftPriceSlot{}, "id = ?", migratedSlot.ID).Error)
 			require.NoError(t, db.Delete(&JingSoftOrder{}, "id IN ?", []int{migratedOrder1.ID, migratedOrder2.ID}).Error)
 			require.NoError(t, db.Delete(&TopUp{}, "id IN ?", []int{completedLegacyTopUp.Id, inFlightLegacyTopUp.Id}).Error)
+			require.NoError(t, db.Unscoped().Delete(&Redemption{}, "id = ?", inFlightRedeem.Id).Error)
+			require.NoError(t, db.Unscoped().Delete(&User{}, "id = ?", inFlightUser.Id).Error)
 
 			tables, err := BackupTableNames(db)
 			require.NoError(t, err)

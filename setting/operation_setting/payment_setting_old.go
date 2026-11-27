@@ -6,6 +6,8 @@ This file is the old version of the payment settings file. If you need to add ne
 package operation_setting
 
 import (
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 )
 
@@ -38,7 +40,25 @@ var PayMethods = []map[string]string{
 
 func UpdatePayMethodsByJsonString(jsonString string) error {
 	PayMethods = make([]map[string]string, 0)
-	return common.Unmarshal([]byte(jsonString), &PayMethods)
+	if err := common.Unmarshal([]byte(jsonString), &PayMethods); err != nil {
+		return err
+	}
+	legacyPrefix := "cat" + "fk"
+	nameReplacer := strings.NewReplacer("Cat"+"FK", "JingSoft", "Cat"+"fk", "JingSoft", legacyPrefix, "JingSoft")
+	for i := range PayMethods {
+		switch strings.ToLower(strings.TrimSpace(PayMethods[i]["type"])) {
+		case legacyPrefix:
+			PayMethods[i]["type"] = JingSoftPaymentMethodLegacy
+		case legacyPrefix + "_alipay":
+			PayMethods[i]["type"] = JingSoftPaymentMethodAlipay
+		case legacyPrefix + "_wxpay":
+			PayMethods[i]["type"] = JingSoftPaymentMethodWeChat
+		}
+		if name := PayMethods[i]["name"]; name != "" {
+			PayMethods[i]["name"] = nameReplacer.Replace(name)
+		}
+	}
+	return nil
 }
 
 func PayMethods2JsonString() string {

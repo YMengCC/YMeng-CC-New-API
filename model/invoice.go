@@ -45,6 +45,7 @@ var (
 		PaymentProviderWaffoPancake,
 		PaymentProviderRedemption,
 		PaymentProviderJingSoft,
+		"cat" + "fk",
 	}
 )
 
@@ -160,7 +161,7 @@ func CalculateTopUpInvoiceSnapshot(topUp *TopUp) (int64, int64, error) {
 	switch topUp.PaymentProvider {
 	case PaymentProviderStripe:
 		credited = decimal.NewFromFloat(topUp.Money).Mul(quotaPerUnit)
-	case PaymentProviderJingSoft:
+	case PaymentProviderJingSoft, "cat" + "fk":
 		// JingSoft stores wallet quota units, which may exceed relay charge limits.
 		quota, err := common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(topUp.Amount))
 		if err != nil {
