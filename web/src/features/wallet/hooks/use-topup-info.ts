@@ -80,7 +80,7 @@ function parsePaymentMethods(
         channel_id:
           typeof item.channel_id === 'string' ? item.channel_id : undefined,
         fee_percent:
-          !type.startsWith('catfk') &&
+          !type.startsWith('jingsoft') &&
           Number.isFinite(feePercent) &&
           feePercent >= 0 &&
           feePercent <= 100

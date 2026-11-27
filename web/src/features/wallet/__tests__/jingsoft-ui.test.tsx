@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -16,7 +34,7 @@ import {
 import { BillingHistoryDialog } from '../components/dialogs/billing-history-dialog'
 import { PaymentConfirmDialog } from '../components/dialogs/payment-confirm-dialog'
 import { RechargeFormCard } from '../components/recharge-form-card'
-import { useCatfkPayment } from '../hooks/use-catfk-payment'
+import { useJingSoftPayment } from '../hooks/use-jingsoft-payment'
 import { useTopupInfo } from '../hooks/use-topup-info'
 import type { TopupInfo } from '../types'
 
@@ -31,7 +49,7 @@ const topupInfo: TopupInfo = {
   stripe_min_topup: 1,
   amount_options: [20],
   discount: {},
-  catfk: {
+  jingsoft: {
     enabled: true,
     available: true,
     products: [product],
@@ -82,26 +100,26 @@ it('places store channels in the same payment grid with identical button styling
         enable_online_topup: true,
         pay_methods: [
           { type: 'alipay', name: 'Existing Alipay' },
-          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+          { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
         ],
       }}
-      onCatfkPaymentSelect={vi.fn()}
+      onJingSoftPaymentSelect={vi.fn()}
     />
   )
   const regular = screen.getByRole('button', { name: 'Existing Alipay' })
   const store = screen.getByRole('button', { name: 'WeChat' })
   expect(store.parentElement).toBe(regular.parentElement)
   expect(store.className).toBe(regular.className)
-  expect(screen.queryByText('Catfk Payment')).not.toBeInTheDocument()
+  expect(screen.queryByText('JingSoft Payment')).not.toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: 'WeChat' })).toHaveLength(1)
 })
 
-it('does not show CatFK channels until a CatFK payment method is configured', () => {
+it('does not show JingSoft channels until a JingSoft payment method is configured', () => {
   render(
     <RechargeFormCard
       {...base}
       topupInfo={{ ...topupInfo, enable_online_topup: true }}
-      onCatfkPaymentSelect={vi.fn()}
+      onJingSoftPaymentSelect={vi.fn()}
     />
   )
 
@@ -115,7 +133,7 @@ it('does not show CatFK channels until a CatFK payment method is configured', ()
   ).toBeVisible()
 })
 
-it('does not show a Catfk payment method whose configured channel does not match its identifier', () => {
+it('does not show a JingSoft payment method whose configured channel does not match its identifier', () => {
   render(
     <RechargeFormCard
       {...base}
@@ -123,18 +141,18 @@ it('does not show a Catfk payment method whose configured channel does not match
         ...topupInfo,
         pay_methods: [
           {
-            type: 'catfk_alipay',
+            type: 'jingsoft_alipay',
             channel_id: 'alipay-id',
-            name: 'Catfk Alipay',
+            name: 'JingSoft Alipay',
           },
         ],
       }}
-      onCatfkPaymentSelect={vi.fn()}
+      onJingSoftPaymentSelect={vi.fn()}
     />
   )
 
   expect(
-    screen.queryByRole('button', { name: 'Catfk Alipay' })
+    screen.queryByRole('button', { name: 'JingSoft Alipay' })
   ).not.toBeInTheDocument()
 })
 
@@ -175,7 +193,7 @@ it('shows no fee note for a payment method without a display fee', () => {
   expect(screen.queryByText(/Includes a .* fee/)).not.toBeInTheDocument()
 })
 
-it('does not apply a configured display fee to CatFK and keeps its contact input', () => {
+it('does not apply a configured display fee to JingSoft and keeps its contact input', () => {
   render(
     <PaymentConfirmDialog
       open
@@ -183,11 +201,11 @@ it('does not apply a configured display fee to CatFK and keeps its contact input
       onConfirm={vi.fn()}
       topupAmount={10}
       paymentAmount={72}
-      paymentMethod={{ type: 'catfk', name: 'Alipay', fee_percent: 25 }}
+      paymentMethod={{ type: 'jingsoft', name: 'Alipay', fee_percent: 25 }}
       calculating={false}
       processing={false}
       paymentFeePercent={25}
-      catfk={{ quote, qq: '', onQQChange: vi.fn(), available: true }}
+      jingSoft={{ quote, qq: '', onQQChange: vi.fn(), available: true }}
     />
   )
 
@@ -200,7 +218,7 @@ it('uses the original preset buttons and keeps custom input visible while quotin
     data: { success: true, data: quote },
   })
   function WalletAmounts() {
-    const payment = useCatfkPayment(topupInfo.catfk, 1)
+    const payment = useJingSoftPayment(topupInfo.jingsoft, 1)
     return (
       <>
         <RechargeFormCard
@@ -208,11 +226,11 @@ it('uses the original preset buttons and keeps custom input visible while quotin
           topupInfo={{
             ...topupInfo,
             pay_methods: [
-              { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+              { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
             ],
           }}
-          catfkChannel={payment.channel}
-          onCatfkPaymentSelect={(selectedChannel, selectedProduct) => {
+          jingSoftChannel={payment.channel}
+          onJingSoftPaymentSelect={(selectedChannel, selectedProduct) => {
             if (selectedProduct) {
               void payment.selectProduct(selectedProduct, selectedChannel)
             }
@@ -227,11 +245,11 @@ it('uses the original preset buttons and keeps custom input visible while quotin
           topupAmount={payment.product?.amount ?? 0}
           paymentAmount={payment.quote?.amount ?? 0}
           paymentMethod={
-            payment.channel ? { ...payment.channel, type: 'catfk' } : undefined
+            payment.channel ? { ...payment.channel, type: 'jingsoft' } : undefined
           }
           calculating={payment.calculating}
           processing={payment.processing}
-          catfk={{
+          jingSoft={{
             quote: payment.quote,
             qq: payment.qq,
             onQQChange: payment.setQQ,
@@ -251,7 +269,7 @@ it('uses the original preset buttons and keeps custom input visible while quotin
   await user.click(screen.getByRole('button', { name: /WeChat/ }))
   await screen.findByRole('textbox', { name: /Contact method/ })
   await waitFor(() =>
-    expect(post).toHaveBeenCalledWith('/api/user/catfk/quote', {
+    expect(post).toHaveBeenCalledWith('/api/user/jingsoft/quote', {
       product_id: 'ten',
       channel_id: 'wechat',
     })
@@ -284,7 +302,7 @@ it('disables the store method for custom input even matching a tier and re-enabl
           enable_online_topup: true,
           pay_methods: [
             { type: 'alipay', name: 'Existing Alipay' },
-            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+            { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
           ],
         }}
         topupAmount={amount}
@@ -297,7 +315,7 @@ it('disables the store method for custom input even matching a tier and re-enabl
           setAmount(next)
           setPreset(null)
         }}
-        onCatfkPaymentSelect={pay}
+        onJingSoftPaymentSelect={pay}
         onPaymentMethodSelect={regularPay}
       />
     )
@@ -345,7 +363,7 @@ it('shows the custom amount note on the initially disabled store method and hide
           enable_online_topup: true,
           pay_methods: [
             { type: 'alipay', name: 'Existing Alipay' },
-            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+            { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
           ],
         }}
       />
@@ -380,16 +398,16 @@ it('maps a shared preset to a newly configured product by credited USD amount ra
       topupInfo={{
         ...topupInfo,
         pay_methods: [
-          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+          { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
         ],
-        catfk: {
+        jingsoft: {
           enabled: true,
           available: true,
           channels: [channel],
           products: [product, added],
         },
       }}
-      onCatfkPaymentSelect={pay}
+      onJingSoftPaymentSelect={pay}
     />
   )
   await userEvent.click(screen.getByRole('button', { name: 'WeChat' }))
@@ -408,7 +426,7 @@ it('disables an unmapped preset without replacing the shared amount buttons', ()
       topupInfo={{
         ...topupInfo,
         pay_methods: [
-          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+          { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
         ],
       }}
     />
@@ -424,9 +442,9 @@ it('displays the server unavailable reason and disables the store method without
       topupInfo={{
         ...topupInfo,
         pay_methods: [
-          { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+          { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
         ],
-        catfk: {
+        jingsoft: {
           enabled: true,
           products: [product],
           channels: [channel],
@@ -449,7 +467,7 @@ it('loads the display fee from the selected payment method configuration', async
         ...topupInfo,
         pay_methods: [
           { type: 'alipay', name: 'Alipay', fee_percent: '2.5' },
-          { type: 'catfk', name: 'Catfk', fee_percent: '99' },
+          { type: 'jingsoft', name: 'JingSoft', fee_percent: '99' },
         ],
       },
     },
@@ -481,13 +499,13 @@ it('preserves the configured store method name and icon when loading payment set
       success: true,
       data: {
         ...topupInfo,
-        catfk: {
-          ...topupInfo.catfk,
+        jingsoft: {
+          ...topupInfo.jingsoft,
           channels: [{ id: 'alipay', name: 'Alipay', payment_type: 'alipay' }],
         },
         pay_methods: [
           {
-            type: 'catfk_alipay',
+            type: 'jingsoft_alipay',
             channel_id: 'alipay',
             name: 'Configured Alipay',
             icon: 'https://example.com/alipay.png',
@@ -539,10 +557,10 @@ it.each([
         onConfirm={vi.fn()}
         topupAmount={10}
         paymentAmount={72}
-        paymentMethod={{ type: 'catfk', name: 'Alipay' }}
+        paymentMethod={{ type: 'jingsoft', name: 'Alipay' }}
         calculating={false}
         processing={false}
-        catfk={{ quote, qq: '12345', onQQChange: vi.fn(), available: true }}
+        jingSoft={{ quote, qq: '12345', onQQChange: vi.fn(), available: true }}
       />
     )
     expect(screen.getByText(currency.expected)).toBeVisible()
@@ -559,10 +577,10 @@ it('updates the credited balance symbol when site currency settings change while
       onConfirm={vi.fn()}
       topupAmount={10}
       paymentAmount={72}
-      paymentMethod={{ type: 'catfk', name: 'Alipay' }}
+      paymentMethod={{ type: 'jingsoft', name: 'Alipay' }}
       calculating={false}
       processing={false}
-      catfk={{ quote, qq: '12345', onQQChange: vi.fn(), available: true }}
+      jingSoft={{ quote, qq: '12345', onQQChange: vi.fn(), available: true }}
     />
   )
   expect(screen.getByText('$10')).toBeVisible()
@@ -598,10 +616,10 @@ it.each(['zhCN', 'zhTW', 'en', 'fr', 'ru', 'ja', 'vi', 'invalid_locale!'])(
           onConfirm={vi.fn()}
           topupAmount={10.25}
           paymentAmount={72}
-          paymentMethod={{ type: 'catfk', name: 'Alipay' }}
+          paymentMethod={{ type: 'jingsoft', name: 'Alipay' }}
           calculating={false}
           processing={false}
-          catfk={{
+          jingSoft={{
             quote: { ...quote, topup_amount: 10.25 },
             qq: '12345',
             onQQChange: vi.fn(),
@@ -630,13 +648,13 @@ it('requires a valid quote and ASCII QQ before confirmation', async () => {
         topupAmount={10}
         paymentAmount={72}
         paymentMethod={{
-          type: 'catfk_wxpay',
+          type: 'jingsoft_wxpay',
           channel_id: 'wechat',
           name: 'WeChat',
         }}
         calculating={false}
         processing={false}
-        catfk={{ quote, qq, onQQChange: setQQ, available: true }}
+        jingSoft={{ quote, qq, onQQChange: setQQ, available: true }}
       />
     )
   }
@@ -689,7 +707,7 @@ it.each([
         paymentMethod={undefined}
         calculating={state.calculating}
         processing={false}
-        catfk={{
+        jingSoft={{
           quote: state.valid ? quote : null,
           qq: '1234',
           onQQChange: vi.fn(),
@@ -713,7 +731,7 @@ it('shows neither a resume button, an order status nor a QR code on the recharge
   ).not.toBeInTheDocument()
 })
 
-function mockCatfkHistory(redemption: unknown) {
+function mockJingSoftHistory(redemption: unknown) {
   return vi.spyOn(api, 'get').mockImplementation(async (url) => {
     if (String(url).endsWith('/redemption')) return { data: redemption }
     return {
@@ -726,9 +744,9 @@ function mockCatfkHistory(redemption: unknown) {
               id: 5,
               amount: 5000000,
               money: 72,
-              trade_no: 'catfk-wxpay-order',
-              payment_method: 'catfk_wxpay',
-              payment_provider: 'catfk',
+              trade_no: 'JingSoft_wxpay_order',
+              payment_method: 'jingsoft_wxpay',
+              payment_provider: 'jingsoft',
               status: 'success',
               create_time: 1,
             },
@@ -736,9 +754,9 @@ function mockCatfkHistory(redemption: unknown) {
               id: 4,
               amount: 5000000,
               money: 72,
-              trade_no: 'catfk-alipay-order',
-              payment_method: 'catfk_alipay',
-              payment_provider: 'catfk',
+              trade_no: 'JingSoft_alipay_order',
+              payment_method: 'jingsoft_alipay',
+              payment_provider: 'jingsoft',
               status: 'success',
               create_time: 1,
             },
@@ -746,9 +764,9 @@ function mockCatfkHistory(redemption: unknown) {
               id: 3,
               amount: 5000000,
               money: 72,
-              trade_no: 'completed-catfk-order',
-              payment_method: 'catfk',
-              payment_provider: 'catfk',
+              trade_no: 'JingSoft_completed_order',
+              payment_method: 'jingsoft',
+              payment_provider: 'jingsoft',
               status: 'success',
               create_time: 1,
             },
@@ -756,9 +774,9 @@ function mockCatfkHistory(redemption: unknown) {
               id: 1,
               amount: 5000000,
               money: 72,
-              trade_no: 'catfk-order',
-              payment_method: 'catfk',
-              payment_provider: 'catfk',
+              trade_no: 'JingSoft_order',
+              payment_method: 'jingsoft',
+              payment_provider: 'jingsoft',
               status: 'pending',
               create_time: 1,
             },
@@ -778,12 +796,12 @@ function mockCatfkHistory(redemption: unknown) {
   })
 }
 
-it('labels Catfk payment channels separately while preserving legacy and regular methods', async () => {
-  mockCatfkHistory({ success: true, data: {} })
+it('labels JingSoft payment channels separately with exact JingSoft casing while preserving legacy and regular methods', async () => {
+  mockJingSoftHistory({ success: true, data: {} })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
   const dialog = await screen.findByRole('dialog')
-  expect(await within(dialog).findByText('catfk Alipay')).toBeVisible()
-  expect(within(dialog).getByText('catfk WeChat Pay')).toBeVisible()
+  expect(await within(dialog).findByText('JingSoft Alipay')).toBeVisible()
+  expect(within(dialog).getByText('JingSoft WeChat Pay')).toBeVisible()
   expect(within(dialog).getAllByText('Online Payment')).toHaveLength(2)
   expect(within(dialog).getByText('Alipay')).toBeVisible()
 })
@@ -799,11 +817,11 @@ it('renders the currency image on both quota-based and USD-based order amounts',
       custom_currency_exchange_rate: 2,
     })
   )
-  mockCatfkHistory({ success: true, data: {} })
+  mockJingSoftHistory({ success: true, data: {} })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
 
   const dialog = await screen.findByRole('dialog')
-  await within(dialog).findByText('catfk-order')
+  await within(dialog).findByText('JingSoft_order')
   const symbols = within(dialog).getAllByRole('img', { name: '¤' })
   expect(symbols).toHaveLength(5)
   for (const symbol of symbols) {
@@ -813,13 +831,13 @@ it('renders the currency image on both quota-based and USD-based order amounts',
   expect(dialog).not.toHaveTextContent(imageUrl)
 })
 
-it('offers a redemption code button on every Catfk history order and no status query', async () => {
+it('offers a redemption code button on every JingSoft redemption history order and no status query', async () => {
   useSystemConfigStore.getState().setConfig({
     currency: { ...DEFAULT_CURRENCY_CONFIG, quotaPerUnit: 500000 },
   })
-  mockCatfkHistory({ success: true, data: {} })
+  mockJingSoftHistory({ success: true, data: {} })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
-  await screen.findByText('catfk-order')
+  await screen.findByText('JingSoft_order')
   expect(screen.getAllByText('$10')).toHaveLength(5)
   expect(
     screen.getAllByRole('button', { name: 'View redemption code' })
@@ -829,8 +847,8 @@ it('offers a redemption code button on every Catfk history order and no status q
   ).not.toBeInTheDocument()
 })
 
-it('shows the redeemed code of a completed Catfk order when its button is clicked', async () => {
-  const get = mockCatfkHistory({
+it('shows the redeemed code of a completed JingSoft order when its button is clicked', async () => {
+  const get = mockJingSoftHistory({
     success: true,
     data: {
       key: '0123456789abcdef0123456789abcdef',
@@ -839,7 +857,7 @@ it('shows the redeemed code of a completed Catfk order when its button is clicke
     },
   })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
-  await screen.findByText('completed-catfk-order')
+  await screen.findByText('JingSoft_completed_order')
   await userEvent.click(
     screen.getAllByRole('button', { name: 'View redemption code' })[2]
   )
@@ -851,18 +869,18 @@ it('shows the redeemed code of a completed Catfk order when its button is clicke
     within(dialog).getByRole('button', { name: 'Copy redemption code' })
   ).toBeVisible()
   expect(get).toHaveBeenCalledWith(
-    '/api/user/catfk/orders/completed-catfk-order/redemption'
+    '/api/user/jingsoft/orders/JingSoft_completed_order/redemption'
   )
 })
 
-it('explains that an unfinished Catfk order has no redemption code yet', async () => {
-  mockCatfkHistory({
+it('explains that an unfinished JingSoft order has no redemption code yet', async () => {
+  mockJingSoftHistory({
     success: false,
     message: 'Redemption code is not available yet',
     message_key: 'Redemption code is not available yet',
   })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
-  await screen.findByText('catfk-order')
+  await screen.findByText('JingSoft_order')
   await userEvent.click(
     screen.getAllByRole('button', { name: 'View redemption code' })[1]
   )
@@ -928,9 +946,9 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
           ...topupInfo,
           min_topup: 5,
           pay_methods: [
-            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+            { type: 'jingsoft_wxpay', channel_id: 'wechat', name: 'WeChat' },
           ],
-          catfk: {
+          jingsoft: {
             enabled: true,
             available: true,
             mode: 'direct',
@@ -938,7 +956,7 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
             channels: [channel],
           },
         }}
-        onCatfkPaymentSelect={select}
+        onJingSoftPaymentSelect={select}
       />
     )
   }
@@ -960,10 +978,10 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
       onConfirm={confirm}
       topupAmount={15}
       paymentAmount={108}
-      paymentMethod={{ type: 'catfk', name: 'WeChat' }}
+      paymentMethod={{ type: 'jingsoft', name: 'WeChat' }}
       calculating={false}
       processing={false}
-      catfk={{
+      jingSoft={{
         quote: { ...quote, topup_amount: 15, amount: 108 },
         qq: '',
         onQQChange: vi.fn(),
@@ -990,10 +1008,10 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
             id: 11,
             amount: 5000000,
             money: 72,
-            trade_no: 'catfk-direct-history',
-            payment_method: 'catfk_wxpay',
-            payment_provider: 'catfk',
-            catfk_mode: 'direct',
+            trade_no: 'JingSoft_direct_history',
+            payment_method: 'jingsoft_wxpay',
+            payment_provider: 'jingsoft',
+            jingsoft_mode: 'direct',
             status: 'success',
             create_time: 1,
           },
@@ -1001,10 +1019,10 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
             id: 12,
             amount: 5000000,
             money: 72,
-            trade_no: 'catfk-redemption-history',
-            payment_method: 'catfk_wxpay',
-            payment_provider: 'catfk',
-            catfk_mode: 'redemption',
+            trade_no: 'JingSoft_redemption_history',
+            payment_method: 'jingsoft_wxpay',
+            payment_provider: 'jingsoft',
+            jingsoft_mode: 'redemption',
             status: 'success',
             create_time: 1,
           },
@@ -1013,7 +1031,7 @@ it('enables custom amounts and omits the QQ field in direct mode while hiding re
     },
   })
   render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
-  await screen.findByText('catfk-direct-history')
+  await screen.findByText('JingSoft_direct_history')
   expect(
     screen.getAllByRole('button', { name: 'View redemption code' })
   ).toHaveLength(1)

@@ -167,7 +167,7 @@ func Redeem(key string, userId int) (quota int, err error) {
 			return redeemErr
 		}
 		// Ordinary redemption creates its own invoice snapshot, which is also its
-		// order history entry, dated when the user redeemed the code. CatFK uses
+		// order history entry, dated when the user redeemed the code. JingSoft uses
 		// the shared transaction helper and completes its existing TopUp instead.
 		invoiceAmount, err := InvoiceAmountFromQuota(redemption.Quota)
 		if err != nil {

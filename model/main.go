@@ -360,8 +360,8 @@ func migrateDB() error {
 		&Log{},
 		&Midjourney{},
 		&TopUp{},
-		&CatFKOrder{},
-		&CatFKPriceSlot{},
+		&JingSoftOrder{},
+		&JingSoftPriceSlot{},
 		&QuotaData{},
 		&Task{},
 		&TaskPlugin{},
@@ -399,6 +399,9 @@ func migrateDB() error {
 		&SupportTicketMessage{},
 	)
 	if err != nil {
+		return err
+	}
+	if err := MigrateLegacyJingSoftData(DB); err != nil {
 		return err
 	}
 	if err := InitializeUserAuthVersions(); err != nil {

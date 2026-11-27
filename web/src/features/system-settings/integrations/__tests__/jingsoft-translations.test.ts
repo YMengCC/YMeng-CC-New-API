@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { createInstance } from 'i18next'
 import { expect, it } from 'vitest'
 
@@ -12,7 +30,7 @@ import zh from '@/i18n/locales/zh.json'
 const resources = { en, zh, 'zh-TW': zhTW, fr, ja, ru, vi }
 
 it.each(Object.entries(resources))(
-  'resolves gateway labels and validation from the translation namespace in %s',
+  'resolves JingSoft gateway labels and validation from the translation namespace in %s without any legacy catfk or yunmao strings',
   async (language, resource) => {
     const i18n = createInstance()
     await i18n.init({
@@ -21,12 +39,23 @@ it.each(Object.entries(resources))(
       resources: { [language]: resource, en },
     })
     for (const key of [
-      'Enable CatFK',
-      'CatFK store token',
-      'CatFK product mappings',
-      'Read Catfk channels',
+      'Enable JingSoft',
+      'JingSoft platform URL',
+      'Test compatibility',
+      'JingSoft store compatibility verified',
+      'JingSoft store token',
+      'JingSoft product mappings',
+      'Auto-detect store products',
+      'Auto-detect hidden slots',
+      'Detected hidden card products',
+      'Contact format must be Any',
+      'Product must be on sale',
+      'Check contact format',
+      'JingSoft channels synced',
+      'Channels are refreshed automatically when you save settings. Enable them by adding the matching payment methods in General.',
+      'No JingSoft channels synced yet. Save settings to read available channels.',
       'Expected credited balance (USD)',
-      'CatFK product IDs must be unique',
+      'JingSoft product IDs must be unique',
       'Cancel payment',
       'Open Alipay to pay',
       'Waiting for payment confirmation',
@@ -45,61 +74,57 @@ it.each(Object.entries(resources))(
       'Contact method',
       'Enter QQ number (5-12 digits)',
       'Custom amounts are not supported',
-      'Catfk consignment store payments',
-      'Catfk payment setup guide',
-      'Open Catfk merchant console',
-      'Catfk available channels',
-      'Read Catfk channels',
-      'Catfk Alipay',
-      'Catfk WeChat Pay',
-      'catfk Alipay',
-      'catfk WeChat Pay',
+      'JingSoft consignment store payments',
+      'JingSoft payment setup guide',
+      'Open JingSoft merchant console',
+      'JingSoft available channels',
+      'JingSoft Alipay',
+      'JingSoft WeChat Pay',
       'Select payment type',
       'Custom Epay payment identifier',
       'Payment method display name',
       'Choose the payment provider.',
       'Custom Epay payment type key',
-      'Custom Epay payment identifier',
       'Enter payment type key',
       'Icon name or HTTPS image URL',
-      'Catfk payment identifiers must use the verified channel list',
-      'CatFK settlement mode',
-      'CatFK merchant token',
+      'JingSoft payment identifiers must use the verified channel list',
+      'JingSoft settlement mode',
+      'JingSoft merchant token',
       'Direct-credit & auto-restock mode',
       'Redemption-code verification mode',
       'Auto fallback mode (direct first, fallback to redemption)',
       'Check merchant token',
-      'Catfk merchant token is valid',
-      'Catfk merchant token is invalid or expired',
+      'JingSoft merchant token is valid',
+      'JingSoft merchant token is invalid or expired',
       'Custom amounts are temporarily unavailable, please select a preset amount',
       'Direct-credit slot goods keys',
       'Reset quarantined slots',
       'Quarantined slots have been reset',
-      'CatFK payment channel is busy, please try again shortly',
-      'Too many Catfk payment requests, please try again shortly',
-      'Catfk single payment cannot exceed ¥{{amount}}',
+      'JingSoft payment channel is busy, please try again shortly',
+      'Too many JingSoft payment requests, please try again shortly',
+      'JingSoft single payment cannot exceed ¥{{amount}}',
       'Max single payment (CNY)',
       'Order rate limit (per minute)',
-      'Maximum new Catfk orders allowed per user or IP per minute.',
-      'CatFK quote is invalid or expired',
-      'CatFK order is unavailable',
+      'Maximum new JingSoft orders allowed per user or IP per minute.',
+      'JingSoft quote is invalid or expired',
+      'JingSoft order is unavailable',
       'Copy the part of the store link after /shop/ and paste it into the store token field. You can also paste the full store link.',
-      'Open the product page and copy the part of the product link after /item/. Paste only this part into the goods key field.',
+      'Paste either the goods key or the full product URL; the key and ID are recognized automatically.',
       'Match each product’s expected credited balance (USD) to an amount option in General. Use the balance value, not the CNY selling price or converted display amount. Unmatched presets cannot use this payment method.',
     ]) {
       expect(i18n.exists(key, { lng: language })).toBe(true)
       const translated = i18n.t(key)
-      expect(translated).not.toContain('CatFK')
-      expect(translated).not.toMatch(/云猫|雲貓|Yunmao|Cloud Cat/i)
+      expect(translated).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
       if (language !== 'en') expect(translated).not.toBe(key)
     }
-    for (const value of Object.values(resource.translation)) {
-      expect(String(value)).not.toMatch(/云猫|雲貓|Yunmao|Cloud Cat/i)
+    for (const [entryKey, value] of Object.entries(resource.translation)) {
+      expect(entryKey).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
+      expect(String(value)).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
     }
   }
 )
 
-it('shows the requested Chinese custom amount note and switches gateway labels with the language', async () => {
+it('shows exact JingSoft casing in Chinese and English and switches gateway labels with the language', async () => {
   const i18n = createInstance()
   await i18n.init({ lng: 'zh', fallbackLng: 'en', resources })
   expect(i18n.t('Cancel payment')).toBe('取消支付')
@@ -118,14 +143,16 @@ it('shows the requested Chinese custom amount note and switches gateway labels w
     '请输入QQ号（5-12位数字）'
   )
   expect(i18n.t('Custom amounts are not supported')).toBe('不支持自定义金额')
-  expect(i18n.t('Enable CatFK')).toBe('启用 Catfk 支付')
-  expect(i18n.t('Catfk consignment store payments')).toBe('Catfk 店铺支付')
-  expect(i18n.t('Catfk payment setup guide')).toBe('Catfk 支付设置指南')
-  expect(i18n.t('Catfk Alipay')).toBe('Catfk 支付宝')
-  expect(i18n.t('Catfk WeChat Pay')).toBe('Catfk 微信支付')
+  expect(i18n.t('Enable JingSoft')).toBe('启用 JingSoft 支付')
+  expect(i18n.t('JingSoft consignment store payments')).toBe('JingSoft 店铺支付')
+  expect(i18n.t('JingSoft payment setup guide')).toBe('JingSoft 支付设置指南')
+  expect(i18n.t('JingSoft Alipay')).toBe('JingSoft 支付宝')
+  expect(i18n.t('JingSoft WeChat Pay')).toBe('JingSoft 微信支付')
+  expect(i18n.t('Test compatibility')).toBe('测试兼容')
+  expect(i18n.t('Auto-detect store products')).toBe('自动识别店铺商品')
   expect(i18n.t('Select payment type')).toBe('请选择支付处理标识')
   await i18n.changeLanguage('en')
-  expect(i18n.t('Enable CatFK')).toBe('Enable Catfk payments')
+  expect(i18n.t('Enable JingSoft')).toBe('Enable JingSoft payments')
   await i18n.changeLanguage('zh-TW')
   expect(i18n.t('Custom amounts are not supported')).toBe('不支援自訂金額')
 })

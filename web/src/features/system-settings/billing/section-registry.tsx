@@ -158,24 +158,28 @@ const BILLING_SECTIONS = [
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,
           CreemProducts: settings.CreemProducts,
-          CatFKEnabled: settings['catfk_setting.enabled'],
-          CatFKMode:
-            settings['catfk_setting.mode'] === 'direct' ||
-            settings['catfk_setting.mode'] === 'auto'
-              ? settings['catfk_setting.mode']
+          JingSoftEnabled: settings['jingsoft_setting.enabled'],
+          JingSoftMode:
+            settings['jingsoft_setting.mode'] === 'direct' ||
+            settings['jingsoft_setting.mode'] === 'auto'
+              ? settings['jingsoft_setting.mode']
               : 'redemption',
-          CatFKStoreToken: settings['catfk_setting.store_token'],
-          CatFKMerchantToken: settings['catfk_setting.merchant_token'] ?? '',
-          CatFKProducts: settings['catfk_setting.products'],
-          CatFKDirectGoodsKeys:
-            settings['catfk_setting.direct_goods_keys'] ?? '[]',
-          CatFKAutoRestockMin: settings['catfk_setting.auto_restock_min'] ?? 5,
-          CatFKAutoRestockBatch:
-            settings['catfk_setting.auto_restock_batch'] ?? 20,
-          CatFKMaxAmountCNY: settings['catfk_setting.max_amount_cny'] ?? 5000,
-          CatFKMaxOrdersPerMinute:
-            settings['catfk_setting.max_orders_per_minute'] ?? 15,
-          CatFKChannels: settings['catfk_setting.channels'],
+          JingSoftBaseURL: settings['jingsoft_setting.base_url'] ?? '',
+          JingSoftStoreToken: settings['jingsoft_setting.store_token'],
+          JingSoftMerchantToken:
+            settings['jingsoft_setting.merchant_token'] ?? '',
+          JingSoftProducts: settings['jingsoft_setting.products'],
+          JingSoftDirectGoodsKeys:
+            settings['jingsoft_setting.direct_goods_keys'] ?? '[]',
+          JingSoftAutoRestockMin:
+            settings['jingsoft_setting.auto_restock_min'] ?? 5,
+          JingSoftAutoRestockBatch:
+            settings['jingsoft_setting.auto_restock_batch'] ?? 20,
+          JingSoftMaxAmountCNY:
+            settings['jingsoft_setting.max_amount_cny'] ?? 5000,
+          JingSoftMaxOrdersPerMinute:
+            settings['jingsoft_setting.max_orders_per_minute'] ?? 15,
+          JingSoftChannels: settings['jingsoft_setting.channels'],
         }}
         waffoDefaultValues={{
           WaffoEnabled: settings.WaffoEnabled ?? false,

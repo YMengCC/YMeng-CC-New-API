@@ -64,8 +64,8 @@ func TestGetInvoiceEligibilityExcludesNonPaymentSources(t *testing.T) {
 	assert.Equal(t, int64(600*InvoiceAmountScale), result.Orders[0].Amount)
 }
 
-// TestCatFKInvoiceDatabaseMatrix requires disposable databases for external dialects.
-func TestCatFKInvoiceDatabaseMatrix(t *testing.T) {
+// TestJingSoftInvoiceDatabaseMatrix requires disposable databases for external dialects.
+func TestJingSoftInvoiceDatabaseMatrix(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			var driver gorm.Dialector
@@ -96,7 +96,7 @@ func TestCatFKInvoiceDatabaseMatrix(t *testing.T) {
 			common.SetDatabaseTypes(common.DatabaseType(dialect), common.DatabaseType(dialect))
 			initCol()
 			t.Cleanup(func() {
-				require.NoError(t, db.Migrator().DropTable(&InvoiceApplicationItem{}, &InvoiceApplication{}, &InvoiceProfile{}, &InvoiceRefundAdjustment{}, &CatFKOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}))
+				require.NoError(t, db.Migrator().DropTable(&InvoiceApplicationItem{}, &InvoiceApplication{}, &InvoiceProfile{}, &InvoiceRefundAdjustment{}, &JingSoftOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}))
 				DB, LOG_DB = previousDB, previousLogDB
 				common.SetDatabaseTypes(previousMainType, previousLogType)
 				initCol()
@@ -110,35 +110,35 @@ func TestCatFKInvoiceDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Raw(query).Scan(&version).Error)
 			t.Logf("database version: %s", version)
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}, &CatFKOrder{}, &CatFKPriceSlot{}, &InvoiceProfile{}, &InvoiceApplication{}, &InvoiceApplicationItem{}, &InvoiceRefundAdjustment{}))
+				require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}, &JingSoftOrder{}, &JingSoftPriceSlot{}, &InvoiceProfile{}, &InvoiceApplication{}, &InvoiceApplicationItem{}, &InvoiceRefundAdjustment{}))
 			}
-			t.Run("eligibility_and_application", TestCatFKInvoiceEligibilityAndApplication)
-			t.Run("legacy_backfill", TestCatFKInvoiceBackfillPreservesOneOrderPerRecharge)
+			t.Run("eligibility_and_application", TestJingSoftInvoiceEligibilityAndApplication)
+			t.Run("legacy_backfill", TestJingSoftInvoiceBackfillPreservesOneOrderPerRecharge)
 			t.Run("today_topup_amount", TestTodayTopUpAmountUsesCompletedCreditedSnapshots)
 		})
 	}
 }
 
-func TestCatFKInvoiceSnapshotPreservesWalletQuotaUnits(t *testing.T) {
+func TestJingSoftInvoiceSnapshotPreservesWalletQuotaUnits(t *testing.T) {
 	previous := common.QuotaPerUnit
 	common.QuotaPerUnit = 500_000
 	t.Cleanup(func() { common.QuotaPerUnit = previous })
 	credited, amount, err := CalculateTopUpInvoiceSnapshot(&TopUp{
-		PaymentProvider: PaymentProviderCatFK, Amount: 3_000_000_000, Money: 10.18,
+		PaymentProvider: PaymentProviderJingSoft, Amount: 3_000_000_000, Money: 10.18,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(3_000_000_000), credited)
 	assert.Equal(t, int64(6000*InvoiceAmountScale), amount)
-	_, _, err = CalculateTopUpInvoiceSnapshot(&TopUp{PaymentProvider: PaymentProviderCatFK, Amount: int64(common.MaxWalletQuota) + 1})
+	_, _, err = CalculateTopUpInvoiceSnapshot(&TopUp{PaymentProvider: PaymentProviderJingSoft, Amount: int64(common.MaxWalletQuota) + 1})
 	require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 }
 
-func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
+func TestJingSoftInvoiceEligibilityAndApplication(t *testing.T) {
 	originalQuotaPerUnit := common.QuotaPerUnit
 	common.QuotaPerUnit = 100
 	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
 	userID, key := setupRedeemFixture(t, 500)
-	order := setupCatFKOrderFixture(t, userID, "invoice")
+	order := setupJingSoftOrderFixture(t, userID, "invoice")
 	require.NoError(t, DB.AutoMigrate(&InvoiceProfile{}, &InvoiceApplication{}, &InvoiceApplicationItem{}, &InvoiceRefundAdjustment{}))
 	t.Cleanup(func() {
 		require.NoError(t, DB.Where("user_id = ?", userID).Delete(&InvoiceProfile{}).Error)
@@ -147,15 +147,15 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 	})
 	for _, state := range []string{"pending", "paid"} {
 		if state == "paid" {
-			order = markCatFKOrderPaid(t, order)
+			order = markJingSoftOrderPaid(t, order)
 		}
 		eligibility, err := GetInvoiceEligibility(userID)
 		require.NoError(t, err)
 		assert.Empty(t, eligibility.Orders, state+" orders are not completed recharges")
-		_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID})
+		_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-JINGSOFT", "", []int{order.TopUpID})
 		require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 	}
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
+	_, err := CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
 	require.NoError(t, err)
 	topUp := GetTopUpById(order.TopUpID)
 	require.NotNil(t, topUp)
@@ -167,21 +167,21 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, eligibility.Orders, 1)
 	assert.Equal(t, order.TradeNo, eligibility.Orders[0].TradeNo)
-	assert.Equal(t, PaymentProviderCatFK, eligibility.Orders[0].PaymentProvider)
+	assert.Equal(t, PaymentProviderJingSoft, eligibility.Orders[0].PaymentProvider)
 	assert.Equal(t, int64(5*InvoiceAmountScale), eligibility.Orders[0].Amount, "completed snapshot survives quota configuration changes")
 	other, err := GetInvoiceEligibility(userID + 1)
 	require.NoError(t, err)
 	assert.Empty(t, other.Orders)
 	_, err = CreateInvoiceApplication(userID+1, "Other Company", "TAX-OTHER", "", []int{order.TopUpID})
 	require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
-	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID})
+	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-JINGSOFT", "", []int{order.TopUpID})
 	require.ErrorIs(t, err, ErrInvoiceAmountTooLow)
 	regular := insertInvoiceTestTopUp(t, userID, "invoice-regular", PaymentProviderEpay, common.TopUpStatusSuccess, 600)
-	application, err := CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "  请开具增值税专用发票  ", []int{order.TopUpID, regular.Id})
+	application, err := CreateInvoiceApplication(userID, "Example Company", "TAX-JINGSOFT", "  请开具增值税专用发票  ", []int{order.TopUpID, regular.Id})
 	require.NoError(t, err)
 	assert.Equal(t, int64(605*InvoiceAmountScale), application.NetAmount)
 	assert.Equal(t, "请开具增值税专用发票", application.Remark)
-	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID, regular.Id})
+	_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-JINGSOFT", "", []int{order.TopUpID, regular.Id})
 	require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 	eligibility, err = GetInvoiceEligibility(userID)
 	require.NoError(t, err)
@@ -190,13 +190,13 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 	}
 }
 
-func TestCatFKInvoiceBackfillPreservesOneOrderPerRecharge(t *testing.T) {
+func TestJingSoftInvoiceBackfillPreservesOneOrderPerRecharge(t *testing.T) {
 	originalQuotaPerUnit := common.QuotaPerUnit
 	common.QuotaPerUnit = 100
 	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
 	userID, key := setupRedeemFixture(t, 500)
-	order := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, "invoice-backfill"))
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
+	order := markJingSoftOrderPaid(t, setupJingSoftOrderFixture(t, userID, "invoice-backfill"))
+	_, err := CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
 	require.NoError(t, err)
 	// Existing releases completed these TopUps without invoice snapshots.
 	require.NoError(t, DB.Model(&TopUp{}).Where("id = ?", order.TopUpID).Updates(map[string]any{"credited_quota": 0, "invoice_amount": 0}).Error)

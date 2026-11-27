@@ -236,7 +236,7 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
-	if err := operation_setting.ValidateCatFKOption(key, value); err != nil {
+	if err := operation_setting.ValidateJingSoftOption(key, value); err != nil {
 		return err
 	}
 	if key == legacyAccessTokenRetireAtKey {

@@ -40,7 +40,7 @@ afterEach(() => {
 it('refreshes both the wallet balance and the shared dashboard balance after a store order completes', async () => {
   let settled = false
   vi.spyOn(api, 'post').mockImplementation(async (url) => {
-    if (url === '/api/user/catfk/quote') {
+    if (url === '/api/user/jingsoft/quote') {
       return {
         data: {
           success: true,
@@ -53,12 +53,12 @@ it('refreshes both the wallet balance and the shared dashboard balance after a s
         },
       }
     }
-    if (url === '/api/user/catfk/pay') {
+    if (url === '/api/user/jingsoft/pay') {
       return {
         data: {
           success: true,
           data: {
-            trade_no: 'settled-order',
+            trade_no: 'JingSoft_settled_order',
             status: 'pending',
             payment_qr_code: 'https://qr.alipay.com/upx-code',
           },
@@ -81,23 +81,29 @@ it('refreshes both the wallet balance and the shared dashboard balance after a s
           group: 'default',
         }
         break
-      case '/api/user/catfk/orders/settled-order':
+      case '/api/user/jingsoft/orders/JingSoft_settled_order':
         settled = true
         data = {
-          trade_no: 'settled-order',
+          trade_no: 'JingSoft_settled_order',
           status: 'completed',
         }
         break
       case '/api/user/topup/info':
         data = {
           min_topup: 1,
-          pay_methods: [],
+          pay_methods: [
+            {
+              type: 'jingsoft_alipay',
+              channel_id: '1',
+              name: 'JingSoft Alipay',
+            },
+          ],
           amount_options: [10],
-          catfk: {
+          jingsoft: {
             enabled: true,
             available: true,
             products: [{ id: 'ten', name: 'Ten dollars', amount: 10 }],
-            channels: [{ id: '1', name: 'Alipay' }],
+            channels: [{ id: '1', name: 'Alipay', payment_type: 'alipay' }],
           },
         }
         break
@@ -185,6 +191,6 @@ it('refreshes both the wallet balance and the shared dashboard balance after a s
     )
   ).toBeVisible()
   expect(
-    Object.keys(localStorage).filter((key) => key.startsWith('wallet:catfk'))
+    Object.keys(localStorage).filter((key) => key.startsWith('wallet:jingsoft'))
   ).toEqual([])
 })

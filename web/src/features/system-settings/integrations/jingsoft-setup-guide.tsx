@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { HelpCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -5,18 +23,22 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 
-const catfkMerchantConsoleUrl = 'https://catfk.com/merchant'
+import { normalizeJingSoftBaseURL } from './jingsoft-schema'
 
-export function CatFKSetupGuide() {
+export function JingSoftSetupGuide(props: { baseUrl?: string }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const resolvedOrigin = normalizeJingSoftBaseURL(props.baseUrl ?? '')
+  const exampleOrigin = resolvedOrigin || 'https://wzyp.cn'
+  const merchantConsoleUrl = resolvedOrigin ? `${resolvedOrigin}/merchant` : ''
+
   return (
     <Dialog
       open={open}
       onOpenChange={setOpen}
-      title={t('Catfk payment setup guide')}
+      title={t('JingSoft payment setup guide')}
       description={t(
-        'Follow these steps to find the store token and goods keys in your Catfk merchant account.'
+        'Follow these steps to configure the platform URL, store token, and product settings in your JingSoft merchant account.'
       )}
       contentClassName='sm:max-w-xl'
       bodyClassName='text-sm break-words'
@@ -36,27 +58,45 @@ export function CatFKSetupGuide() {
           >
             {t('Close')}
           </Button>
-          <Button
-            role='link'
-            render={
-              <a
-                href={catfkMerchantConsoleUrl}
-                target='_blank'
-                rel='noopener noreferrer'
-              />
-            }
-          >
-            {t('Open Catfk merchant console')}
-          </Button>
+          {merchantConsoleUrl && (
+            <Button
+              role='link'
+              render={
+                <a
+                  href={merchantConsoleUrl}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                />
+              }
+            >
+              {t('Open JingSoft merchant console')}
+            </Button>
+          )}
         </>
       }
     >
       <ol className='list-decimal space-y-5 pl-5'>
         <li className='space-y-1.5'>
+          <h3 className='font-medium'>
+            {t('Configure platform URL & test compatibility')}
+          </h3>
+          <p className='text-muted-foreground'>
+            {t(
+              'Enter the HTTPS origin of any JingSoft PRO storefront platform, then click Test compatibility to verify its API endpoints.'
+            )}
+          </p>
+          <p className='text-muted-foreground'>
+            {t('Example')}:{' '}
+            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
+              {exampleOrigin}
+            </code>
+          </p>
+        </li>
+        <li className='space-y-1.5'>
           <h3 className='font-medium'>{t('Get the store token')}</h3>
           <p className='text-muted-foreground'>
             {t(
-              'Sign in to the Catfk merchant console and open your store page.'
+              'Sign in to the JingSoft merchant console and open your store page.'
             )}
           </p>
           <p className='text-muted-foreground'>
@@ -67,7 +107,7 @@ export function CatFKSetupGuide() {
           <p className='text-muted-foreground'>
             {t('Example')}:{' '}
             <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              https://catfk.com/shop/YourShop
+              {`${exampleOrigin}/shop/YourShop`}
             </code>{' '}
             →{' '}
             <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
@@ -83,22 +123,20 @@ export function CatFKSetupGuide() {
             )}
           </p>
           <p className='text-muted-foreground'>
-            {t(
-              'Set the contact format to Any or QQ, and set the purchase limit to 1 per order.'
-            )}
+            {t('Set the contact format to Any or QQ.')}
           </p>
         </li>
         <li className='space-y-1.5'>
           <h3 className='font-medium'>{t('Add product mappings')}</h3>
           <p className='text-muted-foreground'>
             {t(
-              'Open the product page and copy the part of the product link after /item/. Paste only this part into the goods key field.'
+              'Click Auto-detect store products to import on-sale card products automatically, or paste a product key or full /item/... link.'
             )}
           </p>
           <p className='text-muted-foreground'>
             {t('Example')}:{' '}
             <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              https://catfk.com/item/jbf7yz
+              {`${exampleOrigin}/item/jbf7yz`}
             </code>{' '}
             →{' '}
             <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
@@ -110,11 +148,6 @@ export function CatFKSetupGuide() {
               'Set the expected credited balance (USD) to a top-up amount option in General, not the CNY selling price.'
             )}
           </p>
-          <p className='text-muted-foreground'>
-            {t(
-              'Choose your own stable product ID. It cannot be changed later.'
-            )}
-          </p>
         </li>
         <li className='space-y-1.5'>
           <h3 className='font-medium'>
@@ -122,22 +155,22 @@ export function CatFKSetupGuide() {
           </h3>
           <p className='text-muted-foreground'>
             {t(
-              'To skip manual code exports and enable custom recharge amounts, create 1–20 dedicated card products with Contact format set to Any, Purchase limit set to 1, and Storefront visibility set to Hidden, then enter your merchant token and slot goods keys.'
+              'To skip manual code exports and enable custom recharge amounts, create 1–20 dedicated card products with Contact format set to Any and Storefront visibility set to Hidden, then enter your merchant token and slot goods keys.'
             )}
           </p>
         </li>
         <li className='space-y-1.5'>
           <h3 className='font-medium'>
-            {t('Configure Catfk payment methods')}
+            {t('Configure JingSoft payment methods')}
           </h3>
           <p className='text-muted-foreground'>
             {t(
-              'Read the available channels, add the matching Catfk payment methods in General, then save all settings.'
+              'Save settings to automatically read the available channels, then add the matching JingSoft payment methods in General and save again.'
             )}
           </p>
           <p className='text-muted-foreground'>
             {t(
-              'The server must also set CATFK_ORDER_ENCRYPTION_KEY to a Base64 value that decodes to 32 bytes.'
+              'The server must also set JINGSOFT_ORDER_ENCRYPTION_KEY to a Base64 value that decodes to 32 bytes.'
             )}
           </p>
         </li>

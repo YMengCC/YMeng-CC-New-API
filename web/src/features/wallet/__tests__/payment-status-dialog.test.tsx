@@ -16,12 +16,12 @@ import {
   useSystemConfigStore,
 } from '@/stores/system-config-store'
 
-import { CatfkPaymentStatusDialog } from '../components/dialogs/catfk-payment-status-dialog'
+import { JingSoftPaymentStatusDialog } from '../components/dialogs/jingsoft-payment-status-dialog'
 import { PaymentConfirmDialog } from '../components/dialogs/payment-confirm-dialog'
-import { useCatfkPayment } from '../hooks/use-catfk-payment'
+import { useJingSoftPayment } from '../hooks/use-jingsoft-payment'
 
 const channel = { id: 'alipay', name: 'Alipay' }
-const product = { id: 'cat-10', name: 'Ten', amount: 10 }
+const product = { id: 'jingsoft-10', name: 'Ten', amount: 10 }
 const quote = {
   quote_id: 'quote',
   amount: 10.18,
@@ -85,7 +85,7 @@ it('shows the payment QR code in the site without opening the payment page until
   let check!: () => Promise<void>
   function Payment() {
     const client = useQueryClient()
-    const payment = useCatfkPayment(info, 1, credited)
+    const payment = useJingSoftPayment(info, 1, credited)
     check = () =>
       client.invalidateQueries({
         queryKey: ['wallet', 'store-order', 1, 'order'],
@@ -104,17 +104,17 @@ it('shows the payment QR code in the site without opening the payment page until
           onConfirm={payment.confirm}
           topupAmount={payment.product?.amount ?? 0}
           paymentAmount={payment.quote?.amount ?? 0}
-          paymentMethod={{ type: 'catfk', name: 'Alipay' }}
+          paymentMethod={{ type: 'jingsoft', name: 'Alipay' }}
           calculating={payment.calculating}
           processing={payment.processing}
-          catfk={{
+          jingSoft={{
             quote: payment.quote,
             qq: payment.qq,
             onQQChange: payment.setQQ,
             available: true,
           }}
         />
-        <CatfkPaymentStatusDialog
+        <JingSoftPaymentStatusDialog
           open={!!payment.statusOrder}
           onOpenChange={(open) => {
             if (!open) payment.closeStatus()
@@ -190,7 +190,7 @@ it.each(['pending', 'paid', 'needs_attention', 'expired', 'creation_unknown'])(
   'never claims automatic credit for a %s order',
   (status) => {
     render(
-      <CatfkPaymentStatusDialog
+      <JingSoftPaymentStatusDialog
         open
         onOpenChange={vi.fn()}
         order={{
@@ -216,7 +216,7 @@ it.each(['pending', 'paid', 'needs_attention', 'expired', 'creation_unknown'])(
 it('keeps only the amount, the QR code and a cancel button while waiting, and cancel just closes the dialog', async () => {
   const onOpenChange = vi.fn()
   render(
-    <CatfkPaymentStatusDialog
+    <JingSoftPaymentStatusDialog
       open
       onOpenChange={onOpenChange}
       order={{
@@ -250,7 +250,7 @@ it('keeps only the amount, the QR code and a cancel button while waiting, and ca
 
 it('asks to scan with WeChat while a WeChat order waits', () => {
   render(
-    <CatfkPaymentStatusDialog
+    <JingSoftPaymentStatusDialog
       open
       onOpenChange={vi.fn()}
       order={{
@@ -259,7 +259,7 @@ it('asks to scan with WeChat while a WeChat order waits', () => {
         payment: paidAmount,
         amount: 10,
         status: 'pending',
-        paymentQrCode: 'https://catfk.com/shopApi/Pay/payment?trade_no=CAT1',
+        paymentQrCode: 'https://wzyp.cn/shopApi/Pay/payment?trade_no=JING1',
       }}
       queryFailed={false}
     />
@@ -283,7 +283,7 @@ describe('on a phone', () => {
 
   it('offers opening Alipay directly for a scraped Alipay code', () => {
     render(
-      <CatfkPaymentStatusDialog
+      <JingSoftPaymentStatusDialog
         open
         onOpenChange={vi.fn()}
         order={{
@@ -305,7 +305,7 @@ describe('on a phone', () => {
 
   it('offers no Alipay button when the code is the fallback payment page', () => {
     render(
-      <CatfkPaymentStatusDialog
+      <JingSoftPaymentStatusDialog
         open
         onOpenChange={vi.fn()}
         order={{
@@ -314,7 +314,7 @@ describe('on a phone', () => {
           payment: paidAmount,
           amount: 10,
           status: 'pending',
-          paymentQrCode: 'https://catfk.com/shopApi/Pay/payment?trade_no=CAT1',
+          paymentQrCode: 'https://wzyp.cn/shopApi/Pay/payment?trade_no=JING1',
         }}
         queryFailed={false}
       />
@@ -341,7 +341,7 @@ describe('on a phone', () => {
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => {})
     render(
-      <CatfkPaymentStatusDialog
+      <JingSoftPaymentStatusDialog
         open
         onOpenChange={vi.fn()}
         order={{
@@ -350,7 +350,7 @@ describe('on a phone', () => {
           payment: paidAmount,
           amount: 10,
           status: 'pending',
-          paymentMethod: 'catfk_wxpay',
+          paymentMethod: 'jingsoft_wxpay',
           paymentQrCode: 'weixin://wxpay/bizpayurl?pr=testToken',
         }}
         queryFailed={false}
@@ -389,7 +389,7 @@ it.each(['zhCN', 'zhTW', 'en', 'fr', 'ru', 'ja', 'vi', 'invalid_locale!'])(
     })
     render(
       <I18nextProvider i18n={i18n}>
-        <CatfkPaymentStatusDialog
+        <JingSoftPaymentStatusDialog
           open
           onOpenChange={vi.fn()}
           order={{
@@ -427,7 +427,7 @@ it('omits unsafe QR codes and supports dismissing with Escape', async () => {
   function Payment() {
     const [open, setOpen] = useState(true)
     return (
-      <CatfkPaymentStatusDialog
+      <JingSoftPaymentStatusDialog
         open={open}
         onOpenChange={setOpen}
         order={{

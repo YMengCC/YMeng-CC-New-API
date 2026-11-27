@@ -47,7 +47,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { getPaymentIcon } from '@/features/wallet/lib/ui'
 import { isHttpsUrl } from '@/lib/content-format'
 
-import type { CatFKChannel } from './catfk-schema'
+import type { JingSoftChannel } from './jingsoft-schema'
 
 const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
   z
@@ -57,8 +57,8 @@ const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
       custom_type: z
         .string()
         .refine(
-          (value) => !value.trim().toLowerCase().startsWith('catfk'),
-          t('Catfk payment identifiers must use the verified channel list')
+          (value) => !value.trim().toLowerCase().startsWith('jingsoft'),
+          t('JingSoft payment identifiers must use the verified channel list')
         ),
       channel_id: z.string(),
       icon: z.string().optional(),
@@ -123,14 +123,14 @@ type PaymentMethodDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: PaymentMethodData) => void
   editData?: PaymentMethodData | null
-  catfkChannels?: CatFKChannel[]
+  jingSoftChannels?: JingSoftChannel[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
   alipay: 'SiAlipay',
-  catfk: 'SiAlipay',
-  catfk_alipay: 'SiAlipay',
-  catfk_wxpay: 'SiWechat',
+  jingsoft: 'SiAlipay',
+  jingsoft_alipay: 'SiAlipay',
+  jingsoft_wxpay: 'SiWechat',
   stripe: 'SiStripe',
   waffo_pancake: 'LuCreditCard',
   wxpay: 'SiWechat',
@@ -143,33 +143,33 @@ export function PaymentMethodDialog({
   onOpenChange,
   onSave,
   editData,
-  catfkChannels = [],
+  jingSoftChannels = [],
 }: PaymentMethodDialogProps) {
   const { t } = useTranslation()
   const isEditMode = !!editData
   const paymentMethodDialogSchema = createPaymentMethodDialogSchema(t)
-  const catfkOptions = useMemo(
+  const jingSoftOptions = useMemo(
     () =>
-      catfkChannels.flatMap((channel) => {
+      jingSoftChannels.flatMap((channel) => {
         let value: string | undefined
-        if (channel.payment_type === 'wxpay') value = 'catfk_wxpay'
-        if (channel.payment_type === 'alipay') value = 'catfk_alipay'
+        if (channel.payment_type === 'wxpay') value = 'jingsoft_wxpay'
+        if (channel.payment_type === 'alipay') value = 'jingsoft_alipay'
         if (!value) return []
         return [
           {
             iconName: getDefaultIconName(value),
-            label: `${t(channel.payment_type === 'wxpay' ? 'Catfk WeChat Pay' : 'Catfk Alipay')} (${channel.name}, Catfk: ${value})`,
+            label: `${t(channel.payment_type === 'wxpay' ? 'JingSoft WeChat Pay' : 'JingSoft Alipay')} (${channel.name}, JingSoft: ${value})`,
             name: t(
               channel.payment_type === 'wxpay'
-                ? 'Catfk WeChat Pay'
-                : 'Catfk Alipay'
+                ? 'JingSoft WeChat Pay'
+                : 'JingSoft Alipay'
             ),
             value,
             channelID: channel.id,
           },
         ]
       }),
-    [catfkChannels, t]
+    [jingSoftChannels, t]
   )
   const paymentTypeOptions = useMemo<PaymentTypeOption[]>(
     () => [
@@ -197,7 +197,7 @@ export function PaymentMethodDialog({
         name: t('Waffo Pancake'),
         value: 'waffo_pancake',
       },
-      ...catfkOptions,
+      ...jingSoftOptions,
       {
         iconName: 'LuCreditCard',
         label: t('Custom Epay payment identifier'),
@@ -205,7 +205,7 @@ export function PaymentMethodDialog({
         value: '__custom_epay__',
       },
     ],
-    [catfkOptions, t]
+    [jingSoftOptions, t]
   )
   const getPaymentTypeOption = (value: string) =>
     paymentTypeOptions.find((option) => option.value === value)
@@ -245,15 +245,15 @@ export function PaymentMethodDialog({
       const knownType =
         ['alipay', 'wxpay', 'stripe', 'waffo_pancake'].includes(
           editData.type
-        ) || editData.type.startsWith('catfk_')
-      const legacyCatfkMethod = editData.type === 'catfk'
+        ) || editData.type.startsWith('jingsoft_')
+      const legacyJingSoftMethod = editData.type === 'jingsoft'
       let initialType = '__custom_epay__'
       if (knownType) initialType = editData.type
-      if (legacyCatfkMethod) initialType = ''
+      if (legacyJingSoftMethod) initialType = ''
       form.reset({
         name: editData.name,
         type: initialType,
-        custom_type: knownType || legacyCatfkMethod ? '' : editData.type,
+        custom_type: knownType || legacyJingSoftMethod ? '' : editData.type,
         channel_id: editData.channel_id ?? '',
         icon: editData.icon ?? getDefaultIconName(editData.type),
         min_topup: editData.min_topup ?? '',
@@ -291,7 +291,7 @@ export function PaymentMethodDialog({
       show_topup_notice: String(values.show_topup_notice),
       show_topup_link: String(values.show_topup_link),
     }
-    if (type.startsWith('catfk_') && values.channel_id) {
+    if (type.startsWith('jingsoft_') && values.channel_id) {
       data.channel_id = values.channel_id
     }
     if (editData?.color) {
@@ -303,7 +303,7 @@ export function PaymentMethodDialog({
     if (values.min_topup && values.min_topup.trim() !== '') {
       data.min_topup = values.min_topup
     }
-    if (!type.startsWith('catfk')) {
+    if (!type.startsWith('jingsoft')) {
       data.fee_percent = values.fee_percent.trim() || '0'
     }
     if (values.topup_notice_text?.trim()) {
@@ -513,7 +513,7 @@ export function PaymentMethodDialog({
             )}
           />
 
-          {resolvedPaymentType && !resolvedPaymentType.startsWith('catfk') && (
+          {resolvedPaymentType && !resolvedPaymentType.startsWith('jingsoft') && (
             <FormField
               control={form.control}
               name='fee_percent'

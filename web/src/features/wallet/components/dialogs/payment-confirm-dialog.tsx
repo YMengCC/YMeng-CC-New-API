@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { isValidCatfkQQ, isValidCatfkQuote } from '../../catfk-api'
+import { isValidJingSoftQQ, isValidJingSoftQuote } from '../../jingsoft-api'
 import { DEFAULT_DISCOUNT_RATE } from '../../constants'
 import {
   formatCurrency,
@@ -36,8 +36,8 @@ import {
   getTopupPromptContent,
   getTopupPromptVisibility,
 } from '../../lib'
-import type { PaymentMethod, CatfkQuote } from '../../types'
-import { CatfkFeeNote } from '../catfk-fee-note'
+import type { JingSoftQuote, PaymentMethod } from '../../types'
+import { JingSoftFeeNote } from '../jingsoft-fee-note'
 
 interface PaymentConfirmDialogProps {
   open: boolean
@@ -51,8 +51,8 @@ interface PaymentConfirmDialogProps {
   paymentFeePercent?: number
   discountRate?: number
   usdExchangeRate?: number
-  catfk?: {
-    quote: CatfkQuote | null
+  jingSoft?: {
+    quote: JingSoftQuote | null
     qq: string
     onQQChange: (value: string) => void
     available: boolean
@@ -73,19 +73,21 @@ export function PaymentConfirmDialog({
   paymentFeePercent = 0,
   discountRate = DEFAULT_DISCOUNT_RATE,
   usdExchangeRate = 1,
-  catfk,
+  jingSoft,
   topupLink,
 }: PaymentConfirmDialogProps) {
   const { t, i18n } = useTranslation()
   useSystemConfigStore((state) => state.config.currency)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const requireCatfkQQ = !!catfk && catfk.requireQQ !== false
+  const requireJingSoftQQ = !!jingSoft && jingSoft.requireQQ !== false
   const invalidQQ =
-    requireCatfkQQ && catfk.qq.length > 0 && !isValidCatfkQQ(catfk.qq)
+    requireJingSoftQQ &&
+    jingSoft.qq.length > 0 &&
+    !isValidJingSoftQQ(jingSoft.qq)
   const hasDiscount =
-    !catfk && discountRate > 0 && discountRate < 1 && paymentAmount > 0
+    !jingSoft && discountRate > 0 && discountRate < 1 && paymentAmount > 0
   const displayFeePercent =
-    !catfk &&
+    !jingSoft &&
     Number.isFinite(paymentFeePercent) &&
     paymentFeePercent > 0 &&
     paymentFeePercent <= 100
@@ -120,12 +122,12 @@ export function PaymentConfirmDialog({
         !Number.isFinite(paymentAmount) ||
         paymentAmount <= 0 ||
         !!(
-          catfk &&
-          (!catfk.available ||
-            (requireCatfkQQ && !isValidCatfkQQ(catfk.qq)) ||
-            !isValidCatfkQuote(
-              catfk.quote,
-              requireCatfkQQ ? topupAmount : undefined
+          jingSoft &&
+          (!jingSoft.available ||
+            (requireJingSoftQQ && !isValidJingSoftQQ(jingSoft.qq)) ||
+            !isValidJingSoftQuote(
+              jingSoft.quote,
+              requireJingSoftQQ ? topupAmount : undefined
             ))
         )
       }
@@ -143,8 +145,8 @@ export function PaymentConfirmDialog({
             {t('Topup Amount')}
           </span>
           <CurrencyAmount
-            amount={catfk ? topupAmount : topupAmount * usdExchangeRate}
-            mode={catfk ? 'billing' : 'local'}
+            amount={jingSoft ? topupAmount : topupAmount * usdExchangeRate}
+            mode={jingSoft ? 'billing' : 'local'}
             options={{
               digitsLarge: 2,
               digitsSmall: 2,
@@ -171,13 +173,13 @@ export function PaymentConfirmDialog({
                   </span>
                 )}
               </div>
-              {catfk?.quote ? (
-                <CatfkFeeNote
-                  fee={catfk.quote.fee}
-                  feeRate={catfk.quote.fee_rate}
+              {jingSoft?.quote ? (
+                <JingSoftFeeNote
+                  fee={jingSoft.quote.fee}
+                  feeRate={jingSoft.quote.fee_rate}
                 />
               ) : (
-                <CatfkFeeNote
+                <JingSoftFeeNote
                   fee={displayedFeeAmount}
                   feeRate={displayFeePercent}
                 />
@@ -215,17 +217,17 @@ export function PaymentConfirmDialog({
         </div>
       </div>
 
-      {requireCatfkQQ && (
+      {requireJingSoftQQ && (
         <div className='space-y-2'>
           <div className='flex items-center gap-3'>
-            <Label htmlFor='catfk-qq' className='shrink-0'>
+            <Label htmlFor='jingsoft-qq' className='shrink-0'>
               <span className='text-destructive' aria-hidden='true'>
                 *
               </span>
               {t('Contact method')}
             </Label>
             <Input
-              id='catfk-qq'
+              id='jingsoft-qq'
               className='bg-muted/50 h-11 flex-1'
               inputMode='numeric'
               autoComplete='off'
@@ -233,15 +235,15 @@ export function PaymentConfirmDialog({
               minLength={5}
               maxLength={12}
               placeholder={t('Enter QQ number (5-12 digits)')}
-              value={catfk.qq}
+              value={jingSoft.qq}
               disabled={processing}
-              onChange={(event) => catfk.onQQChange(event.target.value)}
+              onChange={(event) => jingSoft.onQQChange(event.target.value)}
               aria-invalid={invalidQQ}
-              aria-describedby={invalidQQ ? 'catfk-qq-hint' : undefined}
+              aria-describedby={invalidQQ ? 'jingsoft-qq-hint' : undefined}
             />
           </div>
           {invalidQQ && (
-            <p id='catfk-qq-hint' className='text-destructive text-xs'>
+            <p id='jingsoft-qq-hint' className='text-destructive text-xs'>
               {t('Enter QQ number (5-12 digits)')}
             </p>
           )}

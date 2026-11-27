@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -5,20 +23,20 @@ import { useTranslation } from 'react-i18next'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import {
-  CatfkPaymentRejectedError,
-  getCatfkOrder,
-  isValidCatfkQQ,
-  isValidCatfkQuote,
-  payCatfk,
-  quoteCatfk,
-  safeCatfkQrCode,
-} from '../catfk-api'
+  JingSoftPaymentRejectedError,
+  getJingSoftOrder,
+  isValidJingSoftQQ,
+  isValidJingSoftQuote,
+  payJingSoft,
+  quoteJingSoft,
+  safeJingSoftQrCode,
+} from '../jingsoft-api'
 import type {
-  CatfkChannel,
-  CatfkInfo,
-  CatfkProduct,
-  CatfkPaymentStatusOrder,
-  CatfkQuote,
+  JingSoftChannel,
+  JingSoftInfo,
+  JingSoftPaymentStatusOrder,
+  JingSoftProduct,
+  JingSoftQuote,
 } from '../types'
 
 const finalStatuses = new Set(['completed', 'expired', 'needs_attention'])
@@ -27,22 +45,22 @@ const finalStatuses = new Set(['completed', 'expired', 'needs_attention'])
 // the dialog ends it; the server keeps settling or expiring the real order,
 // and a later purchase always creates a new one. An unpaid order costs
 // nothing, so no local record guards against creating another.
-export function useCatfkPayment(
-  info: CatfkInfo | undefined,
+export function useJingSoftPayment(
+  info: JingSoftInfo | undefined,
   userId?: number,
   onCompleted?: () => Promise<void>,
   onModeFallback?: () => Promise<void> | void
 ) {
   const { t } = useTranslation()
-  const [channel, setChannel] = useState<CatfkChannel | null>(null)
-  const [product, setProduct] = useState<CatfkProduct | null>(null)
+  const [channel, setChannel] = useState<JingSoftChannel | null>(null)
+  const [product, setProduct] = useState<JingSoftProduct | null>(null)
   const [directAmount, setDirectAmount] = useState<number | null>(null)
-  const [quote, setQuote] = useState<CatfkQuote | null>(null)
+  const [quote, setQuote] = useState<JingSoftQuote | null>(null)
   const [qq, setQQ] = useState('')
   const [open, setOpen] = useState(false)
   const [calculating, setCalculating] = useState(false)
   const [statusOrder, setStatusOrder] =
-    useState<CatfkPaymentStatusOrder | null>(null)
+    useState<JingSoftPaymentStatusOrder | null>(null)
   const generation = useRef(0)
   const identity = useRef(userId)
   identity.current = userId
@@ -51,12 +69,12 @@ export function useCatfkPayment(
   const requestKey = useRef<string | null>(null)
   const creditedTrade = useRef<string | null>(null)
   const quoteMutation = useMutation({
-    mutationFn: quoteCatfk,
+    mutationFn: quoteJingSoft,
     meta: { errorToast: false },
     retry: false,
   })
   const payMutation = useMutation({
-    mutationFn: payCatfk,
+    mutationFn: payJingSoft,
     meta: { errorToast: false },
     retry: false,
   })
@@ -85,7 +103,7 @@ export function useCatfkPayment(
     requestKey.current = null
   }
 
-  function selectChannel(next: CatfkChannel | null) {
+  function selectChannel(next: JingSoftChannel | null) {
     if (inFlight.current) return
     reset()
     setChannel(next)
@@ -93,7 +111,10 @@ export function useCatfkPayment(
     setDirectAmount(null)
   }
 
-  async function selectProduct(next: CatfkProduct, selectedChannel = channel) {
+  async function selectProduct(
+    next: JingSoftProduct,
+    selectedChannel = channel
+  ) {
     if (inFlight.current) return
     reset()
     setStatusOrder(null)
@@ -110,7 +131,7 @@ export function useCatfkPayment(
         channel_id: selectedChannel.id,
       })
       if (version !== generation.current || identity.current !== userId) return
-      if (!isValidCatfkQuote(result, next.amount)) {
+      if (!isValidJingSoftQuote(result, next.amount)) {
         throw new Error(t('Invalid payment quote'))
       }
       setQuote(result)
@@ -145,7 +166,7 @@ export function useCatfkPayment(
         channel_id: selectedChannel.id,
       })
       if (version !== generation.current || identity.current !== userId) return
-      if (!isValidCatfkQuote(result)) {
+      if (!isValidJingSoftQuote(result)) {
         throw new Error(t('Invalid payment quote'))
       }
       if (result.mode === 'redemption' && result.product_id) {
@@ -188,14 +209,14 @@ export function useCatfkPayment(
       if (
         directAmount === null ||
         directAmount <= 0 ||
-        !isValidCatfkQuote(quote)
+        !isValidJingSoftQuote(quote)
       ) {
         return
       }
     } else if (
       !fallbackProductId ||
-      !isValidCatfkQQ(qq) ||
-      !isValidCatfkQuote(quote, expectedRedemptionAmount)
+      !isValidJingSoftQQ(qq) ||
+      !isValidJingSoftQuote(quote, expectedRedemptionAmount)
     ) {
       return
     }
@@ -236,7 +257,7 @@ export function useCatfkPayment(
         paymentMethod: order.payment_method,
         paymentQrCode:
           order.status === 'pending'
-            ? safeCatfkQrCode(order.payment_qr_code)
+            ? safeJingSoftQrCode(order.payment_qr_code)
             : null,
         payment: {
           amount: quote.amount,
@@ -247,7 +268,7 @@ export function useCatfkPayment(
       inFlight.current = false
       reset()
     } catch (error) {
-      if (error instanceof CatfkPaymentRejectedError) {
+      if (error instanceof JingSoftPaymentRejectedError) {
         requestKey.current = null
       }
       if (version === generation.current && identity.current === userId) {
@@ -265,10 +286,10 @@ export function useCatfkPayment(
   const trade = statusOrder?.tradeNo ?? null
   const trackedOrder = useQuery({
     queryKey: ['wallet', 'store-order', userId, trade],
-    queryFn: () => getCatfkOrder(trade ?? ''),
+    queryFn: () => getJingSoftOrder(trade ?? ''),
     enabled:
       !!trade && !!userId && !finalStatuses.has(statusOrder?.status ?? ''),
-    // Each read also checks CatFK, throttled by the server per order.
+    // Each read also checks JingSoft, throttled by the server per order.
     refetchInterval: 3000,
     refetchOnWindowFocus: 'always',
     refetchIntervalInBackground: true,
@@ -300,7 +321,7 @@ export function useCatfkPayment(
             paymentMethod: order.payment_method ?? current.paymentMethod,
             paymentQrCode:
               order.status === 'pending'
-                ? (safeCatfkQrCode(order.payment_qr_code) ??
+                ? (safeJingSoftQrCode(order.payment_qr_code) ??
                   current.paymentQrCode)
                 : null,
           }

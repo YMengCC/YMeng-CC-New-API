@@ -60,10 +60,10 @@ import {
   formatTimestamp,
 } from '../../lib/billing'
 import type { BillingHistoryFilters, TopupStatus } from '../../types'
-import { CatfkRedemptionDialog } from './catfk-redemption-dialog'
+import { JingSoftRedemptionDialog } from './jingsoft-redemption-dialog'
 
 // These providers store the credited wallet quota rather than a USD amount.
-const quotaAmountProviders = new Set(['catfk', 'redemption'])
+const quotaAmountProviders = new Set(['jingsoft', 'redemption'])
 const defaultBillingHistoryFilters: BillingHistoryFilters = {
   page: 1,
   pageSize: 10,
@@ -178,9 +178,9 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
                   'creem',
                   'waffo',
                   'waffo_pancake',
-                  'catfk',
-                  'catfk_alipay',
-                  'catfk_wxpay',
+                  'jingsoft',
+                  'jingsoft_alipay',
+                  'jingsoft_wxpay',
                   'redemption',
                 ].map((value) => ({
                   value,
@@ -207,9 +207,9 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
                     'creem',
                     'waffo',
                     'waffo_pancake',
-                    'catfk',
-                    'catfk_alipay',
-                    'catfk_wxpay',
+                    'jingsoft',
+                    'jingsoft_alipay',
+                    'jingsoft_wxpay',
                     'redemption',
                   ].map((value) => (
                     <SelectItem key={value} value={value}>
@@ -439,8 +439,8 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
                         </div>
                       </div>
 
-                      {record.payment_provider === 'catfk' &&
-                        record.catfk_mode !== 'direct' && (
+                      {record.payment_provider === 'jingsoft' &&
+                        record.jingsoft_mode !== 'direct' && (
                           <div className='mt-3 flex justify-end'>
                             <Button
                               size='sm'
@@ -456,7 +456,7 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
 
                       {/* Admin Actions */}
                       {isAdmin &&
-                        record.payment_provider !== 'catfk' &&
+                        record.payment_provider !== 'jingsoft' &&
                         record.status === 'pending' && (
                           <div className='mt-4 flex justify-end'>
                             <Button
@@ -514,7 +514,7 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
       </Dialog>
 
       {redemptionTradeNo && (
-        <CatfkRedemptionDialog
+        <JingSoftRedemptionDialog
           tradeNo={redemptionTradeNo}
           onOpenChange={(next) => {
             if (!next) setRedemptionTradeNo(null)

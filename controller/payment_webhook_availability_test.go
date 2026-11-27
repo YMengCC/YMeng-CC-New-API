@@ -287,16 +287,22 @@ func TestEpayCallbacksVerifyBeforeSettlement(t *testing.T) {
 	}
 }
 
-func TestCatFKSettingsRejectInvalidMappings(t *testing.T) {
-	cfg := operation_setting.GetCatFKSetting()
+func TestJingSoftSettingsRejectInvalidMappings(t *testing.T) {
+	cfg := operation_setting.GetJingSoftSetting()
 	previous := *cfg
-	cfg.Products = []operation_setting.CatFKProduct{{ID: "tier", Name: "Credit", GoodsKey: "real-code-goods", Amount: 5}}
+	cfg.BaseURL = "https://wzyp.cn"
+	cfg.Products = []operation_setting.JingSoftProduct{{ID: "tier", Name: "Credit", GoodsKey: "real-code-goods", Amount: 5}}
 	cfg.DirectGoodsKeys = []string{"direct-slot-1"}
 	t.Cleanup(func() { *cfg = previous })
 
 	for _, tc := range []struct{ key, value string }{
 		{"enabled", "yes"},
 		{"mode", "unknown"},
+		{"base_url", "http://wzyp.cn"},
+		{"base_url", "https://localhost"},
+		{"base_url", "https://127.0.0.1"},
+		{"base_url", "https://10.0.0.1"},
+		{"base_url", "https://wzyp.cn/shop/YMengCC"},
 		{"products", `[{"id":"a","name":"Credit","goods_key":"goods","amount":-1}]`},
 		{"products", `[{"id":"a","name":"Credit","goods_key":"goods","amount":1},{"id":"a","name":"Other","goods_key":"other","amount":2}]`},
 		{"products", `[{"id":"a","name":"Overlap","goods_key":"direct-slot-1","amount":1}]`},
@@ -314,27 +320,28 @@ func TestCatFKSettingsRejectInvalidMappings(t *testing.T) {
 		{"merchant_token", "invalid\nheader"},
 	} {
 		t.Run(tc.key+tc.value, func(t *testing.T) {
-			require.Error(t, operation_setting.ValidateCatFKOption("catfk_setting."+tc.key, tc.value))
+			require.Error(t, operation_setting.ValidateJingSoftOption("jingsoft_setting."+tc.key, tc.value))
 		})
 	}
-	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.products", `[{"id":"tier","name":"Credit","goods_key":"goods","amount":1.5}]`))
-	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.direct_goods_keys", `["slot-a","https://catfk.com/item/slot-b"]`))
-	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.mode", operation_setting.CatFKModeDirect))
-	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.max_amount_cny", "5000"))
-	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.max_orders_per_minute", "15"))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.base_url", "https://wzyp.cn/"))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.products", `[{"id":"tier","name":"Credit","goods_key":"https://wzyp.cn/item/goods","amount":1.5}]`))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.direct_goods_keys", `["slot-a","https://wzyp.cn/item/slot-b"]`))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.mode", operation_setting.JingSoftModeDirect))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.max_amount_cny", "5000"))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.max_orders_per_minute", "15"))
 }
 
-func TestCatFKStoreTokenIsNotReturnedByOptions(t *testing.T) {
-	const storeKey = "catfk_setting.store_token"
-	const merchantKey = "catfk_setting.merchant_token"
+func TestJingSoftStoreTokenIsNotReturnedByOptions(t *testing.T) {
+	const storeKey = "jingsoft_setting.store_token"
+	const merchantKey = "jingsoft_setting.merchant_token"
 	common.OptionMapRWMutex.Lock()
 	previous := common.OptionMap
 	common.OptionMap = make(map[string]string, len(previous)+2)
 	for optionKey, value := range previous {
 		common.OptionMap[optionKey] = value
 	}
-	common.OptionMap[storeKey] = "catfk-test-private-store-token"
-	common.OptionMap[merchantKey] = "catfk-test-private-merchant-token"
+	common.OptionMap[storeKey] = "jingsoft-test-private-store-token"
+	common.OptionMap[merchantKey] = "jingsoft-test-private-merchant-token"
 	common.OptionMapRWMutex.Unlock()
 	t.Cleanup(func() {
 		common.OptionMapRWMutex.Lock()
@@ -345,18 +352,18 @@ func TestCatFKStoreTokenIsNotReturnedByOptions(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/option/", nil)
 	GetOptions(ctx)
-	assert.NotContains(t, recorder.Body.String(), "catfk-test-private-store-token")
-	assert.NotContains(t, recorder.Body.String(), "catfk-test-private-merchant-token")
+	assert.NotContains(t, recorder.Body.String(), "jingsoft-test-private-store-token")
+	assert.NotContains(t, recorder.Body.String(), "jingsoft-test-private-merchant-token")
 	assert.NotContains(t, recorder.Body.String(), storeKey)
 	assert.NotContains(t, recorder.Body.String(), merchantKey)
 }
 
-func TestCatFKDisabledPurchasesAndInvalidShopRejectPaymentEndpoints(t *testing.T) {
+func TestJingSoftDisabledPurchasesAndInvalidShopRejectPaymentEndpoints(t *testing.T) {
 	confirmPaymentComplianceForTest(t)
 	previousDB := model.DB
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.CatFKOrder{}))
+	require.NoError(t, db.AutoMigrate(&model.JingSoftOrder{}))
 	model.DB = db
 	t.Cleanup(func() {
 		model.DB = previousDB
@@ -364,19 +371,26 @@ func TestCatFKDisabledPurchasesAndInvalidShopRejectPaymentEndpoints(t *testing.T
 		require.NoError(t, dbErr)
 		require.NoError(t, sqlDB.Close())
 	})
-	cfg := operation_setting.GetCatFKSetting()
+	cfg := operation_setting.GetJingSoftSetting()
 	previous := *cfg
 	cfg.Enabled = false
+	cfg.BaseURL = "https://wzyp.cn"
 	t.Cleanup(func() { *cfg = previous })
 	for _, tc := range []struct {
 		name, body, messageKey string
 		handler                gin.HandlerFunc
 	}{
-		{"quote", `{"product_id":"tier","channel_id":"alipay"}`, "CatFK payments are disabled", RequestCatFKQuote},
-		{"pay", `{"product_id":"tier","channel_id":"alipay","qq":"12345","idempotency_key":"abcdefghijklmnop"}`, "CatFK payments are disabled", RequestCatFKPay},
-		{"channels", `{"store_token":"https://other.example/shop/test"}`, "Invalid CatFK payment request", ListCatFKPaymentChannels},
+		{"quote", `{"product_id":"tier","channel_id":"alipay"}`, "JingSoft payments are disabled", RequestJingSoftQuote},
+		{"pay", `{"product_id":"tier","channel_id":"alipay","qq":"12345","idempotency_key":"abcdefghijklmnop"}`, "JingSoft payments are disabled", RequestJingSoftPay},
+		{"channels", `{"store_token":"https://other.example/shop/test"}`, "Invalid JingSoft payment request", ListJingSoftPaymentChannels},
+		{"compatibility_ssrf", `{"base_url":"https://127.0.0.1"}`, "Invalid JingSoft platform URL", CheckJingSoftCompatibility},
+		{"discover_missing_url", `{"base_url":"","store_token":"YMengCC"}`, "Invalid JingSoft platform URL", DiscoverJingSoftProducts},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "discover_missing_url" {
+				cfg.BaseURL = ""
+				t.Cleanup(func() { cfg.BaseURL = "https://wzyp.cn" })
+			}
 			recorder := httptest.NewRecorder()
 			ctx, _ := gin.CreateTestContext(recorder)
 			ctx.Set("id", 123)

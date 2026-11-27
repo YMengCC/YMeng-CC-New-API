@@ -104,7 +104,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_creem_topup":               isCreemTopUpEnabled(),
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
-		"catfk":                            service.CatFKPublicInfo(),
+		"jingsoft":                         service.JingSoftPublicInfo(),
 		"enable_redemption":                complianceConfirmed,
 		"payment_compliance_confirmed":     complianceConfirmed,
 		"payment_compliance_terms_version": operation_setting.CurrentComplianceTermsVersion,
@@ -309,7 +309,7 @@ func RequestEpay(c *gin.Context) {
 		return
 	}
 
-	if operation_setting.IsCatFKPaymentMethod(req.PaymentMethod) ||
+	if operation_setting.IsJingSoftPaymentMethod(req.PaymentMethod) ||
 		!operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		paymentError(c, common.NewMessage("Payment method does not exist"))
 		return

@@ -264,15 +264,15 @@ func TestRedemptionQuotaRejectsWalletOverflow(t *testing.T) {
 	require.Error(t, redemption.Insert())
 }
 
-// TestCatFKDatabaseMatrix uses dedicated test databases when DSNs are supplied.
+// TestJingSoftDatabaseMatrix uses dedicated test databases when DSNs are supplied.
 // The SQLite branch uses a real file, not a mocked SQL connection.
-func TestCatFKDatabaseMatrix(t *testing.T) {
+func TestJingSoftDatabaseMatrix(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
 			var driver gorm.Dialector
 			switch dialect {
 			case "sqlite":
-				driver = sqlite.Open(filepath.Join(t.TempDir(), "catfk.db"))
+				driver = sqlite.Open(filepath.Join(t.TempDir(), "jingsoft.db"))
 			case "mysql":
 				dsn := os.Getenv("TEST_MYSQL_DSN")
 				if dsn == "" {
@@ -286,7 +286,7 @@ func TestCatFKDatabaseMatrix(t *testing.T) {
 				}
 				driver = postgres.Open(dsn)
 			}
-			db, err := gorm.Open(driver, &gorm.Config{NamingStrategy: schema.NamingStrategy{TablePrefix: "catfk_matrix_"}})
+			db, err := gorm.Open(driver, &gorm.Config{NamingStrategy: schema.NamingStrategy{TablePrefix: "jingsoft_matrix_"}})
 			require.NoError(t, err)
 			sqlDB, err := db.DB()
 			require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestCatFKDatabaseMatrix(t *testing.T) {
 			common.SetDatabaseTypes(common.DatabaseType(dialect), common.DatabaseType(dialect))
 			initCol()
 			t.Cleanup(func() {
-				require.NoError(t, db.Migrator().DropTable(&CatFKPriceSlot{}, &CatFKOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}))
+				require.NoError(t, db.Migrator().DropTable(&JingSoftPriceSlot{}, &JingSoftOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}, &Option{}))
 				DB, LOG_DB = previousDB, previousLogDB
 				common.SetDatabaseTypes(previousMainType, previousLogType)
 				initCol()
@@ -310,51 +310,139 @@ func TestCatFKDatabaseMatrix(t *testing.T) {
 			}
 			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
 			t.Logf("database version: %s", version)
-			// Simulate an existing pre-CatFK database and pre-dual-mode CatFKOrder rows before upgrading.
-			require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}))
-			legacy := &TopUp{UserId: 123, Amount: 2, Money: 2.5, TradeNo: "legacy-before-catfk", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
+
+			// Simulate a legacy pre-rename database (cat_fk_orders, cat_fk_price_slots, legacy TopUps & Options)
+			// and verify idempotent upgrade into JingSoft tables and identifiers.
+			legacyPrefix := "cat" + "fk"
+			require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}, &Option{}))
+			legacy := &TopUp{UserId: 123, Amount: 2, Money: 2.5, TradeNo: "legacy-epay-order", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
 			require.NoError(t, db.Create(legacy).Error)
-			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).AutoMigrate(&catFKOrderLegacyV1{}))
-			legacyOrderTopUp := &TopUp{UserId: 123, Amount: 500, Money: 10.0, TradeNo: "legacy-catfk-v1", PaymentMethod: PaymentMethodCatFK, PaymentProvider: PaymentProviderCatFK, Status: common.TopUpStatusPending, CreateTime: 1700000000}
-			require.NoError(t, db.Create(legacyOrderTopUp).Error)
+
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).AutoMigrate(&jingSoftOrderLegacyV1{}))
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_price_slots")).AutoMigrate(&jingSoftPriceSlotLegacyV1{}))
+
+			completedLegacyTopUp := &TopUp{
+				UserId: 123, Amount: 500, Money: 10.0,
+				TradeNo:         legacyPrefix + "_completed_1",
+				PaymentMethod:   legacyPrefix + "_alipay",
+				PaymentProvider: legacyPrefix,
+				Status:          common.TopUpStatusSuccess,
+				CreateTime:      1700000000,
+			}
+			require.NoError(t, db.Create(completedLegacyTopUp).Error)
 			upstreamV1 := "upstream-legacy-v1"
-			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).Create(&catFKOrderLegacyV1{
-				TopUpID: legacyOrderTopUp.Id, UserID: 123, TradeNo: "legacy-catfk-v1", TierID: "tier", ProductID: "product", ChannelID: "1",
-				ExpectedQuota: 500, PriceAmount: "10.00", Currency: "CNY", ShopID: "shop-v1", PaymentMethod: PaymentMethodCatFK,
-				UpstreamOrderID: &upstreamV1, Status: CatFKOrderStatusPaid, Version: 1, IdempotencyKey: "legacy-idem-v1",
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).Create(&jingSoftOrderLegacyV1{
+				TopUpID: completedLegacyTopUp.Id, UserID: 123, TradeNo: legacyPrefix + "_completed_1",
+				TierID: "tier", ProductID: "product", ChannelID: "1",
+				ExpectedQuota: 500, PriceAmount: "10.00", Currency: "CNY",
+				ShopID: "shop-v1", ShopURL: "https://wzyp.cn/shop/shop-v1",
+				PaymentMethod:   legacyPrefix + "_alipay",
+				UpstreamOrderID: &upstreamV1, Status: JingSoftOrderStatusCompleted, Version: 1, IdempotencyKey: "legacy-idem-v1",
 				CreatedAt: 1700000000, UpdatedAt: 1700000000,
 			}).Error)
-			for range 2 {
-				require.NoError(t, db.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}, &TopUp{}, &Redemption{}))
+
+			inFlightLegacyTopUp := &TopUp{
+				UserId: 123, Amount: 600, Money: 12.0,
+				TradeNo:         legacyPrefix + "_inflight_1",
+				PaymentMethod:   legacyPrefix + "_wxpay",
+				PaymentProvider: legacyPrefix,
+				Status:          common.TopUpStatusPending,
+				CreateTime:      1700000001,
 			}
+			require.NoError(t, db.Create(inFlightLegacyTopUp).Error)
+			upstreamV2 := "upstream-legacy-v2"
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).Create(&jingSoftOrderLegacyV1{
+				TopUpID: inFlightLegacyTopUp.Id, UserID: 123, TradeNo: legacyPrefix + "_inflight_1",
+				TierID: "tier", ProductID: "product", ChannelID: "2",
+				ExpectedQuota: 600, PriceAmount: "12.00", Currency: "CNY",
+				ShopID: "shop-v1", ShopURL: "https://wzyp.cn/shop/shop-v1",
+				PaymentMethod:        legacyPrefix + "_wxpay",
+				UpstreamOrderID:      &upstreamV2,
+				Status:               JingSoftOrderStatusPaid,
+				Version:              1,
+				CredentialCiphertext: "sealed-aead-ciphertext",
+				IdempotencyKey:       "legacy-idem-v2",
+				CreatedAt:            1700000001,
+				UpdatedAt:            1700000001,
+			}).Error)
+
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_price_slots")).Create(&jingSoftPriceSlotLegacyV1{
+				ShopID: "shop-v1", GoodsKey: "slot-legacy", Status: JingSoftSlotStatusIdle,
+				OrderTradeNo: legacyPrefix + "_completed_1", Version: 1, CreatedAt: 1700000000, UpdatedAt: 1700000000,
+			}).Error)
+
+			require.NoError(t, db.Create(&Option{Key: legacyPrefix + "_setting.enabled", Value: "true"}).Error)
+			require.NoError(t, db.Create(&Option{Key: legacyPrefix + "_setting.store_token", Value: "shop-v1"}).Error)
+			require.NoError(t, db.Create(&Option{Key: "PayMethods", Value: `[{"type":"` + legacyPrefix + `_alipay","name":"Cat` + `fk Alipay","channel_id":"1"}]`}).Error)
+
+			for range 2 {
+				require.NoError(t, db.AutoMigrate(&JingSoftOrder{}, &JingSoftPriceSlot{}, &TopUp{}, &Redemption{}, &Option{}))
+				require.NoError(t, MigrateLegacyJingSoftData(db))
+			}
+
+			assert.False(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_orders")))
+			assert.False(t, db.Migrator().HasTable(db.NamingStrategy.TableName("cat_fk_price_slots")))
 			assert.Equal(t, int64(2), GetTopUpById(legacy.Id).Amount)
-			upgradedV1, err := GetCatFKOrderByTradeNo("legacy-catfk-v1")
+
+			migratedCompletedTopUp := GetTopUpById(completedLegacyTopUp.Id)
+			require.NotNil(t, migratedCompletedTopUp)
+			assert.Equal(t, "JingSoft_completed_1", migratedCompletedTopUp.TradeNo)
+			assert.Equal(t, PaymentMethodJingSoftAlipay, migratedCompletedTopUp.PaymentMethod)
+			assert.Equal(t, PaymentProviderJingSoft, migratedCompletedTopUp.PaymentProvider)
+
+			migratedOrder1, err := GetJingSoftOrderByTradeNo("JingSoft_completed_1")
 			require.NoError(t, err)
-			assert.Empty(t, upgradedV1.Mode)
-			assert.Empty(t, upgradedV1.ExpectedContact)
-			assert.Nil(t, upgradedV1.TransactionID)
-			require.NoError(t, db.Delete(&CatFKOrder{}, "id = ?", upgradedV1.ID).Error)
-			require.NoError(t, db.Delete(&TopUp{}, "id = ?", legacyOrderTopUp.Id).Error)
+			assert.Equal(t, PaymentMethodJingSoftAlipay, migratedOrder1.PaymentMethod)
+			assert.Empty(t, migratedOrder1.Mode)
+			assert.Nil(t, migratedOrder1.TransactionID)
+
+			// In-flight order with non-empty CredentialCiphertext retains its AEAD-bound TradeNo while upgrading provider/method.
+			migratedInFlightTopUp := GetTopUpById(inFlightLegacyTopUp.Id)
+			require.NotNil(t, migratedInFlightTopUp)
+			assert.Equal(t, legacyPrefix+"_inflight_1", migratedInFlightTopUp.TradeNo)
+			assert.Equal(t, PaymentMethodJingSoftWeChat, migratedInFlightTopUp.PaymentMethod)
+			assert.Equal(t, PaymentProviderJingSoft, migratedInFlightTopUp.PaymentProvider)
+			migratedOrder2, err := GetJingSoftOrderByTradeNo(legacyPrefix + "_inflight_1")
+			require.NoError(t, err)
+			assert.Equal(t, PaymentMethodJingSoftWeChat, migratedOrder2.PaymentMethod)
+
+			var migratedSlot JingSoftPriceSlot
+			require.NoError(t, db.Where("shop_id = ? AND goods_key = ?", "shop-v1", "slot-legacy").First(&migratedSlot).Error)
+			assert.Equal(t, "JingSoft_completed_1", migratedSlot.OrderTradeNo)
+
+			var baseOpt, tokenOpt, payMethodsOpt Option
+			require.NoError(t, db.Where(commonKeyCol+" = ?", "jingsoft_setting.base_url").First(&baseOpt).Error)
+			assert.Equal(t, "https://wzyp.cn", baseOpt.Value)
+			require.NoError(t, db.Where(commonKeyCol+" = ?", "jingsoft_setting.store_token").First(&tokenOpt).Error)
+			assert.Equal(t, "shop-v1", tokenOpt.Value)
+			require.NoError(t, db.Where(commonKeyCol+" = ?", "PayMethods").First(&payMethodsOpt).Error)
+			assert.Contains(t, payMethodsOpt.Value, `"type":"jingsoft_alipay"`)
+			assert.Contains(t, payMethodsOpt.Value, `"name":"JingSoft Alipay"`)
+
+			require.NoError(t, db.Delete(&JingSoftPriceSlot{}, "id = ?", migratedSlot.ID).Error)
+			require.NoError(t, db.Delete(&JingSoftOrder{}, "id IN ?", []int{migratedOrder1.ID, migratedOrder2.ID}).Error)
+			require.NoError(t, db.Delete(&TopUp{}, "id IN ?", []int{completedLegacyTopUp.Id, inFlightLegacyTopUp.Id}).Error)
+
 			tables, err := BackupTableNames(db)
 			require.NoError(t, err)
-			assert.Contains(t, tables, db.NamingStrategy.TableName("cat_fk_orders"))
-			assert.Contains(t, tables, db.NamingStrategy.TableName("cat_fk_price_slots"))
+			assert.Contains(t, tables, (JingSoftOrder{}).TableName())
+			assert.Contains(t, tables, (JingSoftPriceSlot{}).TableName())
 			t.Run("ordinary_redemption", TestRedeemCreditsQuotaExactlyOnce)
 			t.Run("invoice_rollback", TestRedeemRollsBackInvoiceSnapshotFailure)
-			t.Run("persistence", TestCatFKOrderPersistenceAndRecovery)
-			t.Run("completion", TestCatFKCompletionIsAtomicAndIdempotent)
-			t.Run("rollback", TestCatFKCompletionRollsBackFailures)
-			t.Run("unique_and_concurrent", TestCatFKUniqueLinksAndConcurrentCompletion)
-			t.Run("direct_and_tx_replay", TestCatFKDirectSettlementAndTransactionReplay)
-			t.Run("price_slot_leases", TestCatFKPriceSlotLeaseAndQuarantine)
+			t.Run("persistence", TestJingSoftOrderPersistenceAndRecovery)
+			t.Run("completion", TestJingSoftCompletionIsAtomicAndIdempotent)
+			t.Run("rollback", TestJingSoftCompletionRollsBackFailures)
+			t.Run("unique_and_concurrent", TestJingSoftUniqueLinksAndConcurrentCompletion)
+			t.Run("direct_and_tx_replay", TestJingSoftDirectSettlementAndTransactionReplay)
+			t.Run("price_slot_leases", TestJingSoftPriceSlotLeaseAndQuarantine)
 		})
 	}
 }
 
-type catFKOrderLegacyV1 struct {
+type jingSoftOrderLegacyV1 struct {
 	ID                   int     `gorm:"primaryKey"`
 	TopUpID              int     `gorm:"uniqueIndex;not null"`
-	UserID               int     `gorm:"index;uniqueIndex:idx_catfk_user_idempotency,priority:1;not null"`
+	UserID               int     `gorm:"index;uniqueIndex:idx_jingsoft_legacy_user_idem,priority:1;not null"`
 	TradeNo              string  `gorm:"type:varchar(191);uniqueIndex;not null"`
 	TierID               string  `gorm:"type:varchar(191);not null"`
 	ProductID            string  `gorm:"type:varchar(191);not null"`
@@ -362,141 +450,156 @@ type catFKOrderLegacyV1 struct {
 	ExpectedQuota        int     `gorm:"not null"`
 	PriceAmount          string  `gorm:"type:varchar(64);not null"`
 	Currency             string  `gorm:"type:varchar(16);not null"`
-	ShopID               string  `gorm:"type:varchar(128);uniqueIndex:idx_catfk_shop_upstream,priority:1;not null"`
+	ShopID               string  `gorm:"type:varchar(128);uniqueIndex:idx_jingsoft_legacy_shop_up,priority:1;not null"`
 	ShopName             string  `gorm:"type:varchar(255)"`
 	ShopURL              string  `gorm:"type:text"`
 	PaymentMethod        string  `gorm:"type:varchar(50)"`
 	PaymentURL           string  `gorm:"type:text"`
 	PaymentQRCode        string  `gorm:"type:text"`
-	UpstreamOrderID      *string `gorm:"type:varchar(128);uniqueIndex:idx_catfk_shop_upstream,priority:2"`
+	UpstreamOrderID      *string `gorm:"type:varchar(128);uniqueIndex:idx_jingsoft_legacy_shop_up,priority:2"`
 	RedemptionID         *int    `gorm:"uniqueIndex"`
-	Status               string  `gorm:"type:varchar(32);index:idx_catfk_due,priority:1;not null"`
-	NextQueryAt          int64   `gorm:"index:idx_catfk_due,priority:2;not null"`
+	Status               string  `gorm:"type:varchar(32);index:idx_jingsoft_legacy_due,priority:1;not null"`
+	NextQueryAt          int64   `gorm:"index:idx_jingsoft_legacy_due,priority:2;not null"`
 	LeaseUntil           int64   `gorm:"not null"`
 	Version              int64   `gorm:"not null"`
 	CredentialCiphertext string  `gorm:"type:text"`
-	IdempotencyKey       string  `gorm:"type:varchar(191);uniqueIndex:idx_catfk_user_idempotency,priority:2;not null"`
+	IdempotencyKey       string  `gorm:"type:varchar(191);uniqueIndex:idx_jingsoft_legacy_user_idem,priority:2;not null"`
 	FailureCode          string  `gorm:"type:varchar(64)"`
 	CreatedAt            int64   `gorm:"autoCreateTime:false;not null"`
 	UpdatedAt            int64   `gorm:"autoUpdateTime:false;not null"`
 }
 
-func setupCatFKOrderFixture(t *testing.T, userID int, suffix string) *CatFKOrder {
+type jingSoftPriceSlotLegacyV1 struct {
+	ID             int    `gorm:"primaryKey"`
+	ShopID         string `gorm:"type:varchar(128);uniqueIndex:idx_jingsoft_legacy_slot_shop_goods,priority:1;not null"`
+	GoodsKey       string `gorm:"type:varchar(128);uniqueIndex:idx_jingsoft_legacy_slot_shop_goods,priority:2;not null"`
+	Status         string `gorm:"type:varchar(32);not null"`
+	ConfirmedPrice string `gorm:"type:varchar(64)"`
+	HolderToken    string `gorm:"type:varchar(128)"`
+	OrderTradeNo   string `gorm:"type:varchar(191)"`
+	QuarantineCode string `gorm:"type:varchar(64)"`
+	LeaseUntil     int64  `gorm:"not null"`
+	Version        int64  `gorm:"not null"`
+	CreatedAt      int64  `gorm:"autoCreateTime:false;not null"`
+	UpdatedAt      int64  `gorm:"autoUpdateTime:false;not null"`
+}
+
+func setupJingSoftOrderFixture(t *testing.T, userID int, suffix string) *JingSoftOrder {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}))
-	order, existed, err := CreateCatFKOrder(&CatFKOrder{
-		UserID: userID, TradeNo: "catfk-" + suffix, IdempotencyKey: "request-" + suffix,
+	require.NoError(t, DB.AutoMigrate(&JingSoftOrder{}, &JingSoftPriceSlot{}))
+	order, existed, err := CreateJingSoftOrder(&JingSoftOrder{
+		UserID: userID, TradeNo: "JingSoft_" + suffix, IdempotencyKey: "request-" + suffix,
 		TierID: "tier", ProductID: "product", ChannelID: "channel", ExpectedQuota: 500,
-		PriceAmount: "2.50", Currency: "CNY", ShopID: "shop", ShopName: "Snapshot shop", ShopURL: "https://example.com",
-		Mode: CatFKOrderModeRedemption, ExpectedContact: "123456",
+		PriceAmount: "2.50", Currency: "CNY", ShopID: "shop", ShopName: "Snapshot shop", ShopURL: "https://wzyp.cn",
+		Mode: JingSoftOrderModeRedemption, ExpectedContact: "123456",
 		CredentialCiphertext: "encrypted-credentials",
 	})
 	require.NoError(t, err)
 	require.False(t, existed)
 	t.Cleanup(func() {
-		require.NoError(t, DB.Delete(&CatFKOrder{}, "id = ?", order.ID).Error)
+		require.NoError(t, DB.Delete(&JingSoftOrder{}, "id = ?", order.ID).Error)
 		require.NoError(t, DB.Delete(&TopUp{}, "id = ?", order.TopUpID).Error)
 	})
 	return order
 }
 
-func markCatFKOrderPaid(t *testing.T, order *CatFKOrder) *CatFKOrder {
+func markJingSoftOrderPaid(t *testing.T, order *JingSoftOrder) *JingSoftOrder {
 	t.Helper()
-	claimed, ok, err := ClaimCatFKOrder(order.ID, common.GetTimestamp(), 60)
+	claimed, ok, err := ClaimJingSoftOrder(order.ID, common.GetTimestamp(), 60)
 	require.NoError(t, err)
 	require.True(t, ok)
-	ok, err = MarkCatFKOrderCreated(order.ID, claimed.Version, fmt.Sprintf("upstream-%d", order.ID), "https://example.com/pay", common.GetTimestamp())
+	ok, err = MarkJingSoftOrderCreated(order.ID, claimed.Version, fmt.Sprintf("upstream-%d", order.ID), "https://wzyp.cn/pay", common.GetTimestamp())
 	require.NoError(t, err)
 	require.True(t, ok)
-	order, err = GetCatFKOrderByTradeNo(order.TradeNo)
+	order, err = GetJingSoftOrderByTradeNo(order.TradeNo)
 	require.NoError(t, err)
 	qrCode := "https://qr.alipay.com/upx-code"
-	ok, err = UpdateCatFKOrder(order.ID, order.Version, CatFKOrderUpdate{Status: CatFKOrderStatusPaid, PaymentQRCode: &qrCode, NextQueryAt: common.GetTimestamp()})
+	ok, err = UpdateJingSoftOrder(order.ID, order.Version, JingSoftOrderUpdate{Status: JingSoftOrderStatusPaid, PaymentQRCode: &qrCode, NextQueryAt: common.GetTimestamp()})
 	require.NoError(t, err)
 	require.True(t, ok)
-	order, err = GetCatFKOrderByTradeNo(order.TradeNo)
+	order, err = GetJingSoftOrderByTradeNo(order.TradeNo)
 	require.NoError(t, err)
 	return order
 }
 
-func TestCatFKOrderPersistenceAndRecovery(t *testing.T) {
+func TestJingSoftOrderPersistenceAndRecovery(t *testing.T) {
 	userID, _ := setupRedeemFixture(t, 500)
-	order := setupCatFKOrderFixture(t, userID, "recovery")
+	order := setupJingSoftOrderFixture(t, userID, "recovery")
 	assert.Equal(t, "encrypted-credentials", order.CredentialCiphertext)
 	// Repeat migration with a representative existing row and verify it survives.
-	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}))
-	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}))
-	existing, existed, err := CreateCatFKOrder(&CatFKOrder{UserID: userID, IdempotencyKey: order.IdempotencyKey})
+	require.NoError(t, DB.AutoMigrate(&JingSoftOrder{}))
+	require.NoError(t, DB.AutoMigrate(&JingSoftOrder{}))
+	existing, existed, err := CreateJingSoftOrder(&JingSoftOrder{UserID: userID, IdempotencyKey: order.IdempotencyKey})
 	require.NoError(t, err)
 	assert.True(t, existed)
 	assert.Equal(t, order.ID, existing.ID)
 	assert.Equal(t, 500, existing.ExpectedQuota)
-	recovered, err := FindCatFKOrderForRequest(userID, order.IdempotencyKey)
+	recovered, err := FindJingSoftOrderForRequest(userID, order.IdempotencyKey)
 	require.NoError(t, err)
 	require.NotNil(t, recovered)
 	assert.Equal(t, order.ID, recovered.ID)
-	otherAccount, err := FindCatFKOrderForRequest(userID+1, order.IdempotencyKey)
+	otherAccount, err := FindJingSoftOrderForRequest(userID+1, order.IdempotencyKey)
 	require.NoError(t, err)
 	assert.Nil(t, otherAccount)
-	_, err = GetCatFKOrderForUser(userID+1, order.TradeNo)
+	_, err = GetJingSoftOrderForUser(userID+1, order.TradeNo)
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	payload, err := common.Marshal(order)
 	require.NoError(t, err)
 	assert.NotContains(t, string(payload), "encrypted-credentials")
 	assert.NotContains(t, string(payload), "idempotency_key")
 	now := common.GetTimestamp()
-	claimed, ok, err := ClaimCatFKOrder(order.ID, now, 60)
+	claimed, ok, err := ClaimJingSoftOrder(order.ID, now, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
-	assert.Equal(t, CatFKOrderStatusSubmitting, claimed.Status)
-	_, ok, err = ClaimCatFKOrder(order.ID, now, 60)
+	assert.Equal(t, JingSoftOrderStatusSubmitting, claimed.Status)
+	_, ok, err = ClaimJingSoftOrder(order.ID, now, 60)
 	require.NoError(t, err)
 	assert.False(t, ok)
-	recovered, ok, err = ClaimCatFKOrder(order.ID, now+61, 60)
+	recovered, ok, err = ClaimJingSoftOrder(order.ID, now+61, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
-	assert.Equal(t, CatFKOrderStatusCreationUnknown, recovered.Status)
-	ok, err = MarkCatFKOrderCreated(order.ID, claimed.Version, "stale", "https://example.com/pay", now+62)
+	assert.Equal(t, JingSoftOrderStatusCreationUnknown, recovered.Status)
+	ok, err = MarkJingSoftOrderCreated(order.ID, claimed.Version, "stale", "https://wzyp.cn/pay", now+62)
 	require.NoError(t, err)
 	assert.False(t, ok)
-	ok, err = RetryCatFKOrder(order.ID, recovered.Version, now+120)
+	ok, err = RetryJingSoftOrder(order.ID, recovered.Version, now+120)
 	require.NoError(t, err)
 	require.True(t, ok)
-	rows, err := ListDueCatFKOrders(now+119, 100)
+	rows, err := ListDueJingSoftOrders(now+119, 100)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
-	rows, err = ListDueCatFKOrders(now+120, 100)
+	rows, err = ListDueJingSoftOrders(now+120, 100)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	assert.Equal(t, CatFKOrderStatusCreationUnknown, rows[0].Status)
+	assert.Equal(t, JingSoftOrderStatusCreationUnknown, rows[0].Status)
 	require.Error(t, ManualCompleteTopUp(order.TradeNo, ""))
 	assert.Equal(t, common.TopUpStatusPending, GetTopUpById(order.TopUpID).Status)
 }
 
-func TestCatFKCompletionIsAtomicAndIdempotent(t *testing.T) {
+func TestJingSoftCompletionIsAtomicAndIdempotent(t *testing.T) {
 	userID, key := setupRedeemFixture(t, 500)
-	order := setupCatFKOrderFixture(t, userID, "complete")
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-complete", "")
-	require.ErrorIs(t, err, ErrCatFKOrderConflict)
-	order = markCatFKOrderPaid(t, order)
+	order := setupJingSoftOrderFixture(t, userID, "complete")
+	_, err := CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "tx-complete", "")
+	require.ErrorIs(t, err, ErrJingSoftOrderConflict)
+	order = markJingSoftOrderPaid(t, order)
 	assert.Equal(t, "https://qr.alipay.com/upx-code", order.PaymentQRCode)
-	_, err = GetCatFKRedemptionForUser(userID, order.TradeNo)
-	require.ErrorIs(t, err, ErrCatFKOrderConflict, "a code is shown only after completion")
-	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version-1, key, "tx-complete", "")
-	require.ErrorIs(t, err, ErrCatFKOrderConflict)
-	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "", "")
-	require.ErrorIs(t, err, ErrCatFKTransactionRequired, "new orders require an official transaction ID")
-	already, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-complete", "")
+	_, err = GetJingSoftRedemptionForUser(userID, order.TradeNo)
+	require.ErrorIs(t, err, ErrJingSoftOrderConflict, "a code is shown only after completion")
+	_, err = CompleteVerifiedJingSoftOrder(order.ID, order.Version-1, key, "tx-complete", "")
+	require.ErrorIs(t, err, ErrJingSoftOrderConflict)
+	_, err = CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "", "")
+	require.ErrorIs(t, err, ErrJingSoftTransactionRequired, "new orders require an official transaction ID")
+	already, err := CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "tx-complete", "")
 	require.NoError(t, err)
 	assert.False(t, already)
-	already, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, "", "tx-complete", "")
+	already, err = CompleteVerifiedJingSoftOrder(order.ID, order.Version, "", "tx-complete", "")
 	require.NoError(t, err)
 	assert.True(t, already)
-	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, "", "tx-other", "")
-	require.ErrorIs(t, err, ErrCatFKOrderConflict)
-	stored, err := GetCatFKOrderForUser(userID, order.TradeNo)
+	_, err = CompleteVerifiedJingSoftOrder(order.ID, order.Version, "", "tx-other", "")
+	require.ErrorIs(t, err, ErrJingSoftOrderConflict)
+	stored, err := GetJingSoftOrderForUser(userID, order.TradeNo)
 	require.NoError(t, err)
-	assert.Equal(t, CatFKOrderStatusCompleted, stored.Status)
+	assert.Equal(t, JingSoftOrderStatusCompleted, stored.Status)
 	assert.Empty(t, stored.CredentialCiphertext)
 	require.NotNil(t, stored.RedemptionID)
 	var redemption Redemption
@@ -504,30 +607,30 @@ func TestCatFKCompletionIsAtomicAndIdempotent(t *testing.T) {
 	assert.Equal(t, userID, redemption.UsedUserId)
 	assert.Equal(t, common.RedemptionCodeStatusUsed, redemption.Status)
 	require.NoError(t, DB.Delete(&Redemption{}, "id = ?", redemption.Id).Error)
-	shown, err := GetCatFKRedemptionForUser(userID, order.TradeNo)
+	shown, err := GetJingSoftRedemptionForUser(userID, order.TradeNo)
 	require.NoError(t, err, "a soft-deleted code remains the purchase record")
 	assert.Equal(t, key, shown.Key)
-	staffShown, err := GetCatFKRedemptionByTradeNo(order.TradeNo)
+	staffShown, err := GetJingSoftRedemptionByTradeNo(order.TradeNo)
 	require.NoError(t, err, "staff can read a completed order regardless of its owner")
 	assert.Equal(t, key, staffShown.Key)
-	_, err = GetCatFKRedemptionByTradeNo("catfk_missing")
+	_, err = GetJingSoftRedemptionByTradeNo("JingSoft_missing")
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-	_, err = GetCatFKRedemptionForUser(userID+1, order.TradeNo)
+	_, err = GetJingSoftRedemptionForUser(userID+1, order.TradeNo)
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	assert.Equal(t, common.TopUpStatusSuccess, GetTopUpById(order.TopUpID).Status)
 	var topUpCount int64
 	require.NoError(t, DB.Model(&TopUp{}).Where("user_id = ?", userID).Count(&topUpCount).Error)
-	assert.Equal(t, int64(1), topUpCount, "CatFK must complete its existing TopUp, not create a second redemption snapshot")
+	assert.Equal(t, int64(1), topUpCount, "JingSoft must complete its existing TopUp, not create a second redemption snapshot")
 	var user User
 	require.NoError(t, DB.First(&user, "id = ?", userID).Error)
 	assert.Equal(t, 500, user.Quota)
 }
 
-func TestCatFKCompletionRollsBackFailures(t *testing.T) {
+func TestJingSoftCompletionRollsBackFailures(t *testing.T) {
 	for _, scenario := range []string{"denomination", "expired", "disabled", "used", "wallet_overflow", "account_binding", "topup_conflict"} {
 		t.Run(scenario, func(t *testing.T) {
 			userID, key := setupRedeemFixture(t, 500)
-			order := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, scenario))
+			order := markJingSoftOrderPaid(t, setupJingSoftOrderFixture(t, userID, scenario))
 			initialQuota := 0
 			switch scenario {
 			case "denomination":
@@ -548,11 +651,11 @@ func TestCatFKCompletionRollsBackFailures(t *testing.T) {
 			}
 			var before Redemption
 			require.NoError(t, DB.Where(commonKeyCol+" = ?", key).First(&before).Error)
-			_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+scenario, "")
+			_, err := CompleteVerifiedJingSoftOrder(order.ID, order.Version, key, "tx-"+scenario, "")
 			require.Error(t, err)
-			stored, err := GetCatFKOrderByTradeNo(order.TradeNo)
+			stored, err := GetJingSoftOrderByTradeNo(order.TradeNo)
 			require.NoError(t, err)
-			assert.Equal(t, CatFKOrderStatusPaid, stored.Status)
+			assert.Equal(t, JingSoftOrderStatusPaid, stored.Status)
 			assert.Equal(t, order.Version, stored.Version)
 			assert.Nil(t, stored.RedemptionID)
 			assert.Equal(t, "encrypted-credentials", stored.CredentialCiphertext)
@@ -567,25 +670,25 @@ func TestCatFKCompletionRollsBackFailures(t *testing.T) {
 	}
 }
 
-func TestCatFKUniqueLinksAndConcurrentCompletion(t *testing.T) {
+func TestJingSoftUniqueLinksAndConcurrentCompletion(t *testing.T) {
 	userID, key := setupRedeemFixture(t, 500)
-	first := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, "first"))
-	second := setupCatFKOrderFixture(t, userID, "second")
-	claimed, ok, err := ClaimCatFKOrder(second.ID, common.GetTimestamp(), 60)
+	first := markJingSoftOrderPaid(t, setupJingSoftOrderFixture(t, userID, "first"))
+	second := setupJingSoftOrderFixture(t, userID, "second")
+	claimed, ok, err := ClaimJingSoftOrder(second.ID, common.GetTimestamp(), 60)
 	require.NoError(t, err)
 	require.True(t, ok)
-	_, err = MarkCatFKOrderCreated(second.ID, claimed.Version, *first.UpstreamOrderID, "https://example.com/pay", common.GetTimestamp())
+	_, err = MarkJingSoftOrderCreated(second.ID, claimed.Version, *first.UpstreamOrderID, "https://wzyp.cn/pay", common.GetTimestamp())
 	require.Error(t, err, "one upstream purchase must not fund two orders")
 	// Separate shops may use the same upstream ID.
-	require.NoError(t, DB.Model(&CatFKOrder{}).Where("id = ?", second.ID).Update("shop_id", "other-shop").Error)
-	ok, err = MarkCatFKOrderCreated(second.ID, claimed.Version, *first.UpstreamOrderID, "https://example.com/pay", common.GetTimestamp())
+	require.NoError(t, DB.Model(&JingSoftOrder{}).Where("id = ?", second.ID).Update("shop_id", "other-shop").Error)
+	ok, err = MarkJingSoftOrderCreated(second.ID, claimed.Version, *first.UpstreamOrderID, "https://wzyp.cn/pay", common.GetTimestamp())
 	require.NoError(t, err)
 	require.True(t, ok)
 	var wg sync.WaitGroup
 	results := make(chan bool, 2)
 	for range 2 {
 		wg.Go(func() {
-			already, err := CompleteVerifiedCatFKOrder(first.ID, first.Version, key, "tx-first", "")
+			already, err := CompleteVerifiedJingSoftOrder(first.ID, first.Version, key, "tx-first", "")
 			results <- err == nil && !already
 		})
 	}
@@ -598,103 +701,103 @@ func TestCatFKUniqueLinksAndConcurrentCompletion(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, credits)
-	second, err = GetCatFKOrderByTradeNo(second.TradeNo)
+	second, err = GetJingSoftOrderByTradeNo(second.TradeNo)
 	require.NoError(t, err)
-	ok, err = UpdateCatFKOrder(second.ID, second.Version, CatFKOrderUpdate{Status: CatFKOrderStatusPaid})
+	ok, err = UpdateJingSoftOrder(second.ID, second.Version, JingSoftOrderUpdate{Status: JingSoftOrderStatusPaid})
 	require.NoError(t, err)
 	require.True(t, ok)
-	second, err = GetCatFKOrderByTradeNo(second.TradeNo)
+	second, err = GetJingSoftOrderByTradeNo(second.TradeNo)
 	require.NoError(t, err)
-	_, err = CompleteVerifiedCatFKOrder(second.ID, second.Version, key, "tx-second", "")
+	_, err = CompleteVerifiedJingSoftOrder(second.ID, second.Version, key, "tx-second", "")
 	require.ErrorIs(t, err, ErrRedemptionUsed, "the same local code cannot fund another purchase")
-	stored, err := GetCatFKOrderByTradeNo(second.TradeNo)
+	stored, err := GetJingSoftOrderByTradeNo(second.TradeNo)
 	require.NoError(t, err)
-	assert.Equal(t, CatFKOrderStatusPaid, stored.Status)
+	assert.Equal(t, JingSoftOrderStatusPaid, stored.Status)
 	assert.Nil(t, stored.RedemptionID)
 	assert.Equal(t, common.TopUpStatusPending, GetTopUpById(second.TopUpID).Status)
-	completed, err := GetCatFKOrderByTradeNo(first.TradeNo)
+	completed, err := GetJingSoftOrderByTradeNo(first.TradeNo)
 	require.NoError(t, err)
-	require.Error(t, DB.Model(&CatFKOrder{}).Where("id = ?", second.ID).Update("redemption_id", completed.RedemptionID).Error)
+	require.Error(t, DB.Model(&JingSoftOrder{}).Where("id = ?", second.ID).Update("redemption_id", completed.RedemptionID).Error)
 	var user User
 	require.NoError(t, DB.First(&user, "id = ?", userID).Error)
 	assert.Equal(t, 500, user.Quota)
 }
 
-func TestCatFKDirectSettlementAndTransactionReplay(t *testing.T) {
+func TestJingSoftDirectSettlementAndTransactionReplay(t *testing.T) {
 	userID, key := setupRedeemFixture(t, 500)
-	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}))
+	require.NoError(t, DB.AutoMigrate(&JingSoftOrder{}, &JingSoftPriceSlot{}))
 
-	// 1. Direct-mode order credits wallet directly, hides redemption lookup, and populates CatFKMode on TopUp history.
-	directOrder, existed, err := CreateCatFKOrder(&CatFKOrder{
-		UserID: userID, TradeNo: "catfk_direct_1", IdempotencyKey: "idem-direct-1",
+	// 1. Direct-mode order credits wallet directly, hides redemption lookup, and populates JingSoftMode on TopUp history.
+	directOrder, existed, err := CreateJingSoftOrder(&JingSoftOrder{
+		UserID: userID, TradeNo: "JingSoft_direct_1", IdempotencyKey: "idem-direct-1",
 		TierID: "direct:10", ProductID: "slot-1", ChannelID: "1", ExpectedQuota: 600,
 		PriceAmount: "70.00", Currency: "CNY", ShopID: "shop", ShopName: "Direct Shop",
-		PaymentMethod: PaymentMethodCatFKWeChat, Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_1",
+		PaymentMethod: PaymentMethodJingSoftWeChat, Mode: JingSoftOrderModeDirect, ExpectedContact: "JingSoft_direct_1",
 		CredentialCiphertext: "encrypted",
 	})
 	require.NoError(t, err)
 	require.False(t, existed)
 	t.Cleanup(func() {
-		require.NoError(t, DB.Delete(&CatFKOrder{}, "id = ?", directOrder.ID).Error)
+		require.NoError(t, DB.Delete(&JingSoftOrder{}, "id = ?", directOrder.ID).Error)
 		require.NoError(t, DB.Delete(&TopUp{}, "id = ?", directOrder.TopUpID).Error)
 	})
 
-	_, err = GetCatFKRedemptionForUser(userID, directOrder.TradeNo)
-	require.ErrorIs(t, err, ErrCatFKDirectOrderNoRedemption)
-	directOrder = markCatFKOrderPaid(t, directOrder)
-	_, err = CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "", "")
-	require.ErrorIs(t, err, ErrCatFKTransactionRequired)
-	already, err := CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
+	_, err = GetJingSoftRedemptionForUser(userID, directOrder.TradeNo)
+	require.ErrorIs(t, err, ErrJingSoftDirectOrderNoRedemption)
+	directOrder = markJingSoftOrderPaid(t, directOrder)
+	_, err = CompleteVerifiedJingSoftOrder(directOrder.ID, directOrder.Version, "", "", "")
+	require.ErrorIs(t, err, ErrJingSoftTransactionRequired)
+	already, err := CompleteVerifiedJingSoftOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
 	require.NoError(t, err)
 	assert.False(t, already)
-	already, err = CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
+	already, err = CompleteVerifiedJingSoftOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
 	require.NoError(t, err)
 	assert.True(t, already)
 
-	storedDirect, err := GetCatFKOrderByTradeNo(directOrder.TradeNo)
+	storedDirect, err := GetJingSoftOrderByTradeNo(directOrder.TradeNo)
 	require.NoError(t, err)
-	assert.Equal(t, CatFKOrderStatusCompleted, storedDirect.Status)
+	assert.Equal(t, JingSoftOrderStatusCompleted, storedDirect.Status)
 	assert.Nil(t, storedDirect.RedemptionID)
 	require.NotNil(t, storedDirect.TransactionID)
 	assert.Equal(t, "wx-official-tx-1", *storedDirect.TransactionID)
-	_, err = GetCatFKRedemptionForUser(userID, directOrder.TradeNo)
-	require.ErrorIs(t, err, ErrCatFKDirectOrderNoRedemption)
+	_, err = GetJingSoftRedemptionForUser(userID, directOrder.TradeNo)
+	require.ErrorIs(t, err, ErrJingSoftDirectOrderNoRedemption)
 
 	topups, total, err := GetUserTopUps(userID, &common.PageInfo{Page: 1, PageSize: 10})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, total)
-	assert.Equal(t, CatFKOrderModeDirect, topups[0].CatFKMode)
+	assert.Equal(t, JingSoftOrderModeDirect, topups[0].JingSoftMode)
 
 	// 2. Cross-mode transaction_id replay must fail and roll back without crediting wallet or consuming redemption code.
-	replayRedemption := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, "tx-replay-redemption"))
-	_, err = CompleteVerifiedCatFKOrder(replayRedemption.ID, replayRedemption.Version, key, "wx-official-tx-1", "")
-	require.ErrorIs(t, err, ErrCatFKTransactionReplay)
+	replayRedemption := markJingSoftOrderPaid(t, setupJingSoftOrderFixture(t, userID, "tx-replay-redemption"))
+	_, err = CompleteVerifiedJingSoftOrder(replayRedemption.ID, replayRedemption.Version, key, "wx-official-tx-1", "")
+	require.ErrorIs(t, err, ErrJingSoftTransactionReplay)
 
 	// 3. Concurrent direct orders competing on the same transaction_id settle at most one.
-	d1, _, err := CreateCatFKOrder(&CatFKOrder{
-		UserID: userID, TradeNo: "catfk_direct_race_1", IdempotencyKey: "idem-race-1",
+	d1, _, err := CreateJingSoftOrder(&JingSoftOrder{
+		UserID: userID, TradeNo: "JingSoft_direct_race_1", IdempotencyKey: "idem-race-1",
 		TierID: "direct:5", ProductID: "slot-1", ChannelID: "1", ExpectedQuota: 200,
-		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_race_1",
+		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: JingSoftOrderModeDirect, ExpectedContact: "JingSoft_direct_race_1",
 	})
 	require.NoError(t, err)
-	d2, _, err := CreateCatFKOrder(&CatFKOrder{
-		UserID: userID, TradeNo: "catfk_direct_race_2", IdempotencyKey: "idem-race-2",
+	d2, _, err := CreateJingSoftOrder(&JingSoftOrder{
+		UserID: userID, TradeNo: "JingSoft_direct_race_2", IdempotencyKey: "idem-race-2",
 		TierID: "direct:5", ProductID: "slot-2", ChannelID: "1", ExpectedQuota: 200,
-		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_race_2",
+		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: JingSoftOrderModeDirect, ExpectedContact: "JingSoft_direct_race_2",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, DB.Delete(&CatFKOrder{}, "id IN ?", []int{d1.ID, d2.ID}).Error)
+		require.NoError(t, DB.Delete(&JingSoftOrder{}, "id IN ?", []int{d1.ID, d2.ID}).Error)
 		require.NoError(t, DB.Delete(&TopUp{}, "id IN ?", []int{d1.TopUpID, d2.TopUpID}).Error)
 	})
-	d1 = markCatFKOrderPaid(t, d1)
-	d2 = markCatFKOrderPaid(t, d2)
+	d1 = markJingSoftOrderPaid(t, d1)
+	d2 = markJingSoftOrderPaid(t, d2)
 
 	var wg sync.WaitGroup
 	wins := make(chan bool, 2)
-	for _, candidate := range []*CatFKOrder{d1, d2} {
+	for _, candidate := range []*JingSoftOrder{d1, d2} {
 		wg.Go(func() {
-			done, settleErr := CompleteVerifiedCatFKOrder(candidate.ID, candidate.Version, "", "wx-shared-race-tx", "")
+			done, settleErr := CompleteVerifiedJingSoftOrder(candidate.ID, candidate.Version, "", "wx-shared-race-tx", "")
 			wins <- settleErr == nil && !done
 		})
 	}
@@ -709,18 +812,18 @@ func TestCatFKDirectSettlementAndTransactionReplay(t *testing.T) {
 	assert.Equal(t, 1, winCount)
 
 	// 4. Pre-upgrade in-flight redemption order (empty Mode and ExpectedContact) still completes without TransactionID.
-	legacyInFlight, _, err := CreateCatFKOrder(&CatFKOrder{
-		UserID: userID, TradeNo: "catfk_preupgrade", IdempotencyKey: "idem-preupgrade",
+	legacyInFlight, _, err := CreateJingSoftOrder(&JingSoftOrder{
+		UserID: userID, TradeNo: "JingSoft_preupgrade", IdempotencyKey: "idem-preupgrade",
 		TierID: "tier", ProductID: "product", ChannelID: "1", ExpectedQuota: 500,
 		PriceAmount: "2.50", Currency: "CNY", ShopID: "shop",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, DB.Delete(&CatFKOrder{}, "id = ?", legacyInFlight.ID).Error)
+		require.NoError(t, DB.Delete(&JingSoftOrder{}, "id = ?", legacyInFlight.ID).Error)
 		require.NoError(t, DB.Delete(&TopUp{}, "id = ?", legacyInFlight.TopUpID).Error)
 	})
-	legacyInFlight = markCatFKOrderPaid(t, legacyInFlight)
-	_, err = CompleteVerifiedCatFKOrder(legacyInFlight.ID, legacyInFlight.Version, key, "", "")
+	legacyInFlight = markJingSoftOrderPaid(t, legacyInFlight)
+	_, err = CompleteVerifiedJingSoftOrder(legacyInFlight.ID, legacyInFlight.Version, key, "", "")
 	require.NoError(t, err)
 
 	var user User
@@ -728,52 +831,52 @@ func TestCatFKDirectSettlementAndTransactionReplay(t *testing.T) {
 	assert.Equal(t, 600+200+500, user.Quota)
 }
 
-func TestCatFKPriceSlotLeaseAndQuarantine(t *testing.T) {
-	require.NoError(t, DB.AutoMigrate(&CatFKPriceSlot{}))
+func TestJingSoftPriceSlotLeaseAndQuarantine(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&JingSoftPriceSlot{}))
 	t.Cleanup(func() {
-		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&CatFKPriceSlot{}).Error)
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&JingSoftPriceSlot{}).Error)
 	})
 	now := int64(1700000000)
 	keys := []string{"slot-a", "slot-b"}
 
-	first, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "10.00", "order-1", now, 60)
+	first, ok, err := AcquireJingSoftPriceSlot("shop-1", keys, "10.00", "order-1", now, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
-	second, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "20.00", "order-2", now, 60)
+	second, ok, err := AcquireJingSoftPriceSlot("shop-1", keys, "20.00", "order-2", now, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.NotEqual(t, first.GoodsKey, second.GoodsKey)
 
 	// Exhausted pool returns ok=false without overwriting active leases.
-	_, ok, err = AcquireCatFKPriceSlot("shop-1", keys, "30.00", "order-3", now, 60)
+	_, ok, err = AcquireJingSoftPriceSlot("shop-1", keys, "30.00", "order-3", now, 60)
 	require.NoError(t, err)
 	assert.False(t, ok)
 
 	// Clean release records confirmed price and prefers matching price on next acquire.
-	released, err := ReleaseCatFKPriceSlot(second.ID, second.Version, second.HolderToken, "20.00", now+10)
+	released, err := ReleaseJingSoftPriceSlot(second.ID, second.Version, second.HolderToken, "20.00", now+10)
 	require.NoError(t, err)
 	assert.True(t, released)
 
 	// Expired lease on first is quarantined, NOT reused! Only second ("20.00") is acquired.
-	reused, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "20.00", "order-4", now+61, 60)
+	reused, ok, err := AcquireJingSoftPriceSlot("shop-1", keys, "20.00", "order-4", now+61, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, second.GoodsKey, reused.GoodsKey)
 
-	_, ok, err = AcquireCatFKPriceSlot("shop-1", keys, "10.00", "order-5", now+61, 60)
+	_, ok, err = AcquireJingSoftPriceSlot("shop-1", keys, "10.00", "order-5", now+61, 60)
 	require.NoError(t, err)
 	assert.False(t, ok, "expired slot must stay quarantined until explicitly reset")
 
-	var quarantinedSlot CatFKPriceSlot
+	var quarantinedSlot JingSoftPriceSlot
 	require.NoError(t, DB.First(&quarantinedSlot, "id = ?", first.ID).Error)
-	assert.Equal(t, CatFKSlotStatusQuarantined, quarantinedSlot.Status)
+	assert.Equal(t, JingSoftSlotStatusQuarantined, quarantinedSlot.Status)
 	assert.Equal(t, "lease_expired", quarantinedSlot.QuarantineCode)
 
-	resetCount, err := ResetQuarantinedCatFKPriceSlots("shop-1", now+62)
+	resetCount, err := ResetQuarantinedJingSoftPriceSlots("shop-1", now+62)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resetCount)
 
-	recovered, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "15.00", "order-6", now+63, 60)
+	recovered, ok, err := AcquireJingSoftPriceSlot("shop-1", keys, "15.00", "order-6", now+63, 60)
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, first.GoodsKey, recovered.GoodsKey)

@@ -44,7 +44,7 @@ var (
 		PaymentProviderWaffo,
 		PaymentProviderWaffoPancake,
 		PaymentProviderRedemption,
-		PaymentProviderCatFK,
+		PaymentProviderJingSoft,
 	}
 )
 
@@ -160,8 +160,8 @@ func CalculateTopUpInvoiceSnapshot(topUp *TopUp) (int64, int64, error) {
 	switch topUp.PaymentProvider {
 	case PaymentProviderStripe:
 		credited = decimal.NewFromFloat(topUp.Money).Mul(quotaPerUnit)
-	case PaymentProviderCatFK:
-		// CatFK stores wallet quota units, which may exceed relay charge limits.
+	case PaymentProviderJingSoft:
+		// JingSoft stores wallet quota units, which may exceed relay charge limits.
 		quota, err := common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(topUp.Amount))
 		if err != nil {
 			return 0, 0, ErrInvoiceOrderInvalid
@@ -244,7 +244,7 @@ func BackfillRedemptionInvoiceTopUps() error {
 				redemptionIDs = append(redemptionIDs, redemption.Id)
 			}
 			var linkedRedemptionIDs []int
-			if err := tx.Model(&CatFKOrder{}).Where("redemption_id IN ?", redemptionIDs).Pluck("redemption_id", &linkedRedemptionIDs).Error; err != nil {
+			if err := tx.Model(&JingSoftOrder{}).Where("redemption_id IN ?", redemptionIDs).Pluck("redemption_id", &linkedRedemptionIDs).Error; err != nil {
 				return err
 			}
 			for _, id := range linkedRedemptionIDs {

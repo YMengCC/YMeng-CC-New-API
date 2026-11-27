@@ -64,15 +64,16 @@ import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
-import {
-  parseCatFKProducts,
-  parseCatFKDirectGoodsKeys,
-  parseCatFKChannels,
-  type CatFKChannel,
-} from './catfk-schema'
-import { CatFKSettingsFields } from './catfk-settings-fields'
-import { CatFKSetupGuide } from './catfk-setup-guide'
 import { CreemProductsVisualEditor } from './creem-products-visual-editor'
+import {
+  normalizeJingSoftBaseURL,
+  parseJingSoftChannels,
+  parseJingSoftDirectGoodsKeys,
+  parseJingSoftProducts,
+  type JingSoftChannel,
+} from './jingsoft-schema'
+import { JingSoftSettingsFields } from './jingsoft-settings-fields'
+import { JingSoftSetupGuide } from './jingsoft-setup-guide'
 import { PaymentMethodsVisualEditor } from './payment-methods-visual-editor'
 import {
   formatJsonForEditor,
@@ -171,38 +172,45 @@ const paymentSchema = z.object({
       })
     }
   }),
-  CatFKEnabled: z.boolean(),
-  CatFKMode: z.enum(['redemption', 'direct', 'auto']),
-  CatFKStoreToken: z.string().max(4096),
-  CatFKMerchantToken: z.string().max(4096),
-  CatFKProducts: z.string().refine((value) => {
+  JingSoftEnabled: z.boolean(),
+  JingSoftMode: z.enum(['redemption', 'direct', 'auto']),
+  JingSoftBaseURL: z
+    .string()
+    .max(2048)
+    .refine(
+      (value) => normalizeJingSoftBaseURL(value) !== null,
+      'Invalid JingSoft platform URL'
+    ),
+  JingSoftStoreToken: z.string().max(4096),
+  JingSoftMerchantToken: z.string().max(4096),
+  JingSoftProducts: z.string().refine((value) => {
     try {
-      parseCatFKProducts(value)
+      parseJingSoftProducts(value)
       return true
     } catch {
       return false
     }
-  }, 'Invalid CatFK mapping configuration'),
-  CatFKDirectGoodsKeys: z.string().refine((value) => {
+  }, 'Invalid JingSoft mapping configuration'),
+  JingSoftDirectGoodsKeys: z.string().refine((value) => {
     try {
-      parseCatFKDirectGoodsKeys(value)
+      parseJingSoftDirectGoodsKeys(value)
       return true
     } catch {
       return false
     }
-  }, 'Invalid CatFK direct slot settings'),
-  CatFKAutoRestockMin: z.coerce.number().int().min(1).max(1000),
-  CatFKAutoRestockBatch: z.coerce.number().int().min(1).max(500),
-  CatFKMaxAmountCNY: z.coerce.number().min(1).max(1000000),
-  CatFKMaxOrdersPerMinute: z.coerce.number().int().min(1).max(600),
-  CatFKChannels: z.string().refine((value) => {
+  }, 'Invalid JingSoft direct slot settings'),
+  JingSoftAutoRestockMin: z.coerce.number().int().min(1).max(1000),
+  JingSoftAutoRestockBatch: z.coerce.number().int().min(1).max(500),
+  JingSoftMaxAmountCNY: z.coerce.number().min(1).max(1000000),
+  JingSoftMaxOrdersPerMinute: z.coerce.number().int().min(1).max(600),
+  JingSoftChannels: z.string().refine((value) => {
     try {
-      parseCatFKChannels(value)
+      parseJingSoftChannels(value)
       return true
     } catch {
       return false
     }
-  }, 'Invalid CatFK mapping configuration'),
+  }, 'Invalid JingSoft mapping configuration'),
   WaffoEnabled: z.boolean(),
   WaffoApiKey: z.string(),
   WaffoPrivateKey: z.string(),
@@ -241,24 +249,26 @@ type PaymentComplianceDefaults = {
 
 type PaymentSettingsDefaultValues = Omit<
   PaymentBaseFormValues,
-  | 'CatFKMode'
-  | 'CatFKMerchantToken'
-  | 'CatFKDirectGoodsKeys'
-  | 'CatFKAutoRestockMin'
-  | 'CatFKAutoRestockBatch'
-  | 'CatFKMaxAmountCNY'
-  | 'CatFKMaxOrdersPerMinute'
+  | 'JingSoftMode'
+  | 'JingSoftBaseURL'
+  | 'JingSoftMerchantToken'
+  | 'JingSoftDirectGoodsKeys'
+  | 'JingSoftAutoRestockMin'
+  | 'JingSoftAutoRestockBatch'
+  | 'JingSoftMaxAmountCNY'
+  | 'JingSoftMaxOrdersPerMinute'
 > &
   Partial<
     Pick<
       PaymentBaseFormValues,
-      | 'CatFKMode'
-      | 'CatFKMerchantToken'
-      | 'CatFKDirectGoodsKeys'
-      | 'CatFKAutoRestockMin'
-      | 'CatFKAutoRestockBatch'
-      | 'CatFKMaxAmountCNY'
-      | 'CatFKMaxOrdersPerMinute'
+      | 'JingSoftMode'
+      | 'JingSoftBaseURL'
+      | 'JingSoftMerchantToken'
+      | 'JingSoftDirectGoodsKeys'
+      | 'JingSoftAutoRestockMin'
+      | 'JingSoftAutoRestockBatch'
+      | 'JingSoftMaxAmountCNY'
+      | 'JingSoftMaxOrdersPerMinute'
     >
   >
 
@@ -294,13 +304,15 @@ export function PaymentSettingsSection({
   const initialFormValues = React.useMemo<PaymentFormValues>(
     () => ({
       ...defaultValues,
-      CatFKMode: defaultValues.CatFKMode ?? 'redemption',
-      CatFKMerchantToken: defaultValues.CatFKMerchantToken ?? '',
-      CatFKDirectGoodsKeys: defaultValues.CatFKDirectGoodsKeys ?? '[]',
-      CatFKAutoRestockMin: defaultValues.CatFKAutoRestockMin ?? 5,
-      CatFKAutoRestockBatch: defaultValues.CatFKAutoRestockBatch ?? 20,
-      CatFKMaxAmountCNY: defaultValues.CatFKMaxAmountCNY ?? 5000,
-      CatFKMaxOrdersPerMinute: defaultValues.CatFKMaxOrdersPerMinute ?? 15,
+      JingSoftMode: defaultValues.JingSoftMode ?? 'redemption',
+      JingSoftBaseURL: defaultValues.JingSoftBaseURL ?? '',
+      JingSoftMerchantToken: defaultValues.JingSoftMerchantToken ?? '',
+      JingSoftDirectGoodsKeys: defaultValues.JingSoftDirectGoodsKeys ?? '[]',
+      JingSoftAutoRestockMin: defaultValues.JingSoftAutoRestockMin ?? 5,
+      JingSoftAutoRestockBatch: defaultValues.JingSoftAutoRestockBatch ?? 20,
+      JingSoftMaxAmountCNY: defaultValues.JingSoftMaxAmountCNY ?? 5000,
+      JingSoftMaxOrdersPerMinute:
+        defaultValues.JingSoftMaxOrdersPerMinute ?? 15,
       ...waffoDefaultValues,
       ...waffoPancakeDefaultValues,
     }),
@@ -333,19 +345,20 @@ export function PaymentSettingsSection({
       storeID: waffoPancakeProvisionedStoreID ?? '',
       productID: waffoPancakeProvisionedProductID ?? '',
     })
-  const [catfkChannels, setCatfkChannels] = React.useState<CatFKChannel[]>(() =>
-    parseCatFKChannels(defaultValues.CatFKChannels)
-  )
-  const catfkTokenGeneration = React.useRef(0)
+  const [activeTab, setActiveTab] = React.useState('general')
+  const [jingSoftChannels, setJingSoftChannels] = React.useState<
+    JingSoftChannel[]
+  >(() => parseJingSoftChannels(defaultValues.JingSoftChannels))
+  const jingSoftTokenGeneration = React.useRef(0)
 
   React.useEffect(() => {
     setWaffoPayMethods(parseWaffoPayMethods(waffoDefaultValues.WaffoPayMethods))
   }, [waffoDefaultValues.WaffoPayMethods])
 
   React.useEffect(() => {
-    setCatfkChannels(parseCatFKChannels(initialFormValues.CatFKChannels))
-    catfkTokenGeneration.current++
-  }, [initialFormValues.CatFKChannels])
+    setJingSoftChannels(parseJingSoftChannels(initialFormValues.JingSoftChannels))
+    jingSoftTokenGeneration.current++
+  }, [initialFormValues.JingSoftChannels])
 
   React.useEffect(() => {
     const nextBinding = {
@@ -443,11 +456,12 @@ export function PaymentSettingsSection({
   })
 
   const { isSubmitting } = form.formState
-  const catfkStoreToken = form.watch('CatFKStoreToken')
+  const jingSoftBaseURL = form.watch('JingSoftBaseURL')
+  const jingSoftStoreToken = form.watch('JingSoftStoreToken')
 
   React.useEffect(() => {
-    catfkTokenGeneration.current++
-  }, [catfkStoreToken])
+    jingSoftTokenGeneration.current++
+  }, [jingSoftBaseURL, jingSoftStoreToken])
 
   const setPaymentValue = React.useCallback(
     (
@@ -466,22 +480,20 @@ export function PaymentSettingsSection({
     [form]
   )
 
-  const readCatfkChannels = React.useCallback(
-    async (token: string) => {
-      const generation = ++catfkTokenGeneration.current
-      const response = await api.post('/api/option/catfk/channels', {
+  const readJingSoftChannels = React.useCallback(
+    async (baseUrl: string, token: string) => {
+      const generation = ++jingSoftTokenGeneration.current
+      const response = await api.post('/api/option/jingsoft/channels', {
+        base_url: baseUrl.trim(),
         store_token: token.trim(),
       })
-      const channels = parseCatFKChannels(
+      const channels = parseJingSoftChannels(
         JSON.stringify(requireServerSuccess(response.data).data)
       )
-      if (
-        generation === catfkTokenGeneration.current &&
-        form.getValues('CatFKStoreToken').trim() === token.trim()
-      ) {
-        setCatfkChannels(channels)
-        form.setValue('CatFKChannels', JSON.stringify(channels), {
-          shouldDirty: true,
+      if (generation === jingSoftTokenGeneration.current) {
+        setJingSoftChannels(channels)
+        form.setValue('JingSoftChannels', JSON.stringify(channels), {
+          shouldDirty: false,
           shouldValidate: true,
         })
       }
@@ -549,17 +561,20 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
       CreemProducts: values.CreemProducts.trim(),
-      CatFKEnabled: values.CatFKEnabled,
-      CatFKMode: values.CatFKMode,
-      CatFKStoreToken: values.CatFKStoreToken.trim(),
-      CatFKMerchantToken: values.CatFKMerchantToken.trim(),
-      CatFKProducts: values.CatFKProducts,
-      CatFKDirectGoodsKeys: values.CatFKDirectGoodsKeys,
-      CatFKAutoRestockMin: values.CatFKAutoRestockMin,
-      CatFKAutoRestockBatch: values.CatFKAutoRestockBatch,
-      CatFKMaxAmountCNY: values.CatFKMaxAmountCNY,
-      CatFKMaxOrdersPerMinute: values.CatFKMaxOrdersPerMinute,
-      CatFKChannels: values.CatFKChannels,
+      JingSoftEnabled: values.JingSoftEnabled,
+      JingSoftMode: values.JingSoftMode,
+      JingSoftBaseURL:
+        normalizeJingSoftBaseURL(values.JingSoftBaseURL) ??
+        values.JingSoftBaseURL.trim(),
+      JingSoftStoreToken: values.JingSoftStoreToken.trim(),
+      JingSoftMerchantToken: values.JingSoftMerchantToken.trim(),
+      JingSoftProducts: values.JingSoftProducts,
+      JingSoftDirectGoodsKeys: values.JingSoftDirectGoodsKeys,
+      JingSoftAutoRestockMin: values.JingSoftAutoRestockMin,
+      JingSoftAutoRestockBatch: values.JingSoftAutoRestockBatch,
+      JingSoftMaxAmountCNY: values.JingSoftMaxAmountCNY,
+      JingSoftMaxOrdersPerMinute: values.JingSoftMaxOrdersPerMinute,
+      JingSoftChannels: values.JingSoftChannels,
       WaffoEnabled: values.WaffoEnabled,
       WaffoSandbox: values.WaffoSandbox,
       WaffoMerchantId: values.WaffoMerchantId.trim(),
@@ -605,17 +620,20 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
       CreemProducts: initialRef.current.CreemProducts.trim(),
-      CatFKEnabled: initialRef.current.CatFKEnabled,
-      CatFKMode: initialRef.current.CatFKMode,
-      CatFKStoreToken: initialRef.current.CatFKStoreToken.trim(),
-      CatFKMerchantToken: initialRef.current.CatFKMerchantToken.trim(),
-      CatFKProducts: initialRef.current.CatFKProducts,
-      CatFKDirectGoodsKeys: initialRef.current.CatFKDirectGoodsKeys,
-      CatFKAutoRestockMin: initialRef.current.CatFKAutoRestockMin,
-      CatFKAutoRestockBatch: initialRef.current.CatFKAutoRestockBatch,
-      CatFKMaxAmountCNY: initialRef.current.CatFKMaxAmountCNY,
-      CatFKMaxOrdersPerMinute: initialRef.current.CatFKMaxOrdersPerMinute,
-      CatFKChannels: initialRef.current.CatFKChannels,
+      JingSoftEnabled: initialRef.current.JingSoftEnabled,
+      JingSoftMode: initialRef.current.JingSoftMode,
+      JingSoftBaseURL:
+        normalizeJingSoftBaseURL(initialRef.current.JingSoftBaseURL) ??
+        initialRef.current.JingSoftBaseURL.trim(),
+      JingSoftStoreToken: initialRef.current.JingSoftStoreToken.trim(),
+      JingSoftMerchantToken: initialRef.current.JingSoftMerchantToken.trim(),
+      JingSoftProducts: initialRef.current.JingSoftProducts,
+      JingSoftDirectGoodsKeys: initialRef.current.JingSoftDirectGoodsKeys,
+      JingSoftAutoRestockMin: initialRef.current.JingSoftAutoRestockMin,
+      JingSoftAutoRestockBatch: initialRef.current.JingSoftAutoRestockBatch,
+      JingSoftMaxAmountCNY: initialRef.current.JingSoftMaxAmountCNY,
+      JingSoftMaxOrdersPerMinute: initialRef.current.JingSoftMaxOrdersPerMinute,
+      JingSoftChannels: initialRef.current.JingSoftChannels,
       WaffoEnabled: initialRef.current.WaffoEnabled,
       WaffoSandbox: initialRef.current.WaffoSandbox,
       WaffoMerchantId: initialRef.current.WaffoMerchantId.trim(),
@@ -835,87 +853,125 @@ export function PaymentSettingsSection({
       updates.push({ key: 'WaffoPayMethods', value: sanitized.WaffoPayMethods })
     }
 
-    if (
-      sanitized.CatFKStoreToken &&
-      sanitized.CatFKStoreToken !== initial.CatFKStoreToken
-    ) {
+    if (sanitized.JingSoftBaseURL !== initial.JingSoftBaseURL) {
       updates.push({
-        key: 'catfk_setting.store_token',
-        value: sanitized.CatFKStoreToken,
+        key: 'jingsoft_setting.base_url',
+        value: sanitized.JingSoftBaseURL,
       })
     }
     if (
-      sanitized.CatFKMerchantToken &&
-      sanitized.CatFKMerchantToken !== initial.CatFKMerchantToken
+      sanitized.JingSoftStoreToken &&
+      sanitized.JingSoftStoreToken !== initial.JingSoftStoreToken
     ) {
       updates.push({
-        key: 'catfk_setting.merchant_token',
-        value: sanitized.CatFKMerchantToken,
+        key: 'jingsoft_setting.store_token',
+        value: sanitized.JingSoftStoreToken,
       })
     }
     if (
-      normalizeJsonForComparison(sanitized.CatFKProducts) !==
-      normalizeJsonForComparison(initial.CatFKProducts)
+      sanitized.JingSoftMerchantToken &&
+      sanitized.JingSoftMerchantToken !== initial.JingSoftMerchantToken
     ) {
       updates.push({
-        key: 'catfk_setting.products',
-        value: sanitized.CatFKProducts,
+        key: 'jingsoft_setting.merchant_token',
+        value: sanitized.JingSoftMerchantToken,
       })
     }
     if (
-      normalizeJsonForComparison(sanitized.CatFKDirectGoodsKeys) !==
-      normalizeJsonForComparison(initial.CatFKDirectGoodsKeys)
+      normalizeJsonForComparison(sanitized.JingSoftProducts) !==
+      normalizeJsonForComparison(initial.JingSoftProducts)
     ) {
       updates.push({
-        key: 'catfk_setting.direct_goods_keys',
-        value: sanitized.CatFKDirectGoodsKeys,
-      })
-    }
-    if (sanitized.CatFKAutoRestockMin !== initial.CatFKAutoRestockMin) {
-      updates.push({
-        key: 'catfk_setting.auto_restock_min',
-        value: sanitized.CatFKAutoRestockMin,
-      })
-    }
-    if (sanitized.CatFKAutoRestockBatch !== initial.CatFKAutoRestockBatch) {
-      updates.push({
-        key: 'catfk_setting.auto_restock_batch',
-        value: sanitized.CatFKAutoRestockBatch,
-      })
-    }
-    if (sanitized.CatFKMaxAmountCNY !== initial.CatFKMaxAmountCNY) {
-      updates.push({
-        key: 'catfk_setting.max_amount_cny',
-        value: sanitized.CatFKMaxAmountCNY,
+        key: 'jingsoft_setting.products',
+        value: sanitized.JingSoftProducts,
       })
     }
     if (
-      sanitized.CatFKMaxOrdersPerMinute !== initial.CatFKMaxOrdersPerMinute
+      normalizeJsonForComparison(sanitized.JingSoftDirectGoodsKeys) !==
+      normalizeJsonForComparison(initial.JingSoftDirectGoodsKeys)
     ) {
       updates.push({
-        key: 'catfk_setting.max_orders_per_minute',
-        value: sanitized.CatFKMaxOrdersPerMinute,
+        key: 'jingsoft_setting.direct_goods_keys',
+        value: sanitized.JingSoftDirectGoodsKeys,
+      })
+    }
+    if (sanitized.JingSoftAutoRestockMin !== initial.JingSoftAutoRestockMin) {
+      updates.push({
+        key: 'jingsoft_setting.auto_restock_min',
+        value: sanitized.JingSoftAutoRestockMin,
       })
     }
     if (
-      normalizeJsonForComparison(sanitized.CatFKChannels) !==
-      normalizeJsonForComparison(initial.CatFKChannels)
+      sanitized.JingSoftAutoRestockBatch !== initial.JingSoftAutoRestockBatch
     ) {
       updates.push({
-        key: 'catfk_setting.channels',
-        value: sanitized.CatFKChannels,
+        key: 'jingsoft_setting.auto_restock_batch',
+        value: sanitized.JingSoftAutoRestockBatch,
       })
     }
-    if (sanitized.CatFKMode !== initial.CatFKMode) {
+    if (sanitized.JingSoftMaxAmountCNY !== initial.JingSoftMaxAmountCNY) {
       updates.push({
-        key: 'catfk_setting.mode',
-        value: sanitized.CatFKMode,
+        key: 'jingsoft_setting.max_amount_cny',
+        value: sanitized.JingSoftMaxAmountCNY,
       })
     }
-    if (sanitized.CatFKEnabled !== initial.CatFKEnabled) {
+    if (
+      sanitized.JingSoftMaxOrdersPerMinute !==
+      initial.JingSoftMaxOrdersPerMinute
+    ) {
       updates.push({
-        key: 'catfk_setting.enabled',
-        value: sanitized.CatFKEnabled,
+        key: 'jingsoft_setting.max_orders_per_minute',
+        value: sanitized.JingSoftMaxOrdersPerMinute,
+      })
+    }
+    if (sanitized.JingSoftMode !== initial.JingSoftMode) {
+      updates.push({
+        key: 'jingsoft_setting.mode',
+        value: sanitized.JingSoftMode,
+      })
+    }
+
+    const hasJingSoftChanges =
+      updates.some((update) => update.key.startsWith('jingsoft_setting.')) ||
+      sanitized.JingSoftEnabled !== initial.JingSoftEnabled
+    let effectiveJingSoftChannels = sanitized.JingSoftChannels
+    let jingSoftChannelsRefreshed = false
+    let jingSoftChannelsRefreshFailed = false
+
+    if (sanitized.JingSoftBaseURL === '') {
+      effectiveJingSoftChannels = '[]'
+      setJingSoftChannels([])
+      form.setValue('JingSoftChannels', '[]', {
+        shouldDirty: false,
+        shouldValidate: true,
+      })
+    } else if (hasJingSoftChanges || activeTab === 'jingsoft') {
+      try {
+        const fetchedChannels = await readJingSoftChannels(
+          sanitized.JingSoftBaseURL,
+          sanitized.JingSoftStoreToken
+        )
+        effectiveJingSoftChannels = JSON.stringify(fetchedChannels)
+        jingSoftChannelsRefreshed = true
+      } catch (error) {
+        jingSoftChannelsRefreshFailed = true
+        handleServerError(error)
+      }
+    }
+
+    if (
+      normalizeJsonForComparison(effectiveJingSoftChannels) !==
+      normalizeJsonForComparison(initial.JingSoftChannels)
+    ) {
+      updates.push({
+        key: 'jingsoft_setting.channels',
+        value: effectiveJingSoftChannels,
+      })
+    }
+    if (sanitized.JingSoftEnabled !== initial.JingSoftEnabled) {
+      updates.push({
+        key: 'jingsoft_setting.enabled',
+        value: sanitized.JingSoftEnabled,
       })
     }
 
@@ -927,7 +983,11 @@ export function PaymentSettingsSection({
       waffoPancakeSelection.productID !== waffoPancakeSavedBinding.productID
 
     if (updates.length === 0 && !hasWaffoPancakeChanges) {
-      toast.info(t('No changes to save'))
+      if (jingSoftChannelsRefreshed) {
+        toast.success(t('JingSoft channels synced'))
+      } else if (!jingSoftChannelsRefreshFailed) {
+        toast.info(t('No changes to save'))
+      }
       return
     }
 
@@ -994,6 +1054,41 @@ export function PaymentSettingsSection({
   }
 
   const currentFormValues = form.watch()
+  const parsedAmountOptions = React.useMemo<number[]>(() => {
+    try {
+      const parsed = JSON.parse(currentFormValues.AmountOptions || '[]')
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item) && item > 0)
+    } catch {
+      return []
+    }
+  }, [currentFormValues.AmountOptions])
+  const parsedAmountDiscounts = React.useMemo<Record<number, number>>(() => {
+    try {
+      const parsed = JSON.parse(currentFormValues.AmountDiscount || '{}')
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {}
+      }
+      const result: Record<number, number> = {}
+      for (const [rawKey, rawVal] of Object.entries(parsed)) {
+        const keyNum = Number(rawKey)
+        const valNum = Number(rawVal)
+        if (
+          Number.isFinite(keyNum) &&
+          keyNum > 0 &&
+          Number.isFinite(valNum) &&
+          valNum > 0
+        ) {
+          result[keyNum] = valNum
+        }
+      }
+      return result
+    } catch {
+      return {}
+    }
+  }, [currentFormValues.AmountDiscount])
   const waffoValues: WaffoSettingsValues = {
     WaffoEnabled: currentFormValues.WaffoEnabled,
     WaffoApiKey: currentFormValues.WaffoApiKey,
@@ -1096,15 +1191,19 @@ export function PaymentSettingsSection({
             isSaving={updateOption.isPending || isSubmitting}
             saveLabel='Save all settings'
           />
-          <Tabs defaultValue='general' className='min-w-0'>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className='min-w-0'
+          >
             <div className='overflow-x-auto pb-1'>
               <TabsList className='min-w-max'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
-                <TabsTrigger value='catfk'>
-                  {t('Catfk consignment store payments')}
+                <TabsTrigger value='jingsoft'>
+                  {t('JingSoft consignment store payments')}
                 </TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
                 <TabsTrigger value='waffo'>Waffo</TabsTrigger>
@@ -1206,7 +1305,7 @@ export function PaymentSettingsSection({
                           <PaymentMethodsVisualEditor
                             value={field.value}
                             onChange={field.onChange}
-                            catfkChannels={catfkChannels}
+                            jingSoftChannels={jingSoftChannels}
                           />
                         ) : (
                           <JsonCodeEditor
@@ -1829,38 +1928,48 @@ export function PaymentSettingsSection({
               </div>
             </TabsContent>
 
-            <TabsContent value='catfk' className={paymentTabContentClassName}>
+            <TabsContent
+              value='jingsoft'
+              className={paymentTabContentClassName}
+            >
               <div className='flex flex-wrap items-center justify-between gap-3'>
                 <h3 className='text-lg font-medium'>
-                  {t('Catfk consignment store payments')}
+                  {t('JingSoft consignment store payments')}
                 </h3>
-                <CatFKSetupGuide />
+                <JingSoftSetupGuide baseUrl={form.watch('JingSoftBaseURL')} />
               </div>
-              <CatFKSettingsFields
+              <JingSoftSettingsFields
                 values={{
-                  CatFKEnabled: form.watch('CatFKEnabled'),
-                  CatFKMode: form.watch('CatFKMode'),
-                  CatFKStoreToken: form.watch('CatFKStoreToken'),
-                  CatFKMerchantToken: form.watch('CatFKMerchantToken'),
-                  CatFKProducts: form.watch('CatFKProducts'),
-                  CatFKDirectGoodsKeys: form.watch('CatFKDirectGoodsKeys'),
-                  CatFKAutoRestockMin: form.watch('CatFKAutoRestockMin'),
-                  CatFKAutoRestockBatch: form.watch('CatFKAutoRestockBatch'),
-                  CatFKMaxAmountCNY: form.watch('CatFKMaxAmountCNY'),
-                  CatFKMaxOrdersPerMinute: form.watch(
-                    'CatFKMaxOrdersPerMinute'
+                  JingSoftEnabled: form.watch('JingSoftEnabled'),
+                  JingSoftMode: form.watch('JingSoftMode'),
+                  JingSoftBaseURL: form.watch('JingSoftBaseURL'),
+                  JingSoftStoreToken: form.watch('JingSoftStoreToken'),
+                  JingSoftMerchantToken: form.watch('JingSoftMerchantToken'),
+                  JingSoftProducts: form.watch('JingSoftProducts'),
+                  JingSoftDirectGoodsKeys: form.watch(
+                    'JingSoftDirectGoodsKeys'
                   ),
-                  CatFKChannels: form.watch('CatFKChannels'),
+                  JingSoftAutoRestockMin: form.watch('JingSoftAutoRestockMin'),
+                  JingSoftAutoRestockBatch: form.watch(
+                    'JingSoftAutoRestockBatch'
+                  ),
+                  JingSoftMaxAmountCNY: form.watch('JingSoftMaxAmountCNY'),
+                  JingSoftMaxOrdersPerMinute: form.watch(
+                    'JingSoftMaxOrdersPerMinute'
+                  ),
+                  JingSoftChannels: form.watch('JingSoftChannels'),
                 }}
                 complianceConfirmed={complianceConfirmed}
-                onReadChannels={readCatfkChannels}
+                presetOptions={parsedAmountOptions}
+                priceRatio={Number(currentFormValues.Price) || 1}
+                amountDiscounts={parsedAmountDiscounts}
                 onChange={(key, value) => {
-                  if (key === 'CatFKEnabled') {
+                  if (key === 'JingSoftEnabled') {
                     form.setValue(key, Boolean(value), {
                       shouldDirty: true,
                       shouldValidate: true,
                     })
-                  } else if (key === 'CatFKMode') {
+                  } else if (key === 'JingSoftMode') {
                     const nextMode =
                       value === 'direct' || value === 'auto'
                         ? value
@@ -1870,10 +1979,10 @@ export function PaymentSettingsSection({
                       shouldValidate: true,
                     })
                   } else if (
-                    key === 'CatFKAutoRestockMin' ||
-                    key === 'CatFKAutoRestockBatch' ||
-                    key === 'CatFKMaxAmountCNY' ||
-                    key === 'CatFKMaxOrdersPerMinute'
+                    key === 'JingSoftAutoRestockMin' ||
+                    key === 'JingSoftAutoRestockBatch' ||
+                    key === 'JingSoftMaxAmountCNY' ||
+                    key === 'JingSoftMaxOrdersPerMinute'
                   ) {
                     form.setValue(key, Number(value), {
                       shouldDirty: true,
@@ -1887,14 +1996,21 @@ export function PaymentSettingsSection({
                   }
                 }}
               />
-              {form.formState.errors.CatFKProducts && (
-                <p role='alert'>{t('Invalid CatFK mapping configuration')}</p>
+              {form.formState.errors.JingSoftBaseURL && (
+                <p role='alert'>{t('Invalid JingSoft platform URL')}</p>
               )}
-              {form.formState.errors.CatFKDirectGoodsKeys && (
-                <p role='alert'>{t('Invalid CatFK direct slot settings')}</p>
+              {form.formState.errors.JingSoftProducts && (
+                <p role='alert'>
+                  {t('Invalid JingSoft mapping configuration')}
+                </p>
               )}
-              {form.formState.errors.CatFKChannels && (
-                <p role='alert'>{t('Invalid CatFK mapping configuration')}</p>
+              {form.formState.errors.JingSoftDirectGoodsKeys && (
+                <p role='alert'>{t('Invalid JingSoft direct slot settings')}</p>
+              )}
+              {form.formState.errors.JingSoftChannels && (
+                <p role='alert'>
+                  {t('Invalid JingSoft mapping configuration')}
+                </p>
               )}
             </TabsContent>
 

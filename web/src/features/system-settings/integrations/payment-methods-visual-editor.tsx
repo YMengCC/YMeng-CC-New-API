@@ -41,13 +41,13 @@ import {
 type PaymentMethodsVisualEditorProps = {
   value: string
   onChange: (value: string) => void
-  catfkChannels?: import('./catfk-schema').CatFKChannel[]
+  jingSoftChannels?: import('./jingsoft-schema').JingSoftChannel[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
-  catfk: 'SiAlipay',
-  catfk_alipay: 'SiAlipay',
-  catfk_wxpay: 'SiWechat',
+  jingsoft: 'SiAlipay',
+  jingsoft_alipay: 'SiAlipay',
+  jingsoft_wxpay: 'SiWechat',
   alipay: 'SiAlipay',
   stripe: 'SiStripe',
   waffo_pancake: 'LuCreditCard',
@@ -65,7 +65,7 @@ function getEffectiveIconName(method: PaymentMethodData) {
 export function PaymentMethodsVisualEditor({
   value,
   onChange,
-  catfkChannels = [],
+  jingSoftChannels = [],
 }: PaymentMethodsVisualEditorProps) {
   const { t } = useTranslation()
   const paymentTemplates = [
@@ -102,7 +102,7 @@ export function PaymentMethodsVisualEditor({
         type: 'waffo_pancake',
       },
     },
-    ...catfkChannels
+    ...jingSoftChannels
       .filter(
         (channel) =>
           channel.payment_type === 'alipay' || channel.payment_type === 'wxpay'
@@ -110,11 +110,11 @@ export function PaymentMethodsVisualEditor({
       .map((channel) => {
         const isWeChat = channel.payment_type === 'wxpay'
         return {
-          name: `${t(isWeChat ? 'Catfk WeChat Pay' : 'Catfk Alipay')} (${channel.name})`,
+          name: `${t(isWeChat ? 'JingSoft WeChat Pay' : 'JingSoft Alipay')} (${channel.name})`,
           template: {
             icon: isWeChat ? 'SiWechat' : 'SiAlipay',
-            name: t(isWeChat ? 'Catfk WeChat Pay' : 'Catfk Alipay'),
-            type: isWeChat ? 'catfk_wxpay' : 'catfk_alipay',
+            name: t(isWeChat ? 'JingSoft WeChat Pay' : 'JingSoft Alipay'),
+            type: isWeChat ? 'jingsoft_wxpay' : 'jingsoft_alipay',
             channel_id: channel.id,
           },
         }
@@ -396,7 +396,7 @@ export function PaymentMethodsVisualEditor({
                 id: 'display-fee',
                 header: t('Display fee (%)'),
                 cell: (method) =>
-                  !method.type.startsWith('catfk') ? (
+                  !method.type.startsWith('jingsoft') ? (
                     <span className='font-mono text-sm'>
                       {method.fee_percent || '0'}%
                     </span>
@@ -507,7 +507,7 @@ export function PaymentMethodsVisualEditor({
                         <span className='font-mono'>{method.min_topup}</span>
                       </div>
                     )}
-                    {!method.type.startsWith('catfk') && (
+                    {!method.type.startsWith('jingsoft') && (
                       <div className='flex items-center gap-2'>
                         <span className='text-muted-foreground min-w-20'>
                           {t('Display fee (%)')}
@@ -530,7 +530,7 @@ export function PaymentMethodsVisualEditor({
         onOpenChange={setDialogOpen}
         onSave={handleSave}
         editData={editData}
-        catfkChannels={catfkChannels}
+        jingSoftChannels={jingSoftChannels}
       />
     </div>
   )

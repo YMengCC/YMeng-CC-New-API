@@ -91,8 +91,8 @@ func GetOptions(c *gin.Context) {
 			continue
 		}
 		value := common.Interface2String(v)
-		isSensitiveKey := k == "catfk_setting.store_token" ||
-			k == "catfk_setting.merchant_token" ||
+		isSensitiveKey := k == "jingsoft_setting.store_token" ||
+			k == "jingsoft_setting.merchant_token" ||
 			strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
 			strings.HasSuffix(k, "Key") ||
@@ -215,37 +215,67 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
-	if strings.HasPrefix(option.Key, "catfk_setting.") {
+	if strings.HasPrefix(option.Key, "jingsoft_setting.") {
 		value := option.Value.(string)
-		if err := operation_setting.ValidateCatFKOption(option.Key, value); err != nil {
+		if err := operation_setting.ValidateJingSoftOption(option.Key, value); err != nil {
 			common.ApiError(c, err)
 			return
 		}
 		// Blank credentials mean unchanged; secrets are never returned by GetOptions.
-		if (option.Key == "catfk_setting.store_token" || option.Key == "catfk_setting.merchant_token") && strings.TrimSpace(value) == "" {
+		if (option.Key == "jingsoft_setting.store_token" || option.Key == "jingsoft_setting.merchant_token") && strings.TrimSpace(value) == "" {
 			common.ApiSuccess(c, nil)
 			return
 		}
-		if option.Key == "catfk_setting.store_token" {
-			token, err := operation_setting.NormalizeCatFKStoreToken(value)
+		if option.Key == "jingsoft_setting.base_url" {
+			normalizedURL, err := operation_setting.NormalizeJingSoftBaseURL(value)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			option.Value = normalizedURL
+		}
+		if option.Key == "jingsoft_setting.store_token" {
+			token, err := operation_setting.NormalizeJingSoftStoreToken(value)
 			if err != nil {
 				common.ApiError(c, err)
 				return
 			}
 			option.Value = token
 		}
-		if option.Key == "catfk_setting.merchant_token" {
+		if option.Key == "jingsoft_setting.merchant_token" {
 			option.Value = strings.TrimSpace(value)
 		}
-		if option.Key == "catfk_setting.direct_goods_keys" {
+		if option.Key == "jingsoft_setting.products" {
+			var products []operation_setting.JingSoftProduct
+			if err := common.UnmarshalJsonStr(value, &products); err != nil {
+				common.ApiErrorT(c, "Invalid JingSoft product mappings")
+				return
+			}
+			for i := range products {
+				normalizedKey, keyErr := operation_setting.NormalizeJingSoftGoodsKey(products[i].GoodsKey)
+				if keyErr != nil {
+					common.ApiError(c, keyErr)
+					return
+				}
+				products[i].GoodsKey = normalizedKey
+				products[i].Name = strings.TrimSpace(products[i].Name)
+			}
+			encoded, err := common.Marshal(products)
+			if err != nil {
+				common.ApiErrorT(c, "Invalid JingSoft product mappings")
+				return
+			}
+			option.Value = string(encoded)
+		}
+		if option.Key == "jingsoft_setting.direct_goods_keys" {
 			var rawKeys []string
 			if err := common.UnmarshalJsonStr(value, &rawKeys); err != nil {
-				common.ApiErrorT(c, "Invalid CatFK direct slot settings")
+				common.ApiErrorT(c, "Invalid JingSoft direct slot settings")
 				return
 			}
 			normalizedKeys := make([]string, 0, len(rawKeys))
 			for _, raw := range rawKeys {
-				normalized, err := operation_setting.NormalizeCatFKGoodsKey(raw)
+				normalized, err := operation_setting.NormalizeJingSoftGoodsKey(raw)
 				if err != nil {
 					common.ApiError(c, err)
 					return
@@ -254,12 +284,12 @@ func UpdateOption(c *gin.Context) {
 			}
 			encoded, err := common.Marshal(normalizedKeys)
 			if err != nil {
-				common.ApiErrorT(c, "Invalid CatFK direct slot settings")
+				common.ApiErrorT(c, "Invalid JingSoft direct slot settings")
 				return
 			}
 			option.Value = string(encoded)
 		}
-		if option.Key == "catfk_setting.enabled" && value == "true" && !operation_setting.IsPaymentComplianceConfirmed() {
+		if option.Key == "jingsoft_setting.enabled" && value == "true" && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorT(c, "Payment, redemption, subscription, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them.")
 			return
 		}
@@ -504,8 +534,8 @@ func UpdateOption(c *gin.Context) {
 		}
 		return
 	}
-	if option.Key == "catfk_setting.merchant_token" || option.Key == "catfk_setting.store_token" || option.Key == "catfk_setting.direct_goods_keys" || option.Key == "catfk_setting.mode" {
-		service.NotifyCatFKMerchantTokenUpdated()
+	if option.Key == "jingsoft_setting.base_url" || option.Key == "jingsoft_setting.merchant_token" || option.Key == "jingsoft_setting.store_token" || option.Key == "jingsoft_setting.direct_goods_keys" || option.Key == "jingsoft_setting.mode" {
+		service.NotifyJingSoftMerchantTokenUpdated()
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]any{

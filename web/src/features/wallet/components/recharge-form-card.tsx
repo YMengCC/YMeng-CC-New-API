@@ -58,8 +58,8 @@ import type {
   TopupInfo,
   CreemProduct,
   WaffoPayMethod,
-  CatfkChannel,
-  CatfkProduct,
+  JingSoftChannel,
+  JingSoftProduct,
 } from '../types'
 import { CreemProductsSection } from './creem-products-section'
 
@@ -91,13 +91,13 @@ interface RechargeFormCardProps {
   waffoPayMethods?: WaffoPayMethod[]
   waffoMinTopup?: number
   onWaffoMethodSelect?: (method: WaffoPayMethod, index: number) => void
-  catfkChannel?: CatfkChannel | null
-  onCatfkPaymentSelect?: (
-    channel: CatfkChannel,
-    product?: CatfkProduct,
+  jingSoftChannel?: JingSoftChannel | null
+  onJingSoftPaymentSelect?: (
+    channel: JingSoftChannel,
+    product?: JingSoftProduct,
     directAmount?: number
   ) => void
-  catfkBusy?: boolean
+  jingSoftBusy?: boolean
   enableWaffoPancakeTopup?: boolean
 }
 
@@ -130,9 +130,9 @@ export function RechargeFormCard({
   waffoMinTopup,
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
-  catfkChannel,
-  onCatfkPaymentSelect,
-  catfkBusy,
+  jingSoftChannel,
+  onJingSoftPaymentSelect,
+  jingSoftBusy,
 }: RechargeFormCardProps) {
   const { t } = useTranslation()
   // The field starts empty and shows the minimum as its placeholder; an
@@ -164,31 +164,31 @@ export function RechargeFormCard({
   const hasAnyTopup =
     hasConfigurableTopup ||
     enableCreemTopup ||
-    (topupInfo?.catfk?.enabled && topupInfo.catfk.channels.length > 0)
-  const paymentMethods: Array<PaymentMethod & { channel?: CatfkChannel }> = (
+    (topupInfo?.jingsoft?.enabled && topupInfo.jingsoft.channels.length > 0)
+  const paymentMethods: Array<PaymentMethod & { channel?: JingSoftChannel }> = (
     topupInfo?.pay_methods ?? []
   ).filter(
     (method) =>
-      method.type !== 'catfk' &&
-      method.type !== 'catfk_alipay' &&
-      method.type !== 'catfk_wxpay'
+      method.type !== 'jingsoft' &&
+      method.type !== 'jingsoft_alipay' &&
+      method.type !== 'jingsoft_wxpay'
   )
-  if (topupInfo?.catfk?.enabled) {
-    for (const channel of topupInfo.catfk.channels) {
-      let catfkType: string | undefined
-      if (channel.payment_type === 'wxpay') catfkType = 'catfk_wxpay'
-      if (channel.payment_type === 'alipay') catfkType = 'catfk_alipay'
-      if (!catfkType) continue
+  if (topupInfo?.jingsoft?.enabled) {
+    for (const channel of topupInfo.jingsoft.channels) {
+      let jingSoftType: string | undefined
+      if (channel.payment_type === 'wxpay') jingSoftType = 'jingsoft_wxpay'
+      if (channel.payment_type === 'alipay') jingSoftType = 'jingsoft_alipay'
+      if (!jingSoftType) continue
       const configured = topupInfo.pay_methods?.find(
         (method) =>
-          method.type === catfkType && method.channel_id === channel.id
+          method.type === jingSoftType && method.channel_id === channel.id
       )
       const method = configured
       if (!method) continue
       paymentMethods.push({
         ...method,
         fee_percent: undefined,
-        type: `catfk:${channel.id}`,
+        type: `jingsoft:${channel.id}`,
         name: method.name || channel.name,
         icon: method.icon || channel.icon,
         channel,
@@ -199,9 +199,9 @@ export function RechargeFormCard({
   const hasWaffoPaymentMethods =
     Array.isArray(waffoPayMethods) && waffoPayMethods.length > 0
   const minTopup = getMinTopupAmount(topupInfo)
-  const selectedCatfkProduct =
+  const selectedJingSoftProduct =
     selectedPreset !== null && selectedPreset === topupAmount
-      ? topupInfo?.catfk?.products.find(
+      ? topupInfo?.jingsoft?.products.find(
           (product) => product.amount === selectedPreset
         )
       : undefined
@@ -298,7 +298,7 @@ export function RechargeFormCard({
       {/* Online Topup Section */}
       {hasAnyTopup ? (
         <div className='space-y-4 sm:space-y-6'>
-          {(hasConfigurableTopup || topupInfo?.catfk?.enabled) && (
+          {(hasConfigurableTopup || topupInfo?.jingsoft?.enabled) && (
             <>
               {presetAmounts.length > 0 && (
                 <div className='space-y-2.5 sm:space-y-3'>
@@ -415,15 +415,15 @@ export function RechargeFormCard({
                         method.min_topup || 0,
                         getMinTopupAmount(topupInfo)
                       )
-                      const isCatfkDirect =
-                        topupInfo?.catfk?.mode === 'direct'
+                      const isJingSoftDirect =
+                        topupInfo?.jingsoft?.mode === 'direct'
                       let disabledReason: string | undefined
                       let disabledLabel: string | undefined
                       if (method.channel) {
-                        if (isCatfkDirect) {
-                          if (!topupInfo?.catfk?.available) {
+                        if (isJingSoftDirect) {
+                          if (!topupInfo?.jingsoft?.available) {
                             disabledReason = t(
-                              topupInfo?.catfk?.unavailable_reason ||
+                              topupInfo?.jingsoft?.unavailable_reason ||
                                 'Payment request failed'
                             )
                           } else if (minTopup > topupAmount) {
@@ -436,11 +436,11 @@ export function RechargeFormCard({
                         } else if (selectedPreset === null) {
                           disabledLabel = t('Custom amounts are not supported')
                           disabledReason = disabledLabel
-                        } else if (!selectedCatfkProduct) {
+                        } else if (!selectedJingSoftProduct) {
                           disabledReason = t('Invalid top-up amount')
-                        } else if (!topupInfo?.catfk?.available) {
+                        } else if (!topupInfo?.jingsoft?.available) {
                           disabledReason = t(
-                            topupInfo?.catfk?.unavailable_reason ||
+                            topupInfo?.jingsoft?.unavailable_reason ||
                               'Payment request failed'
                           )
                         }
@@ -458,16 +458,16 @@ export function RechargeFormCard({
                           variant='outline'
                           onClick={() => {
                             if (method.channel) {
-                              if (isCatfkDirect) {
-                                onCatfkPaymentSelect?.(
+                              if (isJingSoftDirect) {
+                                onJingSoftPaymentSelect?.(
                                   method.channel,
                                   undefined,
                                   topupAmount
                                 )
-                              } else if (selectedCatfkProduct) {
-                                onCatfkPaymentSelect?.(
+                              } else if (selectedJingSoftProduct) {
+                                onJingSoftPaymentSelect?.(
                                   method.channel,
-                                  selectedCatfkProduct
+                                  selectedJingSoftProduct
                                 )
                               }
                             } else {
@@ -476,10 +476,12 @@ export function RechargeFormCard({
                           }}
                           aria-pressed={
                             method.channel
-                              ? catfkChannel?.id === method.channel.id
+                              ? jingSoftChannel?.id === method.channel.id
                               : undefined
                           }
-                          disabled={disabled || !!paymentLoading || catfkBusy}
+                          disabled={
+                            disabled || !!paymentLoading || jingSoftBusy
+                          }
                           title={disabledReason}
                           aria-label={
                             disabledReason
@@ -535,16 +537,17 @@ export function RechargeFormCard({
                 )}
               </div>
 
-              {topupInfo?.catfk?.enabled && !topupInfo.catfk.available && (
-                <Alert>
-                  <AlertDescription>
-                    {t(
-                      topupInfo.catfk.unavailable_reason ||
-                        'Payment request failed'
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
+              {topupInfo?.jingsoft?.enabled &&
+                !topupInfo.jingsoft.available && (
+                  <Alert>
+                    <AlertDescription>
+                      {t(
+                        topupInfo.jingsoft.unavailable_reason ||
+                          'Payment request failed'
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
               {enableWaffoTopup &&
                 hasWaffoPaymentMethods &&

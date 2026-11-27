@@ -335,17 +335,18 @@ export type BillingSettings = {
   CreemWebhookSecret: string
   CreemTestMode: boolean
   CreemProducts: string
-  'catfk_setting.enabled': boolean
-  'catfk_setting.mode': string
-  'catfk_setting.store_token': string
-  'catfk_setting.merchant_token': string
-  'catfk_setting.products': string
-  'catfk_setting.direct_goods_keys': string
-  'catfk_setting.auto_restock_min': number
-  'catfk_setting.auto_restock_batch': number
-  'catfk_setting.max_amount_cny': number
-  'catfk_setting.max_orders_per_minute': number
-  'catfk_setting.channels': string
+  'jingsoft_setting.enabled': boolean
+  'jingsoft_setting.mode': string
+  'jingsoft_setting.base_url': string
+  'jingsoft_setting.store_token': string
+  'jingsoft_setting.merchant_token': string
+  'jingsoft_setting.products': string
+  'jingsoft_setting.direct_goods_keys': string
+  'jingsoft_setting.auto_restock_min': number
+  'jingsoft_setting.auto_restock_batch': number
+  'jingsoft_setting.max_amount_cny': number
+  'jingsoft_setting.max_orders_per_minute': number
+  'jingsoft_setting.channels': string
   WaffoEnabled: boolean
   WaffoApiKey: string
   WaffoPrivateKey: string

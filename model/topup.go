@@ -21,7 +21,7 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CatFKMode       string  `json:"catfk_mode,omitempty" gorm:"-"`
+	JingSoftMode    string  `json:"jingsoft_mode,omitempty" gorm:"-"`
 	CreateTime      int64   `json:"create_time"`
 	CompleteTime    int64   `json:"complete_time"`
 	Status          string  `json:"status"`
@@ -46,18 +46,18 @@ func (topUp *TopUp) BeforeSave(_ *gorm.DB) error {
 }
 
 const (
-	PaymentMethodCatFK        = "catfk"
-	PaymentMethodCatFKAlipay  = "catfk_alipay"
-	PaymentMethodCatFKWeChat  = "catfk_wxpay"
-	PaymentMethodStripe       = "stripe"
-	PaymentMethodCreem        = "creem"
-	PaymentMethodWaffo        = "waffo"
-	PaymentMethodWaffoPancake = "waffo_pancake"
-	PaymentMethodBalance      = "balance"
+	PaymentMethodJingSoft       = "jingsoft"
+	PaymentMethodJingSoftAlipay = "jingsoft_alipay"
+	PaymentMethodJingSoftWeChat = "jingsoft_wxpay"
+	PaymentMethodStripe         = "stripe"
+	PaymentMethodCreem          = "creem"
+	PaymentMethodWaffo          = "waffo"
+	PaymentMethodWaffoPancake   = "waffo_pancake"
+	PaymentMethodBalance        = "balance"
 )
 
 const (
-	PaymentProviderCatFK        = "catfk"
+	PaymentProviderJingSoft     = "jingsoft"
 	PaymentProviderEpay         = "epay"
 	PaymentProviderStripe       = "stripe"
 	PaymentProviderCreem        = "creem"
@@ -392,42 +392,42 @@ func queryTopUps(userId int, filters TopUpFilters, pageInfo *common.PageInfo, re
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
-	populateTopUpCatFKModes(topups)
+	populateTopUpJingSoftModes(topups)
 	return topups, total, nil
 }
 
-func populateTopUpCatFKModes(topups []*TopUp) {
+func populateTopUpJingSoftModes(topups []*TopUp) {
 	if len(topups) == 0 || DB == nil {
 		return
 	}
 	tradeNos := make([]string, 0)
 	for _, item := range topups {
-		if item != nil && item.PaymentProvider == PaymentProviderCatFK && item.TradeNo != "" {
+		if item != nil && item.PaymentProvider == PaymentProviderJingSoft && item.TradeNo != "" {
 			tradeNos = append(tradeNos, item.TradeNo)
 		}
 	}
-	if len(tradeNos) == 0 || !DB.Migrator().HasTable(&CatFKOrder{}) {
+	if len(tradeNos) == 0 || !DB.Migrator().HasTable(&JingSoftOrder{}) {
 		return
 	}
 	var rows []struct {
 		TradeNo string
 		Mode    string
 	}
-	if err := DB.Model(&CatFKOrder{}).Select("trade_no, mode").Where("trade_no IN ?", tradeNos).Find(&rows).Error; err != nil {
+	if err := DB.Model(&JingSoftOrder{}).Select("trade_no, mode").Where("trade_no IN ?", tradeNos).Find(&rows).Error; err != nil {
 		return
 	}
 	modes := make(map[string]string, len(rows))
 	for _, row := range rows {
-		if row.Mode == CatFKOrderModeDirect {
-			modes[row.TradeNo] = CatFKOrderModeDirect
+		if row.Mode == JingSoftOrderModeDirect {
+			modes[row.TradeNo] = JingSoftOrderModeDirect
 		} else {
-			modes[row.TradeNo] = CatFKOrderModeRedemption
+			modes[row.TradeNo] = JingSoftOrderModeRedemption
 		}
 	}
 	for _, item := range topups {
-		if item != nil && item.PaymentProvider == PaymentProviderCatFK {
+		if item != nil && item.PaymentProvider == PaymentProviderJingSoft {
 			if mode, ok := modes[item.TradeNo]; ok {
-				item.CatFKMode = mode
+				item.JingSoftMode = mode
 			}
 		}
 	}
@@ -505,7 +505,7 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
-	populateTopUpCatFKModes(topups)
+	populateTopUpJingSoftModes(topups)
 	return topups, total, nil
 }
 
@@ -546,7 +546,7 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
-	populateTopUpCatFKModes(topups)
+	populateTopUpJingSoftModes(topups)
 	return topups, total, nil
 }
 
@@ -573,8 +573,8 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return common.NewMessage("Top-up order does not exist")
 		}
 
-		if topUp.PaymentProvider == PaymentProviderCatFK || topUp.PaymentMethod == PaymentMethodCatFK {
-			return common.NewMessage("CatFK orders require verified redemption and cannot be completed manually")
+		if topUp.PaymentProvider == PaymentProviderJingSoft || topUp.PaymentMethod == PaymentMethodJingSoft || topUp.PaymentMethod == PaymentMethodJingSoftAlipay || topUp.PaymentMethod == PaymentMethodJingSoftWeChat {
+			return common.NewMessage("JingSoft orders require verified redemption and cannot be completed manually")
 		}
 
 		// 幂等处理：已成功直接返回

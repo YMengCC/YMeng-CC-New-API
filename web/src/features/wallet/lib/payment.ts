@@ -148,7 +148,7 @@ export function getDefaultPaymentType(topupInfo: TopupInfo | null): string {
   // Return first available payment method or default
   if (topupInfo.pay_methods?.length > 0) {
     const method = topupInfo.pay_methods.find(
-      (item) => !item.type.startsWith('catfk')
+      (item) => !item.type.startsWith('jingsoft')
     )
     if (method) return method.type
   }
@@ -181,8 +181,8 @@ export function getMinTopupAmount(topupInfo: TopupInfo | null): number {
   }
 
   if (
-    topupInfo.catfk?.enabled &&
-    topupInfo.catfk.mode === 'direct' &&
+    topupInfo.jingsoft?.enabled &&
+    topupInfo.jingsoft.mode === 'direct' &&
     topupInfo.min_topup > 0
   ) {
     return topupInfo.min_topup

@@ -33,8 +33,8 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
-import { CatfkPaymentStatusDialog } from './components/dialogs/catfk-payment-status-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
+import { JingSoftPaymentStatusDialog } from './components/dialogs/jingsoft-payment-status-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { UserInvoiceDialog } from './components/dialogs/user-invoice-dialog'
@@ -52,7 +52,7 @@ import {
   useWaffoPayment,
   useWaffoPancakePayment,
 } from './hooks'
-import { useCatfkPayment } from './hooks/use-catfk-payment'
+import { useJingSoftPayment } from './hooks/use-jingsoft-payment'
 import {
   getDefaultPaymentType,
   getMinTopupAmount,
@@ -216,8 +216,8 @@ export function Wallet(props: WalletProps) {
   }, [])
   const refreshCreditedBalance = useCallback(() => fetchUser(true), [fetchUser])
 
-  const catfk = useCatfkPayment(
-    topupInfo?.catfk,
+  const jingSoft = useJingSoftPayment(
+    topupInfo?.jingsoft,
     user?.id,
     refreshCreditedBalance,
     refetchTopupInfo
@@ -268,7 +268,7 @@ export function Wallet(props: WalletProps) {
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     paymentSelectionVersion.current++
     const version = paymentSelectionVersion.current
-    catfk.selectChannel(null)
+    jingSoft.selectChannel(null)
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
     setPaymentLoading(method.type)
@@ -358,7 +358,7 @@ export function Wallet(props: WalletProps) {
   ) => {
     paymentSelectionVersion.current++
     const version = paymentSelectionVersion.current
-    catfk.selectChannel(null)
+    jingSoft.selectChannel(null)
     const loadingKey = `waffo-${index}`
     setSelectedPaymentMethod({
       name: method.name,
@@ -407,21 +407,21 @@ export function Wallet(props: WalletProps) {
             >
               <div id='wallet-add-funds' className='scroll-mt-4'>
                 <RechargeFormCard
-                  catfkChannel={catfk.channel}
-                  onCatfkPaymentSelect={(channel, product, directAmount) => {
+                  jingSoftChannel={jingSoft.channel}
+                  onJingSoftPaymentSelect={(channel, product, directAmount) => {
                     paymentSelectionVersion.current++
                     setConfirmDialogOpen(false)
                     setSelectedPaymentMethod(undefined)
                     if (
-                      topupInfo?.catfk?.mode === 'direct' &&
+                      topupInfo?.jingsoft?.mode === 'direct' &&
                       directAmount !== undefined
                     ) {
-                      void catfk.selectDirectAmount(directAmount, channel)
+                      void jingSoft.selectDirectAmount(directAmount, channel)
                     } else if (product) {
-                      void catfk.selectProduct(product, channel)
+                      void jingSoft.selectProduct(product, channel)
                     }
                   }}
-                  catfkBusy={catfk.processing}
+                  jingSoftBusy={jingSoft.processing}
                   topupInfo={topupInfo}
                   presetAmounts={presetAmounts}
                   selectedPreset={selectedPreset}
@@ -502,45 +502,46 @@ export function Wallet(props: WalletProps) {
       />
 
       <PaymentConfirmDialog
-        open={catfk.open}
+        open={jingSoft.open}
         onOpenChange={(open) => {
-          if (!open) catfk.reset()
+          if (!open) jingSoft.reset()
         }}
-        onConfirm={catfk.confirm}
+        onConfirm={jingSoft.confirm}
         topupAmount={
-          catfk.quote?.topup_amount ??
-          catfk.product?.amount ??
-          catfk.directAmount ??
+          jingSoft.quote?.topup_amount ??
+          jingSoft.product?.amount ??
+          jingSoft.directAmount ??
           0
         }
-        paymentAmount={catfk.quote?.amount ?? 0}
+        paymentAmount={jingSoft.quote?.amount ?? 0}
         paymentMethod={
-          catfk.channel
+          jingSoft.channel
             ? {
-                type: 'catfk',
-                name: catfk.channel.name,
-                icon: catfk.channel.icon,
+                type: 'jingsoft',
+                name: jingSoft.channel.name,
+                icon: jingSoft.channel.icon,
               }
             : undefined
         }
-        calculating={catfk.calculating}
-        processing={catfk.processing}
-        catfk={{
-          quote: catfk.quote,
-          qq: catfk.qq,
-          onQQChange: catfk.setQQ,
-          available: !!topupInfo?.catfk?.available,
-          requireQQ: (catfk.quote?.mode ?? topupInfo?.catfk?.mode) !== 'direct',
+        calculating={jingSoft.calculating}
+        processing={jingSoft.processing}
+        jingSoft={{
+          quote: jingSoft.quote,
+          qq: jingSoft.qq,
+          onQQChange: jingSoft.setQQ,
+          available: !!topupInfo?.jingsoft?.available,
+          requireQQ:
+            (jingSoft.quote?.mode ?? topupInfo?.jingsoft?.mode) !== 'direct',
         }}
       />
 
-      <CatfkPaymentStatusDialog
-        open={!!catfk.statusOrder}
+      <JingSoftPaymentStatusDialog
+        open={!!jingSoft.statusOrder}
         onOpenChange={(open) => {
-          if (!open) catfk.closeStatus()
+          if (!open) jingSoft.closeStatus()
         }}
-        order={catfk.statusOrder}
-        queryFailed={catfk.statusQueryFailed}
+        order={jingSoft.statusOrder}
+        queryFailed={jingSoft.statusQueryFailed}
       />
 
       <TransferDialog

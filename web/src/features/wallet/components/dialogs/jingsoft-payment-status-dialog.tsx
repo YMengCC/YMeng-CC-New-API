@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { CheckCircle2 } from 'lucide-react'
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import { useRef } from 'react'
@@ -11,16 +29,16 @@ import { toIntlLocale } from '@/i18n/languages'
 import { saveBlob } from '@/lib/dom-utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { safeCatfkQrCode } from '../../catfk-api'
+import { safeJingSoftQrCode } from '../../jingsoft-api'
 import { formatCurrency } from '../../lib'
-import type { CatfkPaymentStatusOrder } from '../../types'
-import { CatfkFeeNote } from '../catfk-fee-note'
-import { CatfkOrderStatus } from '../catfk-order-status'
+import type { JingSoftPaymentStatusOrder } from '../../types'
+import { JingSoftFeeNote } from '../jingsoft-fee-note'
+import { JingSoftOrderStatus } from '../jingsoft-order-status'
 
-export function CatfkPaymentStatusDialog(props: {
+export function JingSoftPaymentStatusDialog(props: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  order: CatfkPaymentStatusOrder | null
+  order: JingSoftPaymentStatusOrder | null
   queryFailed: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -33,7 +51,7 @@ export function CatfkPaymentStatusDialog(props: {
   const waiting =
     props.order.status === 'pending' || props.order.status === 'new'
   const wechat =
-    props.order.paymentMethod === 'catfk_wxpay' ||
+    props.order.paymentMethod === 'jingsoft_wxpay' ||
     (props.order.paymentMethod === undefined &&
       /微信|wechat|weixin/i.test(props.order.channelName))
   let title = t('Waiting for payment confirmation')
@@ -47,10 +65,10 @@ export function CatfkPaymentStatusDialog(props: {
   } else if (props.order.status === 'needs_attention') {
     title = t('Order needs attention. Contact support.')
   }
-  const qrCode = waiting ? safeCatfkQrCode(props.order.paymentQrCode) : null
+  const qrCode = waiting ? safeJingSoftQrCode(props.order.paymentQrCode) : null
   // On a phone the code cannot be scanned from its own screen. Only a real
-  // Alipay code may be opened; the fallback payment URL returns to catfk.
-  const isWechatMethod = props.order.paymentMethod === 'catfk_wxpay'
+  // Alipay code may be opened; the fallback payment URL returns to JingSoft.
+  const isWechatMethod = props.order.paymentMethod === 'jingsoft_wxpay'
   const alipayLink =
     isMobile &&
     !isWechatMethod &&
@@ -161,7 +179,7 @@ export function CatfkPaymentStatusDialog(props: {
             <span className='text-lg font-semibold'>
               {formatCurrency(props.order.payment.amount)}
             </span>
-            <CatfkFeeNote
+            <JingSoftFeeNote
               fee={props.order.payment.fee}
               feeRate={props.order.payment.fee_rate}
             />
@@ -218,7 +236,7 @@ export function CatfkPaymentStatusDialog(props: {
       )}
       {!waiting && (
         <>
-          <CatfkOrderStatus status={props.order.status} />
+          <JingSoftOrderStatus status={props.order.status} />
           {props.queryFailed && (
             <p role='status' className='text-muted-foreground text-xs'>
               {t('Unable to check payment status. Retrying automatically.')}

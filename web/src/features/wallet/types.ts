@@ -100,7 +100,7 @@ export interface PaymentMethod {
   min_topup?: number
   /** Display-only fee percentage for this payment method */
   fee_percent?: number
-  /** Upstream Catfk channel ID selected for this payment method */
+  /** Upstream JingSoft channel ID selected for this payment method */
   channel_id?: string
   /** Optional react-icons component name or safe icon URL */
   icon?: string
@@ -131,21 +131,21 @@ export interface WaffoPayMethod {
 /**
  * Topup configuration information
  */
-export interface CatfkProduct {
+export interface JingSoftProduct {
   id: string
   name: string
   /** USD credit added to the wallet; one fixed product per order. */
   amount: number
 }
 
-export interface CatfkChannel {
+export interface JingSoftChannel {
   id: string
   name: string
   icon?: string
   payment_type?: 'alipay' | 'wxpay'
 }
 
-export interface CatfkInfo {
+export interface JingSoftInfo {
   enabled: boolean
   available: boolean
   mode?: 'redemption' | 'direct'
@@ -153,11 +153,11 @@ export interface CatfkInfo {
   fallback_active?: boolean
   max_amount_cny?: number
   unavailable_reason?: string
-  products: CatfkProduct[]
-  channels: CatfkChannel[]
+  products: JingSoftProduct[]
+  channels: JingSoftChannel[]
 }
 
-export interface CatfkQuote {
+export interface JingSoftQuote {
   quote_id: string
   amount: number
   currency: string
@@ -169,20 +169,20 @@ export interface CatfkQuote {
   fee_rate?: number
 }
 
-export interface CatfkPaymentStatusOrder {
+export interface JingSoftPaymentStatusOrder {
   tradeNo: string
   amount: number
   status: string
   /** Display name of the payment channel the buyer chose, such as Alipay. */
   channelName: string
-  /** CatFK payment method returned by the backend, when available. */
+  /** JingSoft payment method returned by the backend, when available. */
   paymentMethod?: string
   paymentQrCode: string | null
   /** What the buyer pays, fee included, from the confirmed quote. */
-  payment: Pick<CatfkQuote, 'amount' | 'fee' | 'fee_rate'>
+  payment: Pick<JingSoftQuote, 'amount' | 'fee' | 'fee_rate'>
 }
 
-export interface CatfkOrder {
+export interface JingSoftOrder {
   trade_no: string
   status: string
   mode?: 'redemption' | 'direct'
@@ -191,26 +191,26 @@ export interface CatfkOrder {
   payment_qr_code?: string
 }
 
-export interface CatfkRedemption {
+export interface JingSoftRedemption {
   key: string
   quota: number
   redeemed_time: number
 }
 
-export interface CatfkQuoteRequest {
+export interface JingSoftQuoteRequest {
   product_id?: string
   amount?: number
   channel_id: string
 }
 
-export interface CatfkPayRequest extends CatfkQuoteRequest {
+export interface JingSoftPayRequest extends JingSoftQuoteRequest {
   quote_id: string
   qq: string
   idempotency_key: string
 }
 
 export interface TopupInfo {
-  catfk?: CatfkInfo
+  jingsoft?: JingSoftInfo
   /** Whether online topup is enabled */
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
@@ -369,7 +369,7 @@ export interface TopupRecord {
   /** Payment method type */
   payment_method: string
   payment_provider?: string
-  catfk_mode?: 'redemption' | 'direct'
+  jingsoft_mode?: 'redemption' | 'direct'
   /** Creation timestamp */
   create_time: number
   /** Completion timestamp */
