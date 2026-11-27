@@ -96,7 +96,7 @@ export function OfficeFiles(props: OfficeFilesProps) {
         type='file'
       />
       <Button
-        className='w-full'
+        className='bg-background/70 hover:bg-background h-10 w-full border-dashed'
         disabled={props.isUploading}
         onClick={() => inputRef.current?.click()}
         size='sm'
@@ -153,7 +153,12 @@ export function OfficeFiles(props: OfficeFilesProps) {
         {...dropZone.handlers}
       >
         <div className='border-b px-4 py-3'>
-          <h2 className='text-xs font-semibold'>{t('Workspace files')}</h2>
+          <div className='flex items-center justify-between gap-3'>
+            <h2 className='text-sm font-semibold'>{t('Workspace files')}</h2>
+            <span className='text-muted-foreground text-xs tabular-nums'>
+              {props.files.length}
+            </span>
+          </div>
           <p className='text-muted-foreground mt-1 text-xs leading-5'>
             {dropZone.isDragActive
               ? t('Drop files to upload them to the workspace')

@@ -88,13 +88,13 @@ export function OfficeView() {
   const hasActiveSession = sessions.activeId !== ''
 
   return (
-    <div className='bg-muted/20 relative flex size-full min-h-0 overflow-hidden'>
+    <div className='relative flex size-full min-h-0 overflow-hidden'>
       <div className='hidden md:flex'>
         <OfficeSessionList {...sessionListProps} />
       </div>
 
       <div className='bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-        <header className='flex min-h-14 shrink-0 items-center gap-2 border-b px-3 md:px-4'>
+        <header className='flex min-h-16 shrink-0 items-center gap-2 border-b px-3 md:px-4'>
           <div className='md:hidden'>
             <Sheet onOpenChange={setIsMobileListOpen} open={isMobileListOpen}>
               <SheetTrigger

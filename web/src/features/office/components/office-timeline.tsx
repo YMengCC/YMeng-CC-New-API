@@ -51,7 +51,7 @@ type OfficeTimelineProps = {
 /** Every prompt of the session and what the agent did in answer to it. */
 export function OfficeTimeline(props: OfficeTimelineProps) {
   return (
-    <div className='mx-auto flex w-full max-w-[760px] flex-col px-4 py-6 sm:px-6 lg:py-8'>
+    <div className='mx-auto flex w-full max-w-4xl flex-col px-4 py-6 sm:px-6 lg:py-8'>
       {props.turns.map((turn) => (
         <OfficeTurnItem key={turn.id} turn={turn} />
       ))}
@@ -67,7 +67,7 @@ function OfficeTurnItem(props: { turn: OfficeTurn }) {
   return (
     <section
       aria-label={t('Office task turn {{id}}', { id: turn.id })}
-      className='border-border/60 border-b py-6 first:pt-0 last:border-b-0 last:pb-0'
+      className='border-border/60 border-b py-7 first:pt-0 last:border-b-0 last:pb-0'
     >
       <div className='flex items-start gap-3'>
         <div
@@ -80,7 +80,7 @@ function OfficeTurnItem(props: { turn: OfficeTurn }) {
           <p className='text-muted-foreground mb-1.5 text-xs font-medium'>
             {t('You')}
           </p>
-          <p className='bg-muted/60 rounded-xl px-4 py-3 text-sm leading-6 wrap-break-word whitespace-pre-wrap'>
+          <p className='bg-muted/50 border-border/60 rounded-lg border px-4 py-3 text-sm leading-6 wrap-break-word whitespace-pre-wrap'>
             {turn.prompt}
           </p>
         </div>

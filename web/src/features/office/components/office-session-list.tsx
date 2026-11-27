@@ -64,23 +64,25 @@ export function OfficeSessionList(props: OfficeSessionListProps) {
     <aside
       aria-label={t('Office tasks')}
       className={cn(
-        'bg-muted/20 flex min-h-0 w-64 shrink-0 flex-col border-r',
+        'bg-muted/30 flex min-h-0 w-64 shrink-0 flex-col border-r',
         props.className
       )}
     >
-      <div className='flex min-h-14 items-center gap-1 border-b px-4 py-2'>
-        <h2 className='text-foreground flex-1 truncate text-xs font-semibold tracking-wide'>
-          {t('Office tasks')}
-        </h2>
+      <div className='flex min-h-16 items-center gap-1 border-b px-4 py-2'>
+        <div className='min-w-0 flex-1'>
+          <h2 className='text-foreground truncate text-sm font-semibold'>
+            {t('Office tasks')}
+          </h2>
+          <p className='text-muted-foreground mt-0.5 text-xs'>Codex</p>
+        </div>
       </div>
       <div className='p-2'>
         <Button
           aria-label={t('New office task')}
-          className='bg-background w-full justify-center gap-2'
+          className='w-full justify-center gap-2'
           disabled={props.isDisabled}
           onClick={props.onNew}
           size='sm'
-          variant='outline'
         >
           <PlusIcon className='size-4' />
           <span>{t('New office task')}</span>
@@ -142,7 +144,8 @@ function OfficeSessionItem(props: OfficeSessionItemProps) {
     <div
       className={cn(
         'group flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1',
-        props.isActive && 'bg-background border-border/60 shadow-xs',
+        props.isActive &&
+          'bg-background border-primary/20 shadow-xs ring-1 ring-primary/10',
         !props.isActive && 'hover:bg-muted/60'
       )}
     >

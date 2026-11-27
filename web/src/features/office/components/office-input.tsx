@@ -70,14 +70,14 @@ export function OfficeInput(props: OfficeInputProps) {
 
   return (
     <div
-      className='mx-auto flex w-full max-w-[760px] shrink-0 flex-col gap-1.5 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:gap-2 md:pb-4'
+      className='mx-auto flex w-full max-w-4xl shrink-0 flex-col gap-1.5 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:gap-2 md:pb-4'
       {...dropZone.handlers}
     >
       <PromptInput
         acceptDrop={false}
         className='relative'
         groupClassName={cn(
-          'bg-background border-border ring-1 ring-border/40 rounded-xl overflow-hidden transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-sm',
+          'bg-background border-border ring-1 ring-border/40 rounded-xl overflow-hidden shadow-xs transition-[border-color,box-shadow] duration-200 focus-within:border-ring/60 focus-within:ring-ring/20 focus-within:shadow-sm',
           dropZone.isDragActive && 'border-primary bg-primary/5 ring-primary/30'
         )}
         onSubmit={handleSubmit}
@@ -100,7 +100,7 @@ export function OfficeInput(props: OfficeInputProps) {
             placeholder={t('Describe the task for Codex')}
           />
         </PromptInputBody>
-        <PromptInputFooter className='border-border/60 flex items-center gap-1.5 border-t px-2 py-1.5 md:gap-2 md:px-3 md:py-2'>
+        <PromptInputFooter className='border-border/60 bg-muted/20 flex items-center gap-1.5 border-t px-2 py-1.5 md:gap-2 md:px-3 md:py-2'>
           <div className='shrink-0 [&_button]:max-w-[7.5rem] [&_button]:px-2 md:[&_button]:max-w-[15rem] md:[&_button]:px-2.5'>
             <ModelGroupSelector
               disabled={isSelectorDisabled}

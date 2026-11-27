@@ -154,10 +154,18 @@ function renderPlayground(
 test('the office switch is offered to admins when the office mode is configured', async () => {
   renderPlayground()
 
+  expect(await screen.findByRole('button', { name: 'Office' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
   expect(
-    await screen.findByRole('button', { name: 'Office' })
+    screen.getByRole('heading', { level: 1, name: 'Playground' })
   ).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Chat' })).toBeInTheDocument()
+  expect(screen.getByText('Chat with AI models')).toBeInTheDocument()
 })
 
 test('the office switch is hidden from users who are not admins', async () => {
@@ -194,6 +202,15 @@ test('the office mode replaces the chat with the office view', async () => {
   renderPlayground({ mode: 'office' })
 
   expect(await screen.findByText('office view')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Office' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  )
+  expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
+  expect(screen.getByText('Work with Codex')).toBeInTheDocument()
   expect(
     screen.queryByRole('button', { name: 'New chat' })
   ).not.toBeInTheDocument()

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ShieldCheckIcon } from 'lucide-react'
+import { Settings2Icon, ShieldCheckIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -35,13 +35,20 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
   return (
     <aside
       aria-label={t('Context')}
-      className='bg-muted/20 hidden w-72 shrink-0 flex-col border-l xl:flex 2xl:w-80'
+      className='bg-muted/30 hidden w-72 shrink-0 flex-col border-l xl:flex 2xl:w-80'
     >
-      <div className='border-b px-4 py-3'>
-        <h2 className='text-xs font-semibold'>{t('Context')}</h2>
+      <div className='flex min-h-16 items-center gap-2 border-b px-4 py-3'>
+        <Settings2Icon
+          aria-hidden='true'
+          className='text-muted-foreground size-4'
+        />
+        <div>
+          <h2 className='text-sm font-semibold'>{t('Context')}</h2>
+          <p className='text-muted-foreground mt-0.5 text-xs'>Codex</p>
+        </div>
       </div>
-      <div className='space-y-4 border-b p-4'>
-        <dl className='space-y-3 text-xs'>
+      <div className='border-b p-3'>
+        <dl className='bg-background space-y-3 rounded-lg border p-3 text-xs shadow-xs'>
           <div className='flex items-start justify-between gap-3'>
             <dt className='text-muted-foreground shrink-0'>{t('Model')}</dt>
             <dd
@@ -68,7 +75,7 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
             </dd>
           </div>
         </dl>
-        <p className='text-muted-foreground flex items-start gap-2 text-xs leading-5'>
+        <p className='text-muted-foreground mt-3 flex items-start gap-2 px-1 text-xs leading-5'>
           <ShieldCheckIcon
             aria-hidden='true'
             className='mt-0.5 size-3.5 shrink-0'

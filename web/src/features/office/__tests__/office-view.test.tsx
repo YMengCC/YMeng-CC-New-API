@@ -265,6 +265,9 @@ test('the recorded steps of the open task are replayed', async () => {
   expect(
     await screen.findByRole('heading', { name: 'Quarterly report' })
   ).toBeInTheDocument()
+  const taskList = screen.getByRole('complementary', { name: 'Office tasks' })
+  expect(within(taskList).getByText('Quarterly report')).toBeInTheDocument()
+
   const timeline = screen.getByRole('log')
   expect(within(timeline).getByText('You')).toBeInTheDocument()
   expect(within(timeline).getByText('Summarise the inbox')).toBeInTheDocument()

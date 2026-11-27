@@ -110,7 +110,8 @@ function ConversationItem({
     <div
       className={cn(
         'group flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1',
-        isActive && 'bg-muted border-border/60',
+        isActive &&
+          'bg-background border-primary/20 shadow-xs ring-1 ring-primary/10',
         !isActive && 'hover:bg-muted/60'
       )}
     >
@@ -218,12 +219,12 @@ export function PlaygroundHistorySidebar({
     <aside
       aria-label={t('Conversation history')}
       className={cn(
-        'bg-card/40 flex min-h-0 shrink-0 flex-col border-r transition-[width] duration-200',
+        'bg-muted/30 flex min-h-0 shrink-0 flex-col border-r transition-[width] duration-200',
         isCollapsed ? 'w-12' : 'w-60',
         className
       )}
     >
-      <div className='flex items-center gap-1 border-b p-2'>
+      <div className='flex min-h-16 items-center gap-1 border-b px-3 py-2'>
         {!isCollapsed && (
           <h2 className='text-foreground flex-1 truncate px-1 text-sm font-semibold'>
             {t('Conversation history')}
@@ -280,7 +281,6 @@ export function PlaygroundHistorySidebar({
           disabled={isGenerating}
           onClick={onNewConversation}
           size='sm'
-          variant='outline'
         >
           <PlusIcon className='size-4' />
           {!isCollapsed && <span>{t('New chat')}</span>}
