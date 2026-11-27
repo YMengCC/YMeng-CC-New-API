@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -73,22 +74,15 @@ type ConversationItemProps = {
   onDelete: () => void
 }
 
-function ConversationItem({
-  conversation,
-  isActive,
-  isDisabled,
-  onSelect,
-  onRename,
-  onDelete,
-}: ConversationItemProps) {
+function ConversationItem(props: ConversationItemProps) {
   const { t } = useTranslation()
   const [isRenaming, setIsRenaming] = useState(false)
-  const [draftTitle, setDraftTitle] = useState(conversation.title)
+  const [draftTitle, setDraftTitle] = useState(props.conversation.title)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const displayTitle =
-    conversation.title === DEFAULT_CONVERSATION_TITLE
+    props.conversation.title === DEFAULT_CONVERSATION_TITLE
       ? t(DEFAULT_CONVERSATION_TITLE)
-      : conversation.title
+      : props.conversation.title
 
   const startRename = () => {
     setDraftTitle(displayTitle)
@@ -96,12 +90,12 @@ function ConversationItem({
   }
 
   const commitRename = () => {
-    onRename(draftTitle)
+    props.onRename(draftTitle)
     setIsRenaming(false)
   }
 
   const handleDelete = () => {
-    onDelete()
+    props.onDelete()
     setDeleteConfirmOpen(false)
     toast.success(t('Conversation deleted'))
   }
@@ -109,10 +103,10 @@ function ConversationItem({
   return (
     <div
       className={cn(
-        'group flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1',
-        isActive &&
-          'bg-background border-primary/20 shadow-xs ring-1 ring-primary/10',
-        !isActive && 'hover:bg-muted/60'
+        'group flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-2 transition-colors',
+        props.isActive &&
+          'border-border/80 bg-background ring-primary/10 shadow-xs ring-1',
+        !props.isActive && 'hover:bg-muted/70'
       )}
     >
       {isRenaming ? (
@@ -129,16 +123,16 @@ function ConversationItem({
         />
       ) : (
         <button
-          aria-current={isActive ? 'true' : undefined}
+          aria-current={props.isActive ? 'true' : undefined}
           className='focus-visible:ring-ring/50 min-w-0 flex-1 rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none'
-          onClick={onSelect}
+          onClick={props.onSelect}
           type='button'
         >
           <span className='block truncate text-sm font-medium'>
             {displayTitle}
           </span>
-          <span className='text-muted-foreground block truncate text-xs'>
-            {dayjs(conversation.updatedAt).format('YYYY-MM-DD HH:mm')}
+          <span className='text-muted-foreground mt-0.5 block truncate text-[11px] tabular-nums'>
+            {dayjs(props.conversation.updatedAt).format('YYYY-MM-DD HH:mm')}
           </span>
         </button>
       )}
@@ -149,8 +143,8 @@ function ConversationItem({
             render={
               <Button
                 aria-label={t('Conversation actions')}
-                className='size-7 shrink-0'
-                disabled={isDisabled}
+                className='text-muted-foreground hover:text-foreground size-7 shrink-0 opacity-70 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[popup-open]:opacity-100'
+                disabled={props.isDisabled}
                 size='icon-sm'
                 variant='ghost'
               />
@@ -189,29 +183,18 @@ function ConversationItem({
   )
 }
 
-export function PlaygroundHistorySidebar({
-  history,
-  isCollapsed,
-  isGenerating,
-  onNewConversation,
-  onSelectConversation,
-  onRenameConversation,
-  onDeleteConversation,
-  onClearHistory,
-  onToggleCollapsed,
-  className,
-}: PlaygroundHistorySidebarProps) {
+export function PlaygroundHistorySidebar(props: PlaygroundHistorySidebarProps) {
   const { t } = useTranslation()
-  const { conversations } = history
+  const conversations = props.history.conversations
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
   const handleClearHistory = () => {
-    onClearHistory()
+    props.onClearHistory()
     setClearConfirmOpen(false)
     toast.success(t('Conversation history cleared'))
   }
 
-  const toggleLabel = isCollapsed
+  const toggleLabel = props.isCollapsed
     ? t('Show conversation history')
     : t('Hide conversation history')
 
@@ -219,50 +202,65 @@ export function PlaygroundHistorySidebar({
     <aside
       aria-label={t('Conversation history')}
       className={cn(
-        'bg-muted/30 flex min-h-0 shrink-0 flex-col border-r transition-[width] duration-200',
-        isCollapsed ? 'w-12' : 'w-60',
-        className
+        'border-border/80 bg-muted/25 flex min-h-0 shrink-0 flex-col border-r transition-[width] duration-200',
+        props.isCollapsed ? 'w-12' : 'w-64',
+        props.className
       )}
     >
-      <div className='flex min-h-16 items-center gap-1 border-b px-3 py-2'>
-        {!isCollapsed && (
-          <h2 className='text-foreground flex-1 truncate px-1 text-sm font-semibold'>
-            {t('Conversation history')}
-          </h2>
+      <div
+        className={cn(
+          'border-border/80 flex h-12 shrink-0 items-center gap-1 border-b',
+          props.isCollapsed ? 'justify-center px-1' : 'px-2.5'
+        )}
+      >
+        {!props.isCollapsed && (
+          <>
+            <h2 className='text-foreground min-w-0 flex-1 truncate px-1 text-xs font-semibold tracking-wide'>
+              {t('Conversation history')}
+            </h2>
+            {conversations.length > 0 && (
+              <Badge
+                className='h-5 px-1.5 text-[11px] tabular-nums'
+                variant='secondary'
+              >
+                {conversations.length}
+              </Badge>
+            )}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label={t('Clear conversation history')}
+                    className='text-muted-foreground hover:text-destructive size-8 shrink-0'
+                    disabled={props.isGenerating || conversations.length === 0}
+                    onClick={() => setClearConfirmOpen(true)}
+                    size='icon-sm'
+                    variant='ghost'
+                  />
+                }
+              >
+                <Trash2Icon className='size-4' />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('Clear conversation history')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </>
         )}
         <Tooltip>
           <TooltipTrigger
             render={
               <Button
-                aria-label={t('Clear conversation history')}
-                className='hover:text-destructive size-8 shrink-0'
-                disabled={isGenerating || conversations.length === 0}
-                onClick={() => setClearConfirmOpen(true)}
-                size='icon-sm'
-                variant='ghost'
-              />
-            }
-          >
-            <Trash2Icon className='size-4' />
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('Clear conversation history')}</p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
                 aria-label={toggleLabel}
-                aria-expanded={!isCollapsed}
-                className='size-8 shrink-0'
-                onClick={() => onToggleCollapsed(!isCollapsed)}
+                aria-expanded={!props.isCollapsed}
+                className='text-muted-foreground hover:text-foreground size-8 shrink-0'
+                onClick={() => props.onToggleCollapsed(!props.isCollapsed)}
                 size='icon-sm'
                 variant='ghost'
               />
             }
           >
-            {isCollapsed ? (
+            {props.isCollapsed ? (
               <PanelLeftOpenIcon className='size-4' />
             ) : (
               <PanelLeftCloseIcon className='size-4' />
@@ -274,20 +272,24 @@ export function PlaygroundHistorySidebar({
         </Tooltip>
       </div>
 
-      <div className='p-2'>
+      <div className={cn(props.isCollapsed ? 'p-2' : 'p-2.5')}>
         <Button
           aria-label={t('New chat')}
-          className={cn('w-full justify-center gap-2', isCollapsed && 'px-0')}
-          disabled={isGenerating}
-          onClick={onNewConversation}
-          size='sm'
+          className={cn(
+            props.isCollapsed
+              ? 'mx-auto flex size-8 p-0'
+              : 'h-9 w-full justify-center gap-2 shadow-xs'
+          )}
+          disabled={props.isGenerating}
+          onClick={props.onNewConversation}
+          size={props.isCollapsed ? 'icon-sm' : 'sm'}
         >
           <PlusIcon className='size-4' />
-          {!isCollapsed && <span>{t('New chat')}</span>}
+          {!props.isCollapsed && <span>{t('New chat')}</span>}
         </Button>
       </div>
 
-      {isCollapsed ? null : (
+      {props.isCollapsed ? null : (
         <ScrollArea className='min-h-0 flex-1'>
           {conversations.length === 0 ? (
             <Empty className='border-0'>
@@ -297,18 +299,18 @@ export function PlaygroundHistorySidebar({
               </EmptyDescription>
             </Empty>
           ) : (
-            <div className='space-y-0.5 px-2 pb-2'>
+            <div className='space-y-1 px-2.5 pb-3'>
               {conversations.map((conversation) => (
                 <ConversationItem
                   conversation={conversation}
-                  isActive={conversation.id === history.activeId}
-                  isDisabled={isGenerating}
+                  isActive={conversation.id === props.history.activeId}
+                  isDisabled={props.isGenerating}
                   key={conversation.id}
-                  onDelete={() => onDeleteConversation(conversation.id)}
+                  onDelete={() => props.onDeleteConversation(conversation.id)}
                   onRename={(title) =>
-                    onRenameConversation(conversation.id, title)
+                    props.onRenameConversation(conversation.id, title)
                   }
-                  onSelect={() => onSelectConversation(conversation.id)}
+                  onSelect={() => props.onSelectConversation(conversation.id)}
                 />
               ))}
             </div>

@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { BriefcaseBusinessIcon, HistoryIcon, PlusIcon } from 'lucide-react'
+import {
+  BriefcaseBusinessIcon,
+  HistoryIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  PlusIcon,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -36,6 +42,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
 import { useOfficeFiles } from '../hooks/use-office-files'
 import { useOfficeOptions } from '../hooks/use-office-options'
@@ -56,6 +68,8 @@ export function OfficeView() {
   const files = useOfficeFiles(sessions.activeId)
   const options = useOfficeOptions()
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isContextCollapsed, setIsContextCollapsed] = useState(false)
 
   const turns = useMemo(() => buildOfficeTurns(turn.events), [turn.events])
   const activeTitle =
@@ -86,15 +100,22 @@ export function OfficeView() {
     onUpload: (list: File[]) => void files.uploadFiles(list),
   }
   const hasActiveSession = sessions.activeId !== ''
+  const contextToggleLabel = isContextCollapsed
+    ? t('Show context panel')
+    : t('Hide context panel')
 
   return (
     <div className='relative flex size-full min-h-0 overflow-hidden'>
       <div className='hidden md:flex'>
-        <OfficeSessionList {...sessionListProps} />
+        <OfficeSessionList
+          {...sessionListProps}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapsed={setIsSidebarCollapsed}
+        />
       </div>
 
       <div className='bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-        <header className='flex min-h-16 shrink-0 items-center gap-2 border-b px-3 md:px-4'>
+        <header className='border-border/80 bg-background flex h-12 shrink-0 items-center gap-2.5 border-b px-3 md:px-4'>
           <div className='md:hidden'>
             <Sheet onOpenChange={setIsMobileListOpen} open={isMobileListOpen}>
               <SheetTrigger
@@ -117,19 +138,27 @@ export function OfficeView() {
               </SheetContent>
             </Sheet>
           </div>
-          <div className='min-w-0 flex-1'>
-            <h1 className='truncate text-sm font-semibold'>
+
+          <div className='flex min-w-0 flex-1 items-center gap-2'>
+            <h2 className='truncate text-sm font-semibold'>
               {hasActiveSession ? activeTitle : t('Office tasks')}
-            </h1>
+            </h2>
             {hasActiveSession && (
-              <p className='text-muted-foreground hidden text-[11px] sm:block'>
-                Codex · {t('Office')}
-              </p>
+              <Badge
+                className='hidden shrink-0 font-normal sm:inline-flex'
+                variant='secondary'
+              >
+                Codex
+              </Badge>
             )}
           </div>
+
           {hasActiveSession && (
             <Badge
-              className='hidden sm:inline-flex'
+              className={cn(
+                'hidden sm:inline-flex',
+                !isContextCollapsed && 'xl:hidden'
+              )}
               variant={turn.isRunning ? 'secondary' : 'outline'}
             >
               <span
@@ -143,9 +172,38 @@ export function OfficeView() {
               {turn.isRunning ? t('Working on it…') : t('Ready')}
             </Badge>
           )}
+
           {hasActiveSession && (
-            <div className='xl:hidden'>
+            <div className={cn(!isContextCollapsed && 'xl:hidden')}>
               <OfficeFiles {...fileProps} />
+            </div>
+          )}
+
+          {hasActiveSession && (
+            <div className='hidden xl:flex'>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label={contextToggleLabel}
+                      aria-expanded={!isContextCollapsed}
+                      className='text-muted-foreground hover:text-foreground size-8'
+                      onClick={() => setIsContextCollapsed(!isContextCollapsed)}
+                      size='icon-sm'
+                      variant='ghost'
+                    />
+                  }
+                >
+                  {isContextCollapsed ? (
+                    <PanelRightOpenIcon className='size-4' />
+                  ) : (
+                    <PanelRightCloseIcon className='size-4' />
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{contextToggleLabel}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </header>
@@ -154,9 +212,9 @@ export function OfficeView() {
           <EmptyState
             action={
               <Button
+                className='shadow-xs'
                 disabled={sessions.createSession.isPending}
                 onClick={createTask}
-                variant='outline'
               >
                 <PlusIcon data-icon='inline-start' />
                 {t('New office task')}
@@ -170,8 +228,8 @@ export function OfficeView() {
             title={t('No office task open')}
           />
         ) : (
-          <div className='flex min-h-0 flex-1'>
-            <div className='flex min-w-0 flex-1 flex-col'>
+          <div className='flex min-h-0 flex-1 overflow-hidden'>
+            <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
               <Conversation>
                 <ConversationContent className='p-0'>
                   <OfficeTimelineArea
@@ -203,11 +261,15 @@ export function OfficeView() {
                 onStop={turn.stop}
               />
             </div>
-            <OfficeContextPanel
-              {...fileProps}
-              isRunning={turn.isRunning}
-              model={options.model}
-            />
+
+            {!isContextCollapsed && (
+              <OfficeContextPanel
+                {...fileProps}
+                isRunning={turn.isRunning}
+                model={options.model}
+                onCollapse={() => setIsContextCollapsed(true)}
+              />
+            )}
           </div>
         )}
       </div>
@@ -228,14 +290,14 @@ function OfficeTimelineArea(props: OfficeTimelineAreaProps) {
 
   if (props.isLoading) {
     return (
-      <div className='flex min-h-[50vh] items-center justify-center p-6'>
+      <div className='flex min-h-[min(520px,calc(100svh-18rem))] items-center justify-center p-6'>
         <LoadingState message={t('Loading the office task…')} />
       </div>
     )
   }
   if (props.error) {
     return (
-      <div className='flex min-h-[50vh] items-center justify-center p-6'>
+      <div className='flex min-h-[min(520px,calc(100svh-18rem))] items-center justify-center p-6'>
         <ErrorState
           description={t(
             'The recorded steps of this task could not be loaded.'
@@ -247,7 +309,7 @@ function OfficeTimelineArea(props: OfficeTimelineAreaProps) {
   }
   if (props.turns.length === 0) {
     return (
-      <div className='flex min-h-[50vh] items-center justify-center p-6'>
+      <div className='flex min-h-[min(520px,calc(100svh-18rem))] items-center justify-center p-6'>
         <EmptyState
           className='w-full'
           description={t(

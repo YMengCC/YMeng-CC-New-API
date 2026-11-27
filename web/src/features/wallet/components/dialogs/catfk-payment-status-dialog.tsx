@@ -8,6 +8,7 @@ import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { toIntlLocale } from '@/i18n/languages'
+import { saveBlob } from '@/lib/dom-utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { safeCatfkQrCode } from '../../catfk-api'
@@ -31,7 +32,10 @@ export function CatfkPaymentStatusDialog(props: {
   const completed = props.order.status === 'completed'
   const waiting =
     props.order.status === 'pending' || props.order.status === 'new'
-  const wechat = /微信|wechat|weixin/i.test(props.order.channelName)
+  const wechat =
+    props.order.paymentMethod === 'catfk_wxpay' ||
+    (props.order.paymentMethod === undefined &&
+      /微信|wechat|weixin/i.test(props.order.channelName))
   let title = t('Waiting for payment confirmation')
   // While waiting the dialog holds only the amount, the code and a cancel.
   if (waiting) {
@@ -46,23 +50,22 @@ export function CatfkPaymentStatusDialog(props: {
   const qrCode = waiting ? safeCatfkQrCode(props.order.paymentQrCode) : null
   // On a phone the code cannot be scanned from its own screen. Only a real
   // Alipay code may be opened; the fallback payment URL returns to catfk.
+  const isWechatMethod = props.order.paymentMethod === 'catfk_wxpay'
   const alipayLink =
-    isMobile && qrCode && new URL(qrCode).hostname === 'qr.alipay.com'
+    isMobile &&
+    !isWechatMethod &&
+    qrCode &&
+    new URL(qrCode).hostname === 'qr.alipay.com'
       ? qrCode
       : null
-  // Other codes, such as WeChat's, have no link that opens the app to pay:
-  // the buyer saves the code and scans it from the photo album instead.
-  const savableQrCode = isMobile && qrCode && !alipayLink ? qrCode : null
+  // WeChat native codes must be saved and scanned from the photo album, never
+  // opened as navigation. Legacy responses use the existing display-name hint.
+  const savableQrCode =
+    isMobile && qrCode && (isWechatMethod || !alipayLink) ? qrCode : null
 
   function saveQrCode() {
     canvasRef.current?.toBlob((blob) => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = 'payment-qr-code.png'
-      anchor.click()
-      URL.revokeObjectURL(url)
+      if (blob) saveBlob(blob, 'payment-qr-code.png')
     }, 'image/png')
   }
 

@@ -91,7 +91,9 @@ func GetOptions(c *gin.Context) {
 			continue
 		}
 		value := common.Interface2String(v)
-		isSensitiveKey := k == "catfk_setting.store_token" || strings.HasSuffix(k, "Token") ||
+		isSensitiveKey := k == "catfk_setting.store_token" ||
+			k == "catfk_setting.merchant_token" ||
+			strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
 			strings.HasSuffix(k, "Key") ||
 			strings.HasSuffix(k, "secret") ||
@@ -220,7 +222,7 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 		// Blank credentials mean unchanged; secrets are never returned by GetOptions.
-		if option.Key == "catfk_setting.store_token" && strings.TrimSpace(value) == "" {
+		if (option.Key == "catfk_setting.store_token" || option.Key == "catfk_setting.merchant_token") && strings.TrimSpace(value) == "" {
 			common.ApiSuccess(c, nil)
 			return
 		}
@@ -231,6 +233,31 @@ func UpdateOption(c *gin.Context) {
 				return
 			}
 			option.Value = token
+		}
+		if option.Key == "catfk_setting.merchant_token" {
+			option.Value = strings.TrimSpace(value)
+		}
+		if option.Key == "catfk_setting.direct_goods_keys" {
+			var rawKeys []string
+			if err := common.UnmarshalJsonStr(value, &rawKeys); err != nil {
+				common.ApiErrorT(c, "Invalid CatFK direct slot settings")
+				return
+			}
+			normalizedKeys := make([]string, 0, len(rawKeys))
+			for _, raw := range rawKeys {
+				normalized, err := operation_setting.NormalizeCatFKGoodsKey(raw)
+				if err != nil {
+					common.ApiError(c, err)
+					return
+				}
+				normalizedKeys = append(normalizedKeys, normalized)
+			}
+			encoded, err := common.Marshal(normalizedKeys)
+			if err != nil {
+				common.ApiErrorT(c, "Invalid CatFK direct slot settings")
+				return
+			}
+			option.Value = string(encoded)
 		}
 		if option.Key == "catfk_setting.enabled" && value == "true" && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorT(c, "Payment, redemption, subscription, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them.")

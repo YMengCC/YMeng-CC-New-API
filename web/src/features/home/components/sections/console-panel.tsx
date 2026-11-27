@@ -69,7 +69,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
 
       <div
         data-depth-group
-        className='landing-animate-fade-up mt-6 flex flex-wrap items-center gap-3 opacity-0'
+        className='landing-animate-fade-up mt-7 flex flex-wrap items-center gap-3 opacity-0 lg:mt-9'
         style={{ animationDelay: '300ms' }}
       >
         {props.isAuthenticated ? (
@@ -110,7 +110,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
       </div>
 
       <div
-        className='landing-animate-fade-up mt-7 w-full max-w-xl opacity-0'
+        className='landing-animate-fade-up mt-7 w-full max-w-2xl opacity-0'
         style={{ animationDelay: '360ms' }}
       >
         <div data-depth='1' className='mb-3 flex items-center gap-3'>
@@ -188,7 +188,7 @@ export function ConsolePanel(props: ConsolePanelProps) {
         className='landing-animate-fade-up mt-8 w-full opacity-0'
         style={{ animationDelay: '420ms' }}
       >
-        <HeroTerminalDemo className='max-w-xl lg:mx-0' />
+        <HeroTerminalDemo className='max-w-2xl lg:mx-0' />
       </div>
     </div>
   )

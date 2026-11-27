@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
 
 type catFKPollHandler struct{}
@@ -91,19 +92,29 @@ func (s *catFKService) processClaimed(ctx context.Context, key []byte, order *mo
 		_, err := s.store.Retry(order.ID, order.Version, s.now().Unix()+delay)
 		return err
 	}
+	if evidence.ProbeOnlyUnpaid {
+		if order.Status == model.CatFKOrderStatusPending && order.UpstreamOrderID != nil {
+			_, err := s.store.Retry(order.ID, order.Version, s.now().Add(15*time.Second).Unix())
+			return err
+		}
+		_, err := s.store.Retry(order.ID, order.Version, s.now().Add(time.Minute).Unix())
+		return err
+	}
 	return s.applyEvidence(order, evidence)
 }
 
-// refresh checks a pending or paid order with CatFK right away while its
-// buyer watches the payment dialog, rather than waiting for the background
-// poll. Reads are throttled per order; any failure leaves the stored state.
+// refresh checks a pending, paid or known-ID recovering order with CatFK right
+// away while its buyer watches the payment dialog, rather than waiting for the
+// background poll. Reads are throttled per order; any failure leaves stored state.
 func (s *catFKService) refresh(ctx context.Context, userID int, tradeNo string) (*model.CatFKOrder, error) {
 	order, err := s.store.Get(userID, tradeNo)
 	if err != nil {
 		return nil, err
 	}
 	now := s.now().Unix()
-	waiting := order.Status == model.CatFKOrderStatusPending || order.Status == model.CatFKOrderStatusPaid
+	waiting := order.Status == model.CatFKOrderStatusPending ||
+		order.Status == model.CatFKOrderStatusPaid ||
+		(order.Status == model.CatFKOrderStatusCreationUnknown && order.UpstreamOrderID != nil)
 	if !waiting || !s.adapter.Ready() || order.LeaseUntil > now || order.UpdatedAt > now-2 {
 		return order, nil
 	}
@@ -128,21 +139,34 @@ func (s *catFKService) refresh(ctx context.Context, userID int, tradeNo string) 
 }
 
 func (s *catFKService) applyEvidence(order *model.CatFKOrder, e *CatFKOrderEvidence) error {
-	valid := catFKMatchesPurchase(order, e)
-	if !valid {
+	if !catFKMatchesPurchase(order, e) {
 		_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "verification_mismatch"})
 		return err
 	}
 	// Recover an ambiguous creation only after validating the complete purchase
 	// identity; merely receiving an order identifier does not establish payment.
-	if order.UpstreamOrderID == nil {
-		ok, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusPending, UpstreamOrderID: &e.UpstreamOrderID, NextQueryAt: s.now().Add(15 * time.Second).Unix()})
+	verifiedQR := !e.Paid && !e.Expired && catFKValidPaymentQRCode(e.PaymentQRCode, order.PaymentMethod)
+	recoveredPending := false
+	if order.UpstreamOrderID == nil || order.Status == model.CatFKOrderStatusCreationUnknown {
+		recoverUpdate := model.CatFKOrderUpdate{
+			Status:          model.CatFKOrderStatusPending,
+			UpstreamOrderID: &e.UpstreamOrderID,
+			NextQueryAt:     s.now().Add(15 * time.Second).Unix(),
+		}
+		if verifiedQR {
+			recoverUpdate.PaymentQRCode = &e.PaymentQRCode
+		}
+		ok, err := s.store.Update(order.ID, order.Version, recoverUpdate)
 		if err != nil || !ok {
 			return err
 		}
 		order.Version++
 		order.Status = model.CatFKOrderStatusPending
 		order.UpstreamOrderID = &e.UpstreamOrderID
+		if verifiedQR {
+			order.PaymentQRCode = e.PaymentQRCode
+		}
+		recoveredPending = true
 	}
 	if e.Expired && !e.Paid && order.Status != model.CatFKOrderStatusPaid {
 		_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusExpired})
@@ -153,7 +177,15 @@ func (s *catFKService) applyEvidence(order *model.CatFKOrder, e *CatFKOrderEvide
 			_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "payment_regressed"})
 			return err
 		}
-		_, err := s.store.Retry(order.ID, order.Version, s.now().Add(15*time.Second).Unix())
+		if recoveredPending {
+			return nil
+		}
+		nextQueryAt := s.now().Add(15 * time.Second).Unix()
+		if verifiedQR {
+			_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusPending, PaymentQRCode: &e.PaymentQRCode, NextQueryAt: nextQueryAt})
+			return err
+		}
+		_, err := s.store.Retry(order.ID, order.Version, nextQueryAt)
 		return err
 	}
 	if order.Status != model.CatFKOrderStatusPaid {
@@ -164,22 +196,50 @@ func (s *catFKService) applyEvidence(order *model.CatFKOrder, e *CatFKOrderEvide
 		order.Version++
 		order.Status = model.CatFKOrderStatusPaid
 	}
-	if !e.Delivered {
-		_, err := s.store.Retry(order.ID, order.Version, s.now().Add(15*time.Second).Unix())
-		return err
+
+	isDirect := catFKModeFromOrder(order) == operation_setting.CatFKModeDirect
+	redemptionKey := ""
+	if isDirect {
+		if e.TransactionID == "" {
+			if !e.Delivered {
+				_, err := s.store.Retry(order.ID, order.Version, s.now().Add(15*time.Second).Unix())
+				return err
+			}
+			_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "verification_mismatch"})
+			return err
+		}
+	} else {
+		if !e.Delivered {
+			_, err := s.store.Retry(order.ID, order.Version, s.now().Add(15*time.Second).Unix())
+			return err
+		}
+		// New redemption orders also require a trustworthy upstream transaction ID;
+		// pre-upgrade in-flight orders have empty ExpectedContact and keep their
+		// original verified redemption-code settlement path.
+		if order.ExpectedContact != "" && e.TransactionID == "" {
+			_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "verification_mismatch"})
+			return err
+		}
+		_, codeErr := hex.DecodeString(e.RedemptionKey)
+		if len(e.RedemptionKey) != 32 || codeErr != nil {
+			_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "delivery_invalid"})
+			return err
+		}
+		redemptionKey = e.RedemptionKey
 	}
-	// A delivery must be one exact non-empty code. It is never persisted or
-	// included in logs/DTOs; settlement independently checks denomination.
-	_, codeErr := hex.DecodeString(e.RedemptionKey)
-	if len(e.RedemptionKey) != 32 || codeErr != nil {
-		_, err := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "delivery_invalid"})
-		return err
-	}
-	_, err := s.store.Complete(order.ID, order.Version, e.RedemptionKey, "")
+
+	_, err := s.store.Complete(order.ID, order.Version, redemptionKey, e.TransactionID, "")
 	if err != nil {
-		// Only definite redemption/business failures require human attention.
+		// Definite business, denomination or replay failures require human attention.
 		// Unknown driver failures remain paid and retry without consuming twice.
-		if errors.Is(err, model.ErrRedemptionInvalid) || errors.Is(err, model.ErrRedemptionUsed) || errors.Is(err, model.ErrRedemptionExpired) || errors.Is(err, model.ErrRedemptionQuotaMismatch) || errors.Is(err, model.ErrTopUpQuotaLimitExceeded) || errors.Is(err, model.ErrWalletQuotaLimitExceeded) {
+		if errors.Is(err, model.ErrRedemptionInvalid) ||
+			errors.Is(err, model.ErrRedemptionUsed) ||
+			errors.Is(err, model.ErrRedemptionExpired) ||
+			errors.Is(err, model.ErrRedemptionQuotaMismatch) ||
+			errors.Is(err, model.ErrTopUpQuotaLimitExceeded) ||
+			errors.Is(err, model.ErrWalletQuotaLimitExceeded) ||
+			errors.Is(err, model.ErrCatFKTransactionRequired) ||
+			errors.Is(err, model.ErrCatFKTransactionReplay) {
 			_, updateErr := s.store.Update(order.ID, order.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusNeedsAttention, FailureCode: "settlement_failed"})
 			return updateErr
 		}

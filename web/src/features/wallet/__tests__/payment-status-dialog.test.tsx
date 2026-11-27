@@ -325,7 +325,8 @@ describe('on a phone', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('saves the WeChat QR code as an image to scan from the photo album', async () => {
+  it('saves the native WeChat QR code as a PNG without navigating to the URI', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const blob = new Blob(['png'], { type: 'image/png' })
     vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(
       (callback) => callback(blob)
@@ -349,7 +350,8 @@ describe('on a phone', () => {
           payment: paidAmount,
           amount: 10,
           status: 'pending',
-          paymentQrCode: 'https://catfk.com/shopApi/Pay/payment?trade_no=CAT1',
+          paymentMethod: 'catfk_wxpay',
+          paymentQrCode: 'weixin://wxpay/bizpayurl?pr=testToken',
         }}
         queryFailed={false}
       />
@@ -363,7 +365,9 @@ describe('on a phone', () => {
       )
     ).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Save QR code' }))
+    expect(open).not.toHaveBeenCalled()
     expect(createObjectURL).toHaveBeenCalledWith(blob)
+    expect(screen.getByRole('img', { name: 'Payment QR code' })).toBeVisible()
     const anchor = click.mock.contexts[0] as HTMLAnchorElement
     expect(anchor.download).toBe('payment-qr-code.png')
     expect(anchor.href).toBe('blob:qr')

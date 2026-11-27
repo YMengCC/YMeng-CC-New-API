@@ -628,3 +628,100 @@ test('a dropped connection is reported as lost and leaves no running task', asyn
   ).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
 })
+
+test('the office tasks sidebar collapses and expands while keeping new task creation available', async () => {
+  const user = userEvent.setup()
+  openSession()
+  renderView()
+
+  const taskList = await screen.findByRole('complementary', {
+    name: 'Office tasks',
+  })
+  expect(
+    await within(taskList).findByText('Quarterly report')
+  ).toBeInTheDocument()
+
+  const collapseButton = within(taskList).getByRole('button', {
+    name: 'Hide office tasks',
+  })
+  expect(collapseButton).toHaveAttribute('aria-expanded', 'true')
+  await user.click(collapseButton)
+
+  expect(taskList.className).toContain('w-12')
+  expect(
+    within(taskList).queryByText('Quarterly report')
+  ).not.toBeInTheDocument()
+  expect(
+    within(taskList).getByRole('button', { name: 'New office task' })
+  ).toBeEnabled()
+
+  const expandButton = within(taskList).getByRole('button', {
+    name: 'Show office tasks',
+  })
+  expect(expandButton).toHaveAttribute('aria-expanded', 'false')
+  await user.click(expandButton)
+
+  expect(within(taskList).getByText('Quarterly report')).toBeInTheDocument()
+})
+
+test('the context panel can be collapsed to widen the timeline and reopened from the header', async () => {
+  const user = userEvent.setup()
+  openSession()
+  renderView()
+
+  expect(
+    await screen.findByRole('complementary', { name: 'Context' })
+  ).toBeInTheDocument()
+
+  const headerToggle = screen.getAllByRole('button', {
+    name: 'Hide context panel',
+  })[0]
+  expect(headerToggle).toHaveAttribute('aria-expanded', 'true')
+  await user.click(headerToggle)
+
+  expect(
+    screen.queryByRole('complementary', { name: 'Context' })
+  ).not.toBeInTheDocument()
+
+  const reopenButton = screen.getByRole('button', {
+    name: 'Show context panel',
+  })
+  expect(reopenButton).toHaveAttribute('aria-expanded', 'false')
+  await user.click(reopenButton)
+
+  expect(
+    screen.getByRole('complementary', { name: 'Context' })
+  ).toBeInTheDocument()
+})
+
+test('the composer upload button uploads selected files into the workspace', async () => {
+  const user = userEvent.setup()
+  openSession()
+  const { container } = renderView()
+
+  const uploadTrigger = await screen.findByRole('button', {
+    name: 'Upload files to workspace',
+  })
+  const fileInputs =
+    container.querySelectorAll<HTMLInputElement>('input[type="file"]')
+  const composerFileInput = fileInputs[0]
+  if (!composerFileInput) throw new Error('composer file input is missing')
+
+  const clickSpy = vi.spyOn(composerFileInput, 'click')
+  await user.click(uploadTrigger)
+  expect(clickSpy).toHaveBeenCalledTimes(1)
+  clickSpy.mockRestore()
+
+  await user.upload(
+    composerFileInput,
+    new File(['hello'], 'draft.md', { type: 'text/markdown' })
+  )
+
+  await waitFor(() =>
+    expect(mocks.api.uploadOfficeFile).toHaveBeenCalledWith(
+      SESSION_ID,
+      expect.objectContaining({ name: 'draft.md' }),
+      undefined
+    )
+  )
+})

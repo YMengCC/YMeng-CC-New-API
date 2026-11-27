@@ -631,14 +631,26 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
-/* The same 42/58 split as the console column, measured past its own padding so
-   the seam lines up with the page gutter instead of moving when `lg:px-8` is
-   added to the grid. */
+/* Full-width fluid hero grid: the left beginner rail occupies `--seam-top`
+   pinned to the viewport left edge, while `.home-console-stage` keeps at least
+   a safe seam gutter on smaller desktops and optically centers the `YMeng CC`
+   showcase at 50% of the viewport width on wide screens. */
 @variant lg {
   .home-hero-grid {
-    grid-template-columns:
-      calc((100% - 4rem) * 0.42 + 1rem)
-      calc((100% - 4rem) * 0.58 + 1rem);
+    grid-template-columns: var(--seam-top) minmax(0, 1fr);
+  }
+  .home-console-stage {
+    padding-left: 2rem;
+  }
+}
+@variant xl {
+  .home-console-stage {
+    padding-left: max(2.5rem, calc(50% - var(--seam-top) * 0.5 - 20.5rem));
+  }
+}
+@variant 2xl {
+  .home-console-stage {
+    padding-left: max(3rem, calc(50% - var(--seam-top) * 0.5 - 20.5rem));
   }
 }
 /* ── Home community slice: QQ group in the cut-off corner ── */
@@ -788,12 +800,28 @@ For commercial licensing, please contact support@quantumnous.com
 
 /* ── Home split hero: BaoCode's paper look on the left, a slanted seam ── */
 .home-split {
-  /* The seam leans from 48% of the content width at the top to 34% at the
-     bottom; % is the full-width layer's own width. */
-  --seam-top: calc(50% - min(100%, 80rem) * 0.02);
-  --seam-bottom: calc(50% - min(100%, 80rem) * 0.16);
-  --seam-middle: calc(50% - min(100%, 80rem) * 0.09);
+  /* Compact left-pinned paper rail: both seams and the grid share one full-width
+     coordinate origin so the beginner rail, community corner, and YMeng CC
+     centerpiece stay aligned at every viewport width. */
+  --seam-top: 25.5rem;
+  --seam-bottom: 20.5rem;
+  --seam-middle: calc((var(--seam-top) + var(--seam-bottom)) / 2);
   --seam-width: 2px;
+  --community-seam-x: var(--seam-middle);
+  --community-seam-left-y: 17.25rem;
+  --community-seam-right-y: 12.75rem;
+}
+@variant xl {
+  .home-split {
+    --seam-top: 29.5rem;
+    --seam-bottom: 22.5rem;
+  }
+}
+@variant 2xl {
+  .home-split {
+    --seam-top: 32rem;
+    --seam-bottom: 24.5rem;
+  }
 }
 .home-paper {
   --paper: #fbfaf6;
@@ -869,13 +897,14 @@ For commercial licensing, please contact support@quantumnous.com
     0 0 0 4px rgba(226, 179, 115, 0.08),
     0 12px 28px -8px rgba(0, 0, 0, 0.65);
 }
-/* The community corner: a second seam from behind the paper side (40% wide,
-   19rem down) rising to the right edge 13rem down. It is decoration only and
-   keeps a fixed height, so a taller community region simply extends below it
-   into the regular console background instead of being clipped. */
+/* The community corner: a second seam emerging from behind the shifted paper
+   side (`--community-seam-x`, 17.25rem down) rising to the right edge 12.75rem
+   down. Decoration only, keeping a compact height so the YMeng CC showcase
+   sits higher in the visual center while taller community content extends
+   cleanly into the console background. */
 .home-community-wedge,
 .home-community-seam {
-  height: 19.25rem;
+  height: 17.5rem;
 }
 .home-community-wedge {
   background:
@@ -886,7 +915,13 @@ For commercial licensing, please contact support@quantumnous.com
       rgba(18, 183, 245, 0.12),
       rgba(18, 183, 245, 0.03) 70%
     );
-  clip-path: polygon(0 0, 100% 0, 100% 13rem, 40% 19rem, 0 19rem);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% var(--community-seam-right-y),
+    var(--community-seam-x) var(--community-seam-left-y),
+    0 var(--community-seam-left-y)
+  );
 }
 .dark .home-community-wedge {
   background:
@@ -906,10 +941,10 @@ For commercial licensing, please contact support@quantumnous.com
     rgba(56, 189, 248, 0.45)
   );
   clip-path: polygon(
-    40% 19rem,
-    100% 13rem,
-    100% calc(13rem + 2px),
-    40% calc(19rem + 2px)
+    var(--community-seam-x) var(--community-seam-left-y),
+    100% var(--community-seam-right-y),
+    100% calc(var(--community-seam-right-y) + 2px),
+    var(--community-seam-x) calc(var(--community-seam-left-y) + 2px)
   );
 }
 .home-paper-clip-sm {
@@ -945,7 +980,7 @@ For commercial licensing, please contact support@quantumnous.com
   transform: perspective(900px) rotateX(48deg) rotateZ(-14deg);
   transform-origin: 50% 50%;
   mask-image: radial-gradient(
-    ellipse 70% 60% at 30% 50%,
+    ellipse 70% 60% at 16% 50%,
     rgba(0, 0, 0, 0.12) 0%,
     rgba(0, 0, 0, 0.85) 100%
   );

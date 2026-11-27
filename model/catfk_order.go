@@ -22,11 +22,28 @@ const (
 	CatFKOrderStatusExpired         = "expired"
 )
 
-var ErrCatFKOrderConflict = errors.New("catfk order changed or is not eligible")
+const (
+	CatFKOrderModeRedemption = "redemption"
+	CatFKOrderModeDirect     = "direct"
+)
+
+const (
+	CatFKSlotStatusIdle        = "idle"
+	CatFKSlotStatusLeased      = "leased"
+	CatFKSlotStatusQuarantined = "quarantined"
+)
+
+var (
+	ErrCatFKOrderConflict           = errors.New("catfk order changed or is not eligible")
+	ErrCatFKTransactionRequired     = errors.New("catfk transaction id is required")
+	ErrCatFKTransactionReplay       = errors.New("catfk transaction id already used")
+	ErrCatFKDirectOrderNoRedemption = errors.New("catfk direct order has no redemption code")
+)
 
 // CatFKOrder contains immutable server-selected purchase/account snapshots.
 // CredentialCiphertext must contain authenticated encryption, never a raw code.
 // UpstreamOrderID is shop-scoped; NULL means no upstream order is bound yet.
+// TransactionID is the payment provider's official trade number; NULL when unbound.
 // Service callers must return an explicit public DTO rather than this record.
 type CatFKOrder struct {
 	ID                   int     `json:"id"`
@@ -43,9 +60,12 @@ type CatFKOrder struct {
 	ShopName             string  `json:"shop_name" gorm:"type:varchar(255)"`
 	ShopURL              string  `json:"-" gorm:"type:text"`
 	PaymentMethod        string  `json:"payment_method" gorm:"type:varchar(50)"`
+	Mode                 string  `json:"mode" gorm:"type:varchar(16)"`
+	ExpectedContact      string  `json:"-" gorm:"type:varchar(191)"`
 	PaymentURL           string  `json:"payment_url" gorm:"type:text"`
 	PaymentQRCode        string  `json:"-" gorm:"type:text"`
 	UpstreamOrderID      *string `json:"-" gorm:"type:varchar(128);uniqueIndex:idx_catfk_shop_upstream,priority:2"`
+	TransactionID        *string `json:"-" gorm:"type:varchar(191);uniqueIndex"`
 	RedemptionID         *int    `json:"-" gorm:"uniqueIndex"`
 	Status               string  `json:"status" gorm:"type:varchar(32);index:idx_catfk_due,priority:1;not null"`
 	NextQueryAt          int64   `json:"-" gorm:"index:idx_catfk_due,priority:2;not null"`
@@ -56,6 +76,24 @@ type CatFKOrder struct {
 	FailureCode          string  `json:"failure_code" gorm:"type:varchar(64)"`
 	CreatedAt            int64   `json:"created_at" gorm:"autoCreateTime:false;not null"`
 	UpdatedAt            int64   `json:"updated_at" gorm:"autoUpdateTime:false;not null"`
+}
+
+// CatFKPriceSlot coordinates multi-instance exclusive access to a dedicated
+// CatFK direct-credit slot product while updating its price and creating an
+// upstream order. Expired leases are quarantined rather than blindly reused.
+type CatFKPriceSlot struct {
+	ID             int    `json:"id"`
+	ShopID         string `json:"shop_id" gorm:"type:varchar(128);uniqueIndex:idx_catfk_slot_shop_goods,priority:1;not null"`
+	GoodsKey       string `json:"goods_key" gorm:"type:varchar(191);uniqueIndex:idx_catfk_slot_shop_goods,priority:2;not null"`
+	Status         string `json:"status" gorm:"type:varchar(32);index;not null"`
+	ConfirmedPrice string `json:"confirmed_price" gorm:"type:varchar(64)"`
+	HolderToken    string `json:"-" gorm:"type:varchar(128)"`
+	OrderTradeNo   string `json:"order_trade_no" gorm:"type:varchar(191)"`
+	QuarantineCode string `json:"quarantine_code" gorm:"type:varchar(64)"`
+	LeaseUntil     int64  `json:"lease_until" gorm:"not null"`
+	Version        int64  `json:"-" gorm:"not null"`
+	CreatedAt      int64  `json:"created_at" gorm:"autoCreateTime:false;not null"`
+	UpdatedAt      int64  `json:"updated_at" gorm:"autoUpdateTime:false;not null"`
 }
 
 // CreateCatFKOrder atomically creates a TopUp and its detail. The service sets
@@ -72,7 +110,9 @@ func CreateCatFKOrder(order *CatFKOrder) (existing *CatFKOrder, alreadyExists bo
 		return nil, false, lookupErr
 	}
 	price, priceErr := decimal.NewFromString(order.PriceAmount)
-	if order.ID != 0 || order.TopUpID != 0 || order.TradeNo == "" || len(order.TradeNo) > 191 || order.TierID == "" || order.ProductID == "" || order.ChannelID == "" || order.ShopID == "" || len(order.ShopID) > 128 || order.Currency == "" || len(order.Currency) > 16 || priceErr != nil || !price.IsPositive() || len(order.PriceAmount) > 64 || strings.ContainsAny(order.PriceAmount, "eE") || len(order.TierID) > 191 || len(order.ProductID) > 191 || len(order.ChannelID) > 191 || len(order.ShopName) > 255 {
+	validMode := order.Mode == "" || order.Mode == CatFKOrderModeRedemption || order.Mode == CatFKOrderModeDirect
+	validContact := len(order.ExpectedContact) <= 191 && !strings.ContainsAny(order.ExpectedContact, "\r\n\t\x00") && (order.Mode != CatFKOrderModeDirect || order.ExpectedContact == order.TradeNo)
+	if order.ID != 0 || order.TopUpID != 0 || order.TradeNo == "" || len(order.TradeNo) > 191 || order.TierID == "" || order.ProductID == "" || order.ChannelID == "" || order.ShopID == "" || len(order.ShopID) > 128 || order.Currency == "" || len(order.Currency) > 16 || priceErr != nil || !price.IsPositive() || len(order.PriceAmount) > 64 || strings.ContainsAny(order.PriceAmount, "eE") || len(order.TierID) > 191 || len(order.ProductID) > 191 || len(order.ChannelID) > 191 || len(order.ShopName) > 255 || !validMode || !validContact {
 		return nil, false, errors.New("invalid catfk purchase snapshot")
 	}
 	if order.ExpectedQuota <= 0 || common.ValidateWalletQuota(order.ExpectedQuota) != nil {
@@ -96,7 +136,7 @@ func CreateCatFKOrder(order *CatFKOrder) (existing *CatFKOrder, alreadyExists bo
 		order.TopUpID = topup.Id
 		order.PaymentMethod = paymentMethod
 		order.Status = CatFKOrderStatusNew
-		order.UpstreamOrderID, order.RedemptionID = nil, nil
+		order.UpstreamOrderID, order.TransactionID, order.RedemptionID = nil, nil, nil
 		order.PaymentURL, order.FailureCode = "", ""
 		order.Version, order.LeaseUntil = 0, 0
 		order.NextQueryAt, order.CreatedAt, order.UpdatedAt = now, now, now
@@ -147,6 +187,9 @@ func GetCatFKRedemptionByTradeNo(tradeNo string) (*Redemption, error) {
 }
 
 func catFKRedemptionForOrder(order *CatFKOrder) (*Redemption, error) {
+	if order.Mode == CatFKOrderModeDirect {
+		return nil, ErrCatFKDirectOrderNoRedemption
+	}
 	if order.Status != CatFKOrderStatusCompleted || order.RedemptionID == nil {
 		return nil, ErrCatFKOrderConflict
 	}
@@ -281,21 +324,42 @@ func RetryCatFKOrder(id int, version int64, nextQueryAt int64) (bool, error) {
 // CompleteVerifiedCatFKOrder is an internal service boundary, NEVER a handler
 // for client-supplied redemption codes. Before calling, the service must verify
 // provider identity, paid status, shop/product/channel/currency/price snapshots,
-// and exactly one local code from an authenticated upstream result. The model
-// independently enforces paid state, account binding and exact denomination.
-// A stale worker cannot consume a code; any failure rolls back all four writes.
-func CompleteVerifiedCatFKOrder(id int, version int64, redemptionKey string, callerIP string) (alreadyDone bool, err error) {
+// and either the local redemption code (redemption mode) or direct-credit
+// invariants (direct mode), along with the official payment transaction ID.
+// A stale worker cannot settle twice; any failure rolls back all writes.
+func CompleteVerifiedCatFKOrder(id int, version int64, redemptionKey string, transactionID string, callerIP string) (alreadyDone bool, err error) {
+	txID := strings.TrimSpace(transactionID)
 	order := &CatFKOrder{}
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		if err := lockForUpdate(tx).First(order, "id = ?", id).Error; err != nil {
 			return err
 		}
 		if order.Status == CatFKOrderStatusCompleted {
+			if txID != "" && order.TransactionID != nil && *order.TransactionID != txID {
+				return ErrCatFKOrderConflict
+			}
 			alreadyDone = true
 			return nil
 		}
 		if order.Status != CatFKOrderStatusPaid || order.Version != version || order.UpstreamOrderID == nil || *order.UpstreamOrderID == "" || order.ExpectedQuota <= 0 {
 			return ErrCatFKOrderConflict
+		}
+		isDirect := order.Mode == CatFKOrderModeDirect
+		requireTx := isDirect || order.ExpectedContact != ""
+		if requireTx && txID == "" {
+			return ErrCatFKTransactionRequired
+		}
+		if txID != "" {
+			if len(txID) > 191 || strings.ContainsAny(txID, " \t\r\n\x00") || (order.TransactionID != nil && *order.TransactionID != txID) {
+				return ErrCatFKOrderConflict
+			}
+			var conflictCount int64
+			if err := tx.Model(&CatFKOrder{}).Where("transaction_id = ? AND id <> ?", txID, order.ID).Count(&conflictCount).Error; err != nil {
+				return err
+			}
+			if conflictCount > 0 {
+				return ErrCatFKTransactionReplay
+			}
 		}
 		topup := &TopUp{}
 		if err := lockForUpdate(tx).First(topup, "id = ?", order.TopUpID).Error; err != nil {
@@ -306,19 +370,37 @@ func CompleteVerifiedCatFKOrder(id int, version int64, redemptionKey string, cal
 			return ErrCatFKOrderConflict
 		}
 		now := common.GetTimestamp()
-		result := tx.Model(&CatFKOrder{}).Where("id = ? AND version = ? AND status = ?", id, version, CatFKOrderStatusPaid).Updates(map[string]any{"status": CatFKOrderStatusCompleted, "version": gorm.Expr("version + 1"), "updated_at": now, "lease_until": 0, "next_query_at": 0, "credential_ciphertext": "", "failure_code": ""})
+		orderUpdates := map[string]any{
+			"status":                CatFKOrderStatusCompleted,
+			"version":               gorm.Expr("version + 1"),
+			"updated_at":            now,
+			"lease_until":           0,
+			"next_query_at":         0,
+			"credential_ciphertext": "",
+			"failure_code":          "",
+		}
+		if txID != "" {
+			orderUpdates["transaction_id"] = txID
+		}
+		result := tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(gormlogger.Silent)}).Model(&CatFKOrder{}).Where("id = ? AND version = ? AND status = ?", id, version, CatFKOrderStatusPaid).Updates(orderUpdates)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return ErrCatFKOrderConflict
 		}
-		redemption, err := redeemInTransaction(tx, redemptionKey, order.UserID, order.ExpectedQuota)
-		if err != nil {
-			return err
-		}
-		if err := tx.Model(&CatFKOrder{}).Where("id = ?", id).Update("redemption_id", redemption.Id).Error; err != nil {
-			return err
+		if isDirect {
+			if err := creditTopUpQuota(tx, order.UserID, order.ExpectedQuota, nil); err != nil {
+				return err
+			}
+		} else {
+			redemption, err := redeemInTransaction(tx, redemptionKey, order.UserID, order.ExpectedQuota)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&CatFKOrder{}).Where("id = ?", id).Update("redemption_id", redemption.Id).Error; err != nil {
+				return err
+			}
 		}
 		invoiceAmount, err := InvoiceAmountFromQuota(order.ExpectedQuota)
 		if err != nil {
@@ -333,10 +415,178 @@ func CompleteVerifiedCatFKOrder(id int, version int64, redemptionKey string, cal
 		}
 		return nil
 	})
-	if err != nil || alreadyDone {
-		return alreadyDone, err
+	if err != nil {
+		if txID != "" && !errors.Is(err, ErrCatFKTransactionReplay) {
+			var conflictCount int64
+			if DB.Model(&CatFKOrder{}).Where("transaction_id = ? AND id <> ?", txID, id).Count(&conflictCount).Error == nil && conflictCount > 0 {
+				return false, ErrCatFKTransactionReplay
+			}
+		}
+		return false, err
+	}
+	if alreadyDone {
+		return true, nil
 	}
 	syncCreditUserQuotaCache(order.UserID, order.ExpectedQuota, "catfk topup")
 	RecordTopupLog(order.UserID, common.NewMessage("Online top-up succeeded, amount added: {{quota}}, payment amount: {{amount}}", map[string]any{"quota": logger.FormatQuota(order.ExpectedQuota), "amount": order.PriceAmount + " " + order.Currency}), callerIP, PaymentMethodCatFK, PaymentProviderCatFK)
 	return false, nil
+}
+
+// AcquireCatFKPriceSlot grants exclusive versioned access to one idle direct
+// slot for the given shop. Any slot whose prior lease expired without a clean
+// release is moved to quarantined rather than reused while remote state is unknown.
+func AcquireCatFKPriceSlot(shopID string, goodsKeys []string, targetPrice string, orderTradeNo string, now int64, leaseSeconds int64) (*CatFKPriceSlot, bool, error) {
+	if shopID == "" || len(shopID) > 128 || len(goodsKeys) == 0 || now <= 0 || leaseSeconds <= 0 || leaseSeconds > 600 || now > (1<<63-1)-leaseSeconds {
+		return nil, false, errors.New("invalid catfk slot lease request")
+	}
+	var existing []*CatFKPriceSlot
+	if err := DB.Where("shop_id = ? AND goods_key IN ?", shopID, goodsKeys).Order("id").Find(&existing).Error; err != nil {
+		return nil, false, err
+	}
+	have := make(map[string]bool, len(existing))
+	for _, slot := range existing {
+		have[slot.GoodsKey] = true
+	}
+	for _, key := range goodsKeys {
+		if key == "" || len(key) > 191 || have[key] {
+			continue
+		}
+		row := &CatFKPriceSlot{
+			ShopID:    shopID,
+			GoodsKey:  key,
+			Status:    CatFKSlotStatusIdle,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		_ = DB.Session(&gorm.Session{Logger: DB.Logger.LogMode(gormlogger.Silent)}).Create(row).Error
+		have[key] = true
+	}
+	var slots []*CatFKPriceSlot
+	if err := DB.Where("shop_id = ? AND goods_key IN ?", shopID, goodsKeys).Order("id").Find(&slots).Error; err != nil {
+		return nil, false, err
+	}
+	candidates := make([]*CatFKPriceSlot, 0, len(slots))
+	fallback := make([]*CatFKPriceSlot, 0, len(slots))
+	for _, slot := range slots {
+		if slot.Status == CatFKSlotStatusLeased && slot.LeaseUntil <= now {
+			_ = DB.Model(&CatFKPriceSlot{}).
+				Where("id = ? AND version = ? AND status = ? AND lease_until <= ?", slot.ID, slot.Version, CatFKSlotStatusLeased, now).
+				Updates(map[string]any{
+					"status":          CatFKSlotStatusQuarantined,
+					"confirmed_price": "",
+					"holder_token":    "",
+					"quarantine_code": "lease_expired",
+					"lease_until":     0,
+					"version":         gorm.Expr("version + 1"),
+					"updated_at":      now,
+				}).Error
+			continue
+		}
+		if slot.Status != CatFKSlotStatusIdle {
+			continue
+		}
+		if targetPrice != "" && slot.ConfirmedPrice == targetPrice {
+			candidates = append(candidates, slot)
+		} else {
+			fallback = append(fallback, slot)
+		}
+	}
+	candidates = append(candidates, fallback...)
+	for _, slot := range candidates {
+		holder := common.GetUUID()
+		result := DB.Model(&CatFKPriceSlot{}).
+			Where("id = ? AND version = ? AND status = ?", slot.ID, slot.Version, CatFKSlotStatusIdle).
+			Updates(map[string]any{
+				"status":         CatFKSlotStatusLeased,
+				"holder_token":   holder,
+				"order_trade_no": orderTradeNo,
+				"lease_until":    now + leaseSeconds,
+				"version":        gorm.Expr("version + 1"),
+				"updated_at":     now,
+			})
+		if result.Error != nil {
+			return nil, false, result.Error
+		}
+		if result.RowsAffected == 1 {
+			slot.Status = CatFKSlotStatusLeased
+			slot.HolderToken = holder
+			slot.OrderTradeNo = orderTradeNo
+			slot.LeaseUntil = now + leaseSeconds
+			slot.UpdatedAt = now
+			slot.Version++
+			return slot, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func ReleaseCatFKPriceSlot(id int, version int64, holderToken string, confirmedPrice string, now int64) (bool, error) {
+	if id <= 0 || holderToken == "" || now <= 0 {
+		return false, errors.New("invalid catfk slot release")
+	}
+	result := DB.Model(&CatFKPriceSlot{}).
+		Where("id = ? AND version = ? AND status = ? AND holder_token = ? AND lease_until > ?", id, version, CatFKSlotStatusLeased, holderToken, now).
+		Updates(map[string]any{
+			"status":          CatFKSlotStatusIdle,
+			"confirmed_price": confirmedPrice,
+			"holder_token":    "",
+			"order_trade_no":  "",
+			"quarantine_code": "",
+			"lease_until":     0,
+			"version":         gorm.Expr("version + 1"),
+			"updated_at":      now,
+		})
+	if result.Error != nil || result.RowsAffected == 1 {
+		return result.RowsAffected == 1, result.Error
+	}
+	_, _ = QuarantineCatFKPriceSlot(id, version, holderToken, "lease_expired", now)
+	return false, nil
+}
+
+func QuarantineCatFKPriceSlot(id int, version int64, holderToken string, code string, now int64) (bool, error) {
+	if id <= 0 || holderToken == "" || now <= 0 || len(code) > 64 || strings.ContainsAny(code, " \t\r\n") {
+		return false, errors.New("invalid catfk slot quarantine")
+	}
+	result := DB.Model(&CatFKPriceSlot{}).
+		Where("id = ? AND version = ? AND status = ? AND holder_token = ?", id, version, CatFKSlotStatusLeased, holderToken).
+		Updates(map[string]any{
+			"status":          CatFKSlotStatusQuarantined,
+			"confirmed_price": "",
+			"holder_token":    "",
+			"quarantine_code": code,
+			"lease_until":     0,
+			"version":         gorm.Expr("version + 1"),
+			"updated_at":      now,
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
+func ResetQuarantinedCatFKPriceSlots(shopID string, now int64) (int64, error) {
+	if shopID == "" || now <= 0 {
+		return 0, errors.New("invalid catfk slot reset")
+	}
+	_ = DB.Model(&CatFKPriceSlot{}).
+		Where("shop_id = ? AND status = ? AND lease_until <= ?", shopID, CatFKSlotStatusLeased, now).
+		Updates(map[string]any{
+			"status":          CatFKSlotStatusQuarantined,
+			"confirmed_price": "",
+			"holder_token":    "",
+			"quarantine_code": "lease_expired",
+			"lease_until":     0,
+			"version":         gorm.Expr("version + 1"),
+			"updated_at":      now,
+		}).Error
+	result := DB.Model(&CatFKPriceSlot{}).
+		Where("shop_id = ? AND status = ?", shopID, CatFKSlotStatusQuarantined).
+		Updates(map[string]any{
+			"status":          CatFKSlotStatusIdle,
+			"confirmed_price": "",
+			"holder_token":    "",
+			"order_trade_no":  "",
+			"quarantine_code": "",
+			"lease_until":     0,
+			"version":         gorm.Expr("version + 1"),
+			"updated_at":      now,
+		})
+	return result.RowsAffected, result.Error
 }

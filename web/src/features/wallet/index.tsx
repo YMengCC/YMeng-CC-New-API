@@ -402,11 +402,18 @@ export function Wallet(props: WalletProps) {
               <div id='wallet-add-funds' className='scroll-mt-4'>
                 <RechargeFormCard
                   catfkChannel={catfk.channel}
-                  onCatfkPaymentSelect={(channel, product) => {
+                  onCatfkPaymentSelect={(channel, product, directAmount) => {
                     paymentSelectionVersion.current++
                     setConfirmDialogOpen(false)
                     setSelectedPaymentMethod(undefined)
-                    void catfk.selectProduct(product, channel)
+                    if (
+                      topupInfo?.catfk?.mode === 'direct' &&
+                      directAmount !== undefined
+                    ) {
+                      void catfk.selectDirectAmount(directAmount, channel)
+                    } else if (product) {
+                      void catfk.selectProduct(product, channel)
+                    }
                   }}
                   catfkBusy={catfk.processing}
                   topupInfo={topupInfo}
@@ -494,7 +501,12 @@ export function Wallet(props: WalletProps) {
           if (!open) catfk.reset()
         }}
         onConfirm={catfk.confirm}
-        topupAmount={catfk.product?.amount ?? 0}
+        topupAmount={
+          catfk.quote?.topup_amount ??
+          catfk.product?.amount ??
+          catfk.directAmount ??
+          0
+        }
         paymentAmount={catfk.quote?.amount ?? 0}
         paymentMethod={
           catfk.channel
@@ -512,6 +524,7 @@ export function Wallet(props: WalletProps) {
           qq: catfk.qq,
           onQQChange: catfk.setQQ,
           available: !!topupInfo?.catfk?.available,
+          requireQQ: topupInfo?.catfk?.mode !== 'direct',
         }}
       />
 

@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
@@ -96,7 +97,7 @@ export function OfficeFiles(props: OfficeFilesProps) {
         type='file'
       />
       <Button
-        className='bg-background/70 hover:bg-background h-10 w-full border-dashed'
+        className='border-border/80 bg-background/80 hover:border-primary/40 hover:bg-background h-9 w-full gap-2 rounded-xl border-dashed shadow-2xs transition-colors'
         disabled={props.isUploading}
         onClick={() => inputRef.current?.click()}
         size='sm'
@@ -152,14 +153,19 @@ export function OfficeFiles(props: OfficeFilesProps) {
         )}
         {...dropZone.handlers}
       >
-        <div className='border-b px-4 py-3'>
-          <div className='flex items-center justify-between gap-3'>
-            <h2 className='text-sm font-semibold'>{t('Workspace files')}</h2>
-            <span className='text-muted-foreground text-xs tabular-nums'>
+        <div className='border-border/80 border-b px-3.5 py-2.5'>
+          <div className='flex items-center justify-between gap-2'>
+            <h2 className='text-xs font-semibold tracking-wide'>
+              {t('Workspace files')}
+            </h2>
+            <Badge
+              className='h-5 px-1.5 text-[11px] tabular-nums'
+              variant='secondary'
+            >
               {props.files.length}
-            </span>
+            </Badge>
           </div>
-          <p className='text-muted-foreground mt-1 text-xs leading-5'>
+          <p className='text-muted-foreground mt-1 text-xs leading-4'>
             {dropZone.isDragActive
               ? t('Drop files to upload them to the workspace')
               : t(
@@ -167,12 +173,7 @@ export function OfficeFiles(props: OfficeFilesProps) {
                 )}
           </p>
         </div>
-        <div className='p-3'>
-          {uploadControls}
-          <p className='text-muted-foreground mt-2 text-[11px] leading-4'>
-            {t('You can also drag files here or into the task box.')}
-          </p>
-        </div>
+        <div className='px-3 pt-3 pb-2'>{uploadControls}</div>
         {fileList}
       </section>
     )
@@ -182,9 +183,22 @@ export function OfficeFiles(props: OfficeFilesProps) {
     <Sheet>
       <SheetTrigger
         render={
-          <Button aria-label={t('Workspace files')} size='sm' variant='outline'>
+          <Button
+            aria-label={t('Workspace files')}
+            className='gap-1.5'
+            size='sm'
+            variant='outline'
+          >
             <FolderOpenIcon data-icon='inline-start' />
             <span className='hidden sm:inline'>{t('Files')}</span>
+            {props.files.length > 0 && (
+              <Badge
+                className='h-4 px-1 text-[10px] tabular-nums'
+                variant='secondary'
+              >
+                {props.files.length}
+              </Badge>
+            )}
           </Button>
         }
       />
@@ -228,7 +242,7 @@ function OfficeFileList(props: OfficeFileListProps) {
     return (
       <div className='px-3 pb-3'>
         <EmptyState
-          className='min-h-[200px]'
+          className='min-h-[160px] py-6'
           icon={FolderIcon}
           title={t('No files yet')}
         />
@@ -236,7 +250,7 @@ function OfficeFileList(props: OfficeFileListProps) {
     )
   }
   return (
-    <ul className='space-y-0.5 px-3 pb-3'>
+    <ul className='space-y-1 px-3 pb-3'>
       {props.files.map((file) => (
         <OfficeFileItem
           file={file}
@@ -257,19 +271,22 @@ function OfficeFileItem(props: OfficeFileItemProps) {
   return (
     <li
       className={cn(
-        'hover:bg-muted/60 flex items-center gap-2 rounded-md px-2 py-1.5',
+        'group hover:border-border/60 hover:bg-background/80 flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 transition-colors',
         isDir && 'text-muted-foreground'
       )}
     >
       {isDir ? (
-        <FolderIcon className='size-4 shrink-0' />
+        <FolderIcon className='text-primary/80 size-4 shrink-0' />
       ) : (
-        <FileIcon className='size-4 shrink-0' />
+        <FileIcon className='text-muted-foreground size-4 shrink-0' />
       )}
-      <span className='min-w-0 flex-1 truncate font-mono text-xs'>
+      <span
+        className='min-w-0 flex-1 truncate font-mono text-xs'
+        title={props.file.path}
+      >
         {props.file.path}
       </span>
-      <span className='text-muted-foreground shrink-0 text-xs'>
+      <span className='text-muted-foreground shrink-0 text-[11px] tabular-nums'>
         {isDir ? '' : formatFileSize(props.file.size)}
       </span>
       <div className='flex shrink-0 items-center gap-0.5'>
@@ -280,6 +297,7 @@ function OfficeFileItem(props: OfficeFileItemProps) {
               name: props.file.path,
               interpolation: { escapeValue: false },
             })}
+            className='text-muted-foreground hover:text-foreground size-7'
             onClick={props.onDownload}
             size='icon-sm'
             variant='ghost'
@@ -292,7 +310,7 @@ function OfficeFileItem(props: OfficeFileItemProps) {
             name: props.file.path,
             interpolation: { escapeValue: false },
           })}
-          className='text-muted-foreground hover:text-destructive'
+          className='text-muted-foreground hover:text-destructive size-7'
           disabled={props.isDeleteDisabled}
           onClick={props.onDelete}
           size='icon-sm'

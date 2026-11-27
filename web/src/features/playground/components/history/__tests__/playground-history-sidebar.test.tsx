@@ -280,3 +280,22 @@ test('new chat is disabled while a response is generating', () => {
 
   expect(screen.getByRole('button', { name: 'New chat' })).toBeDisabled()
 })
+
+test('collapsed sidebar hides conversation entries and clear action while keeping new chat accessible', () => {
+  renderSidebar({ isCollapsed: true })
+
+  const sidebar = screen.getByRole('complementary', {
+    name: 'Conversation history',
+  })
+  expect(sidebar.className).toContain('w-12')
+  expect(
+    screen.getByRole('button', { name: 'Show conversation history' })
+  ).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.getByRole('button', { name: 'New chat' })).toBeEnabled()
+  expect(
+    screen.queryByRole('button', { name: 'Clear conversation history' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: /First chat/ })
+  ).not.toBeInTheDocument()
+})

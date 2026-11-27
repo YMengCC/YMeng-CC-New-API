@@ -66,6 +66,7 @@ import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
 import {
   parseCatFKProducts,
+  parseCatFKDirectGoodsKeys,
   parseCatFKChannels,
   type CatFKChannel,
 } from './catfk-schema'
@@ -171,7 +172,9 @@ const paymentSchema = z.object({
     }
   }),
   CatFKEnabled: z.boolean(),
+  CatFKMode: z.enum(['redemption', 'direct']),
   CatFKStoreToken: z.string().max(4096),
+  CatFKMerchantToken: z.string().max(4096),
   CatFKProducts: z.string().refine((value) => {
     try {
       parseCatFKProducts(value)
@@ -180,6 +183,16 @@ const paymentSchema = z.object({
       return false
     }
   }, 'Invalid CatFK mapping configuration'),
+  CatFKDirectGoodsKeys: z.string().refine((value) => {
+    try {
+      parseCatFKDirectGoodsKeys(value)
+      return true
+    } catch {
+      return false
+    }
+  }, 'Invalid CatFK direct slot settings'),
+  CatFKAutoRestockMin: z.coerce.number().int().min(1).max(1000),
+  CatFKAutoRestockBatch: z.coerce.number().int().min(1).max(500),
   CatFKChannels: z.string().refine((value) => {
     try {
       parseCatFKChannels(value)
@@ -224,8 +237,27 @@ type PaymentComplianceDefaults = {
   confirmedBy: number
 }
 
+type PaymentSettingsDefaultValues = Omit<
+  PaymentBaseFormValues,
+  | 'CatFKMode'
+  | 'CatFKMerchantToken'
+  | 'CatFKDirectGoodsKeys'
+  | 'CatFKAutoRestockMin'
+  | 'CatFKAutoRestockBatch'
+> &
+  Partial<
+    Pick<
+      PaymentBaseFormValues,
+      | 'CatFKMode'
+      | 'CatFKMerchantToken'
+      | 'CatFKDirectGoodsKeys'
+      | 'CatFKAutoRestockMin'
+      | 'CatFKAutoRestockBatch'
+    >
+  >
+
 type PaymentSettingsSectionProps = {
-  defaultValues: PaymentBaseFormValues
+  defaultValues: PaymentSettingsDefaultValues
   waffoDefaultValues: WaffoSettingsValues
   waffoPancakeDefaultValues: WaffoPancakeSettingsValues
   waffoPancakeProvisionedStoreID?: string
@@ -256,6 +288,11 @@ export function PaymentSettingsSection({
   const initialFormValues = React.useMemo<PaymentFormValues>(
     () => ({
       ...defaultValues,
+      CatFKMode: defaultValues.CatFKMode ?? 'redemption',
+      CatFKMerchantToken: defaultValues.CatFKMerchantToken ?? '',
+      CatFKDirectGoodsKeys: defaultValues.CatFKDirectGoodsKeys ?? '[]',
+      CatFKAutoRestockMin: defaultValues.CatFKAutoRestockMin ?? 5,
+      CatFKAutoRestockBatch: defaultValues.CatFKAutoRestockBatch ?? 20,
       ...waffoDefaultValues,
       ...waffoPancakeDefaultValues,
     }),
@@ -505,8 +542,13 @@ export function PaymentSettingsSection({
       CreemTestMode: values.CreemTestMode,
       CreemProducts: values.CreemProducts.trim(),
       CatFKEnabled: values.CatFKEnabled,
+      CatFKMode: values.CatFKMode,
       CatFKStoreToken: values.CatFKStoreToken.trim(),
+      CatFKMerchantToken: values.CatFKMerchantToken.trim(),
       CatFKProducts: values.CatFKProducts,
+      CatFKDirectGoodsKeys: values.CatFKDirectGoodsKeys,
+      CatFKAutoRestockMin: values.CatFKAutoRestockMin,
+      CatFKAutoRestockBatch: values.CatFKAutoRestockBatch,
       CatFKChannels: values.CatFKChannels,
       WaffoEnabled: values.WaffoEnabled,
       WaffoSandbox: values.WaffoSandbox,
@@ -554,8 +596,13 @@ export function PaymentSettingsSection({
       CreemTestMode: initialRef.current.CreemTestMode,
       CreemProducts: initialRef.current.CreemProducts.trim(),
       CatFKEnabled: initialRef.current.CatFKEnabled,
+      CatFKMode: initialRef.current.CatFKMode,
       CatFKStoreToken: initialRef.current.CatFKStoreToken.trim(),
+      CatFKMerchantToken: initialRef.current.CatFKMerchantToken.trim(),
       CatFKProducts: initialRef.current.CatFKProducts,
+      CatFKDirectGoodsKeys: initialRef.current.CatFKDirectGoodsKeys,
+      CatFKAutoRestockMin: initialRef.current.CatFKAutoRestockMin,
+      CatFKAutoRestockBatch: initialRef.current.CatFKAutoRestockBatch,
       CatFKChannels: initialRef.current.CatFKChannels,
       WaffoEnabled: initialRef.current.WaffoEnabled,
       WaffoSandbox: initialRef.current.WaffoSandbox,
@@ -786,6 +833,15 @@ export function PaymentSettingsSection({
       })
     }
     if (
+      sanitized.CatFKMerchantToken &&
+      sanitized.CatFKMerchantToken !== initial.CatFKMerchantToken
+    ) {
+      updates.push({
+        key: 'catfk_setting.merchant_token',
+        value: sanitized.CatFKMerchantToken,
+      })
+    }
+    if (
       normalizeJsonForComparison(sanitized.CatFKProducts) !==
       normalizeJsonForComparison(initial.CatFKProducts)
     ) {
@@ -795,12 +851,39 @@ export function PaymentSettingsSection({
       })
     }
     if (
+      normalizeJsonForComparison(sanitized.CatFKDirectGoodsKeys) !==
+      normalizeJsonForComparison(initial.CatFKDirectGoodsKeys)
+    ) {
+      updates.push({
+        key: 'catfk_setting.direct_goods_keys',
+        value: sanitized.CatFKDirectGoodsKeys,
+      })
+    }
+    if (sanitized.CatFKAutoRestockMin !== initial.CatFKAutoRestockMin) {
+      updates.push({
+        key: 'catfk_setting.auto_restock_min',
+        value: sanitized.CatFKAutoRestockMin,
+      })
+    }
+    if (sanitized.CatFKAutoRestockBatch !== initial.CatFKAutoRestockBatch) {
+      updates.push({
+        key: 'catfk_setting.auto_restock_batch',
+        value: sanitized.CatFKAutoRestockBatch,
+      })
+    }
+    if (
       normalizeJsonForComparison(sanitized.CatFKChannels) !==
       normalizeJsonForComparison(initial.CatFKChannels)
     ) {
       updates.push({
         key: 'catfk_setting.channels',
         value: sanitized.CatFKChannels,
+      })
+    }
+    if (sanitized.CatFKMode !== initial.CatFKMode) {
+      updates.push({
+        key: 'catfk_setting.mode',
+        value: sanitized.CatFKMode,
       })
     }
     if (sanitized.CatFKEnabled !== initial.CatFKEnabled) {
@@ -1730,8 +1813,13 @@ export function PaymentSettingsSection({
               <CatFKSettingsFields
                 values={{
                   CatFKEnabled: form.watch('CatFKEnabled'),
+                  CatFKMode: form.watch('CatFKMode'),
                   CatFKStoreToken: form.watch('CatFKStoreToken'),
+                  CatFKMerchantToken: form.watch('CatFKMerchantToken'),
                   CatFKProducts: form.watch('CatFKProducts'),
+                  CatFKDirectGoodsKeys: form.watch('CatFKDirectGoodsKeys'),
+                  CatFKAutoRestockMin: form.watch('CatFKAutoRestockMin'),
+                  CatFKAutoRestockBatch: form.watch('CatFKAutoRestockBatch'),
                   CatFKChannels: form.watch('CatFKChannels'),
                 }}
                 complianceConfirmed={complianceConfirmed}
@@ -1739,6 +1827,20 @@ export function PaymentSettingsSection({
                 onChange={(key, value) => {
                   if (key === 'CatFKEnabled') {
                     form.setValue(key, Boolean(value), {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  } else if (key === 'CatFKMode') {
+                    form.setValue(
+                      key,
+                      value === 'direct' ? 'direct' : 'redemption',
+                      { shouldDirty: true, shouldValidate: true }
+                    )
+                  } else if (
+                    key === 'CatFKAutoRestockMin' ||
+                    key === 'CatFKAutoRestockBatch'
+                  ) {
+                    form.setValue(key, Number(value), {
                       shouldDirty: true,
                       shouldValidate: true,
                     })
@@ -1752,6 +1854,9 @@ export function PaymentSettingsSection({
               />
               {form.formState.errors.CatFKProducts && (
                 <p role='alert'>{t('Invalid CatFK mapping configuration')}</p>
+              )}
+              {form.formState.errors.CatFKDirectGoodsKeys && (
+                <p role='alert'>{t('Invalid CatFK direct slot settings')}</p>
               )}
               {form.formState.errors.CatFKChannels && (
                 <p role='alert'>{t('Invalid CatFK mapping configuration')}</p>

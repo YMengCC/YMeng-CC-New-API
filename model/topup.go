@@ -21,6 +21,7 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	CatFKMode       string  `json:"catfk_mode,omitempty" gorm:"-"`
 	CreateTime      int64   `json:"create_time"`
 	CompleteTime    int64   `json:"complete_time"`
 	Status          string  `json:"status"`
@@ -391,7 +392,45 @@ func queryTopUps(userId int, filters TopUpFilters, pageInfo *common.PageInfo, re
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
+	populateTopUpCatFKModes(topups)
 	return topups, total, nil
+}
+
+func populateTopUpCatFKModes(topups []*TopUp) {
+	if len(topups) == 0 || DB == nil {
+		return
+	}
+	tradeNos := make([]string, 0)
+	for _, item := range topups {
+		if item != nil && item.PaymentProvider == PaymentProviderCatFK && item.TradeNo != "" {
+			tradeNos = append(tradeNos, item.TradeNo)
+		}
+	}
+	if len(tradeNos) == 0 || !DB.Migrator().HasTable(&CatFKOrder{}) {
+		return
+	}
+	var rows []struct {
+		TradeNo string
+		Mode    string
+	}
+	if err := DB.Model(&CatFKOrder{}).Select("trade_no, mode").Where("trade_no IN ?", tradeNos).Find(&rows).Error; err != nil {
+		return
+	}
+	modes := make(map[string]string, len(rows))
+	for _, row := range rows {
+		if row.Mode == CatFKOrderModeDirect {
+			modes[row.TradeNo] = CatFKOrderModeDirect
+		} else {
+			modes[row.TradeNo] = CatFKOrderModeRedemption
+		}
+	}
+	for _, item := range topups {
+		if item != nil && item.PaymentProvider == PaymentProviderCatFK {
+			if mode, ok := modes[item.TradeNo]; ok {
+				item.CatFKMode = mode
+			}
+		}
+	}
 }
 
 func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
@@ -466,6 +505,7 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
+	populateTopUpCatFKModes(topups)
 	return topups, total, nil
 }
 
@@ -506,6 +546,7 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
+	populateTopUpCatFKModes(topups)
 	return topups, total, nil
 }
 

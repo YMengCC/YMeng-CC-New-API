@@ -288,29 +288,47 @@ func TestEpayCallbacksVerifyBeforeSettlement(t *testing.T) {
 }
 
 func TestCatFKSettingsRejectInvalidMappings(t *testing.T) {
+	cfg := operation_setting.GetCatFKSetting()
+	previous := *cfg
+	cfg.Products = []operation_setting.CatFKProduct{{ID: "tier", Name: "Credit", GoodsKey: "real-code-goods", Amount: 5}}
+	cfg.DirectGoodsKeys = []string{"direct-slot-1"}
+	t.Cleanup(func() { *cfg = previous })
+
 	for _, tc := range []struct{ key, value string }{
 		{"enabled", "yes"},
+		{"mode", "unknown"},
 		{"products", `[{"id":"a","name":"Credit","goods_key":"goods","amount":-1}]`},
 		{"products", `[{"id":"a","name":"Credit","goods_key":"goods","amount":1},{"id":"a","name":"Other","goods_key":"other","amount":2}]`},
+		{"products", `[{"id":"a","name":"Overlap","goods_key":"direct-slot-1","amount":1}]`},
+		{"direct_goods_keys", `["real-code-goods"]`},
+		{"direct_goods_keys", `["slot-1","slot-1"]`},
+		{"direct_goods_keys", `["https://other.example/item/slot-1"]`},
+		{"auto_restock_min", "0"},
+		{"auto_restock_batch", "501"},
 		{"channels", `[{"id":"alipay","name":"Ali"},{"id":"alipay","name":"Other"}]`},
 		{"store_token", "invalid\nheader"},
+		{"merchant_token", "invalid\nheader"},
 	} {
 		t.Run(tc.key+tc.value, func(t *testing.T) {
 			require.Error(t, operation_setting.ValidateCatFKOption("catfk_setting."+tc.key, tc.value))
 		})
 	}
 	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.products", `[{"id":"tier","name":"Credit","goods_key":"goods","amount":1.5}]`))
+	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.direct_goods_keys", `["slot-a","https://catfk.com/item/slot-b"]`))
+	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.mode", operation_setting.CatFKModeDirect))
 }
 
 func TestCatFKStoreTokenIsNotReturnedByOptions(t *testing.T) {
-	const key = "catfk_setting.store_token"
+	const storeKey = "catfk_setting.store_token"
+	const merchantKey = "catfk_setting.merchant_token"
 	common.OptionMapRWMutex.Lock()
 	previous := common.OptionMap
-	common.OptionMap = make(map[string]string, len(previous)+1)
+	common.OptionMap = make(map[string]string, len(previous)+2)
 	for optionKey, value := range previous {
 		common.OptionMap[optionKey] = value
 	}
-	common.OptionMap[key] = "catfk-test-private-store-token"
+	common.OptionMap[storeKey] = "catfk-test-private-store-token"
+	common.OptionMap[merchantKey] = "catfk-test-private-merchant-token"
 	common.OptionMapRWMutex.Unlock()
 	t.Cleanup(func() {
 		common.OptionMapRWMutex.Lock()
@@ -322,7 +340,9 @@ func TestCatFKStoreTokenIsNotReturnedByOptions(t *testing.T) {
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/option/", nil)
 	GetOptions(ctx)
 	assert.NotContains(t, recorder.Body.String(), "catfk-test-private-store-token")
-	assert.NotContains(t, recorder.Body.String(), key)
+	assert.NotContains(t, recorder.Body.String(), "catfk-test-private-merchant-token")
+	assert.NotContains(t, recorder.Body.String(), storeKey)
+	assert.NotContains(t, recorder.Body.String(), merchantKey)
 }
 
 func TestCatFKDisabledPurchasesAndInvalidShopRejectPaymentEndpoints(t *testing.T) {

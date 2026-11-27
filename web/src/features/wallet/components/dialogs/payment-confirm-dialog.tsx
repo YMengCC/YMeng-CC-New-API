@@ -56,6 +56,7 @@ interface PaymentConfirmDialogProps {
     qq: string
     onQQChange: (value: string) => void
     available: boolean
+    requireQQ?: boolean
   }
   topupLink?: string
 }
@@ -78,7 +79,9 @@ export function PaymentConfirmDialog({
   const { t, i18n } = useTranslation()
   useSystemConfigStore((state) => state.config.currency)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const invalidQQ = !!catfk && catfk.qq.length > 0 && !isValidCatfkQQ(catfk.qq)
+  const requireCatfkQQ = !!catfk && catfk.requireQQ !== false
+  const invalidQQ =
+    requireCatfkQQ && catfk.qq.length > 0 && !isValidCatfkQQ(catfk.qq)
   const hasDiscount =
     !catfk && discountRate > 0 && discountRate < 1 && paymentAmount > 0
   const displayFeePercent =
@@ -119,8 +122,11 @@ export function PaymentConfirmDialog({
         !!(
           catfk &&
           (!catfk.available ||
-            !isValidCatfkQQ(catfk.qq) ||
-            !isValidCatfkQuote(catfk.quote, topupAmount))
+            (requireCatfkQQ && !isValidCatfkQQ(catfk.qq)) ||
+            !isValidCatfkQuote(
+              catfk.quote,
+              requireCatfkQQ ? topupAmount : undefined
+            ))
         )
       }
       confirmText={
@@ -209,7 +215,7 @@ export function PaymentConfirmDialog({
         </div>
       </div>
 
-      {catfk && (
+      {requireCatfkQQ && (
         <div className='space-y-2'>
           <div className='flex items-center gap-3'>
             <Label htmlFor='catfk-qq' className='shrink-0'>

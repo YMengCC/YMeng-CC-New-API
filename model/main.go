@@ -361,6 +361,7 @@ func migrateDB() error {
 		&Midjourney{},
 		&TopUp{},
 		&CatFKOrder{},
+		&CatFKPriceSlot{},
 		&QuotaData{},
 		&Task{},
 		&TaskPlugin{},

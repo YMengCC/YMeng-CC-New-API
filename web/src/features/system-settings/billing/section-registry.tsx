@@ -159,8 +159,18 @@ const BILLING_SECTIONS = [
           CreemTestMode: settings.CreemTestMode,
           CreemProducts: settings.CreemProducts,
           CatFKEnabled: settings['catfk_setting.enabled'],
+          CatFKMode:
+            settings['catfk_setting.mode'] === 'direct'
+              ? 'direct'
+              : 'redemption',
           CatFKStoreToken: settings['catfk_setting.store_token'],
+          CatFKMerchantToken: settings['catfk_setting.merchant_token'] ?? '',
           CatFKProducts: settings['catfk_setting.products'],
+          CatFKDirectGoodsKeys:
+            settings['catfk_setting.direct_goods_keys'] ?? '[]',
+          CatFKAutoRestockMin: settings['catfk_setting.auto_restock_min'] ?? 5,
+          CatFKAutoRestockBatch:
+            settings['catfk_setting.auto_restock_batch'] ?? 20,
           CatFKChannels: settings['catfk_setting.channels'],
         }}
         waffoDefaultValues={{

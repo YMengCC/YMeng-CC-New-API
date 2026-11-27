@@ -34,6 +34,7 @@ export function useCatfkPayment(
   const { t } = useTranslation()
   const [channel, setChannel] = useState<CatfkChannel | null>(null)
   const [product, setProduct] = useState<CatfkProduct | null>(null)
+  const [directAmount, setDirectAmount] = useState<number | null>(null)
   const [quote, setQuote] = useState<CatfkQuote | null>(null)
   const [qq, setQQ] = useState('')
   const [open, setOpen] = useState(false)
@@ -47,6 +48,7 @@ export function useCatfkPayment(
   // One key per confirmation, so retrying a lost response reuses its order.
   const requestKey = useRef<string | null>(null)
   const creditedTrade = useRef<string | null>(null)
+  const isDirect = info?.mode === 'direct'
   const quoteMutation = useMutation({
     mutationFn: quoteCatfk,
     meta: { errorToast: false },
@@ -64,6 +66,7 @@ export function useCatfkPayment(
     requestKey.current = null
     setChannel(null)
     setProduct(null)
+    setDirectAmount(null)
     setQuote(null)
     setQQ('')
     setOpen(false)
@@ -86,6 +89,7 @@ export function useCatfkPayment(
     reset()
     setChannel(next)
     setProduct(null)
+    setDirectAmount(null)
   }
 
   async function selectProduct(next: CatfkProduct, selectedChannel = channel) {
@@ -94,6 +98,7 @@ export function useCatfkPayment(
     setStatusOrder(null)
     setChannel(selectedChannel)
     setProduct(next)
+    setDirectAmount(null)
     if (!userId || !selectedChannel || !info?.enabled || !info.available) return
     const version = generation.current
     setOpen(true)
@@ -119,6 +124,41 @@ export function useCatfkPayment(
     }
   }
 
+  async function selectDirectAmount(
+    amount: number,
+    selectedChannel = channel
+  ) {
+    if (inFlight.current || !Number.isFinite(amount) || amount <= 0) return
+    reset()
+    setStatusOrder(null)
+    setChannel(selectedChannel)
+    setProduct(null)
+    setDirectAmount(amount)
+    if (!userId || !selectedChannel || !info?.enabled || !info.available) return
+    const version = generation.current
+    setOpen(true)
+    setCalculating(true)
+    try {
+      const result = await quoteMutation.mutateAsync({
+        amount,
+        channel_id: selectedChannel.id,
+      })
+      if (version !== generation.current || identity.current !== userId) return
+      if (!isValidCatfkQuote(result)) {
+        throw new Error(t('Invalid payment quote'))
+      }
+      setQuote(result)
+    } catch (error) {
+      if (version === generation.current && identity.current === userId) {
+        handleServerError(error, t('Payment request failed'))
+      }
+    } finally {
+      if (version === generation.current && identity.current === userId) {
+        setCalculating(false)
+      }
+    }
+  }
+
   async function confirm() {
     if (
       inFlight.current ||
@@ -126,7 +166,19 @@ export function useCatfkPayment(
       !open ||
       !info?.enabled ||
       !info.available ||
-      !channel ||
+      !channel
+    ) {
+      return
+    }
+    if (isDirect) {
+      if (
+        directAmount === null ||
+        directAmount <= 0 ||
+        !isValidCatfkQuote(quote)
+      ) {
+        return
+      }
+    } else if (
       !product ||
       !isValidCatfkQQ(qq) ||
       !isValidCatfkQuote(quote, product.amount)
@@ -137,13 +189,23 @@ export function useCatfkPayment(
     requestKey.current ??= crypto.randomUUID()
     inFlight.current = true
     try {
-      const order = await payMutation.mutateAsync({
-        product_id: product.id,
-        channel_id: channel.id,
-        quote_id: quote.quote_id,
-        qq,
-        idempotency_key: requestKey.current,
-      })
+      const order = await payMutation.mutateAsync(
+        isDirect
+          ? {
+              amount: directAmount ?? undefined,
+              channel_id: channel.id,
+              quote_id: quote.quote_id,
+              qq: '',
+              idempotency_key: requestKey.current,
+            }
+          : {
+              product_id: product?.id,
+              channel_id: channel.id,
+              quote_id: quote.quote_id,
+              qq,
+              idempotency_key: requestKey.current,
+            }
+      )
       if (version !== generation.current || identity.current !== userId) return
       if (
         typeof order.trade_no !== 'string' ||
@@ -154,9 +216,10 @@ export function useCatfkPayment(
       }
       setStatusOrder({
         tradeNo: order.trade_no,
-        amount: product.amount,
+        amount: quote.topup_amount,
         status: order.status,
         channelName: channel.name,
+        paymentMethod: order.payment_method,
         paymentQrCode:
           order.status === 'pending'
             ? safeCatfkQrCode(order.payment_qr_code)
@@ -217,8 +280,12 @@ export function useCatfkPayment(
         ? {
             ...current,
             status: order.status,
+            paymentMethod: order.payment_method ?? current.paymentMethod,
             paymentQrCode:
-              order.status === 'pending' ? current.paymentQrCode : null,
+              order.status === 'pending'
+                ? (safeCatfkQrCode(order.payment_qr_code) ??
+                  current.paymentQrCode)
+                : null,
           }
         : current
     )
@@ -235,6 +302,7 @@ export function useCatfkPayment(
     statusQueryFailed: trackedOrder.isError,
     channel,
     product,
+    directAmount,
     quote,
     qq,
     setQQ,
@@ -243,6 +311,7 @@ export function useCatfkPayment(
     processing: payMutation.isPending,
     selectChannel,
     selectProduct,
+    selectDirectAmount,
     confirm,
     reset,
   }

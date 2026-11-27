@@ -35,7 +35,8 @@ function pendingOrder(trade: string) {
       data: {
         trade_no: trade,
         status: 'pending',
-        payment_qr_code: 'https://qr.alipay.com/upx-code',
+        payment_method: 'catfk_wxpay',
+        payment_qr_code: 'weixin://wxpay/bizpayurl?pr=testToken',
       },
     },
   }
@@ -80,7 +81,8 @@ it('shows the QR code dialog without opening a window and refreshes the wallet o
     amount: 10,
     status: 'pending',
     channelName: 'WeChat',
-    paymentQrCode: 'https://qr.alipay.com/upx-code',
+    paymentMethod: 'catfk_wxpay',
+    paymentQrCode: 'weixin://wxpay/bizpayurl?pr=testToken',
     payment: { amount: 72, fee: undefined, fee_rate: undefined },
   })
   read.mockResolvedValue(orderRead('trade1', 'completed'))
@@ -167,6 +169,28 @@ it('accepts only ASCII digit QQ strings and bounded HTTPS QR codes without crede
     expect(safeCatfkQrCode(value)).toBeNull()
   }
 })
+it('keeps the native WeChat QR payload unchanged', () => {
+  const value = 'weixin://wxpay/bizpayurl?pr=testToken'
+  expect(safeCatfkQrCode(value)).toBe(value)
+})
+
+it.each([
+  'weixin://wxpay/bizpayurl?pr=',
+  'weixin://wxpay/bizpayurl?pr=token&pr=other',
+  'weixin://wxpay/bizpayurl?pr=token&extra=1',
+  'weixin://wxpay/bizpayurl?pr=token#fragment',
+  'weixin://wxpay/bizpayurl?pr=token%26extra%3D1',
+  'weixin://wxpay/bizpayurl?pr=token\n',
+  'weixin://wxpay/bizpayurl?pr=to ken',
+  'weixin://user@wxpay/bizpayurl?pr=token',
+  'weixin://wxpay:443/bizpayurl?pr=token',
+  'weixin://wxpay.example/bizpayurl?pr=token',
+  'weixin://wxpay/other?pr=token',
+  `weixin://wxpay/bizpayurl?pr=${'a'.repeat(2048)}`,
+])('rejects malformed native WeChat QR data %j', (value) => {
+  expect(safeCatfkQrCode(value)).toBeNull()
+})
+
 it('ignores an old quote after switching channels', async () => {
   let resolve!: (value: unknown) => void
   vi.spyOn(api, 'post').mockImplementation(
@@ -207,4 +231,44 @@ it('clears the previous account quote, QQ and channel when the account changes',
   expect(result.current.quote).toBeNull()
   expect(result.current.channel).toBeNull()
   expect(result.current.open).toBe(false)
+})
+
+it('quotes and confirms custom or preset amounts in direct mode without requiring a QQ number', async () => {
+  const directQuote = {
+    quote_id: 'q-direct',
+    amount: 108,
+    currency: 'CNY',
+    topup_amount: 15,
+  }
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { success: true, data: directQuote } })
+    .mockResolvedValueOnce(pendingOrder('direct-trade'))
+  vi.spyOn(api, 'get').mockResolvedValue(orderRead('direct-trade', 'pending'))
+
+  const { result } = renderHook(
+    () => useCatfkPayment({ ...info, mode: 'direct' }, 1),
+    { wrapper }
+  )
+  await act(() => result.current.selectDirectAmount(15, channel))
+  expect(result.current.open).toBe(true)
+  expect(result.current.qq).toBe('')
+  await act(() => result.current.confirm())
+
+  expect(post).toHaveBeenNthCalledWith(1, '/api/user/catfk/quote', {
+    amount: 15,
+    channel_id: 'wechat',
+  })
+  expect(post).toHaveBeenNthCalledWith(
+    2,
+    '/api/user/catfk/pay',
+    expect.objectContaining({
+      amount: 15,
+      channel_id: 'wechat',
+      quote_id: 'q-direct',
+      qq: '',
+    })
+  )
+  expect(result.current.statusOrder?.tradeNo).toBe('direct-trade')
+  expect(result.current.statusOrder?.amount).toBe(15)
 })

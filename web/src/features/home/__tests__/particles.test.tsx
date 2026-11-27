@@ -20,6 +20,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { HeroParticles } from '../components/hero-particles'
+import { getHeroSeamX } from '../lib/hero-seam'
 
 const originalMatchMedia = window.matchMedia
 const originalGetContext = HTMLCanvasElement.prototype.getContext
@@ -133,3 +134,24 @@ it('degrades gracefully without errors when Canvas 2D context is unavailable', (
   expect(() => render(<HeroParticles />)).not.toThrow()
   expect(rafSpy).not.toHaveBeenCalled()
 })
+
+it.each([
+  [1024, 900, 408, 328],
+  [1440, 900, 472, 360],
+  [1920, 1080, 512, 392],
+])(
+  'aligns the desktop particle seam with the shifted CSS rail at %ipx width',
+  (viewportWidth, viewportHeight, expectedTopPx, expectedBottomPx) => {
+    expect(getHeroSeamX(0, viewportWidth, viewportHeight)).toBe(expectedTopPx)
+    expect(
+      getHeroSeamX(viewportHeight / 2, viewportWidth, viewportHeight)
+    ).toBe((expectedTopPx + expectedBottomPx) / 2)
+    expect(getHeroSeamX(viewportHeight, viewportWidth, viewportHeight)).toBe(
+      expectedBottomPx
+    )
+    // Viewport center (50%) must always stay in the console side on desktop
+    expect(getHeroSeamX(0, viewportWidth, viewportHeight)).toBeLessThan(
+      viewportWidth * 0.5
+    )
+  }
+)

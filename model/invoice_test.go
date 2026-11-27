@@ -110,7 +110,7 @@ func TestCatFKInvoiceDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Raw(query).Scan(&version).Error)
 			t.Logf("database version: %s", version)
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}, &CatFKOrder{}, &InvoiceProfile{}, &InvoiceApplication{}, &InvoiceApplicationItem{}, &InvoiceRefundAdjustment{}))
+				require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}, &CatFKOrder{}, &CatFKPriceSlot{}, &InvoiceProfile{}, &InvoiceApplication{}, &InvoiceApplicationItem{}, &InvoiceRefundAdjustment{}))
 			}
 			t.Run("eligibility_and_application", TestCatFKInvoiceEligibilityAndApplication)
 			t.Run("legacy_backfill", TestCatFKInvoiceBackfillPreservesOneOrderPerRecharge)
@@ -155,7 +155,7 @@ func TestCatFKInvoiceEligibilityAndApplication(t *testing.T) {
 		_, err = CreateInvoiceApplication(userID, "Example Company", "TAX-CATFK", "", []int{order.TopUpID})
 		require.ErrorIs(t, err, ErrInvoiceOrderInvalid)
 	}
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
+	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
 	require.NoError(t, err)
 	topUp := GetTopUpById(order.TopUpID)
 	require.NotNil(t, topUp)
@@ -196,7 +196,7 @@ func TestCatFKInvoiceBackfillPreservesOneOrderPerRecharge(t *testing.T) {
 	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
 	userID, key := setupRedeemFixture(t, 500)
 	order := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, "invoice-backfill"))
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
+	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+order.TradeNo, "")
 	require.NoError(t, err)
 	// Existing releases completed these TopUps without invoice snapshots.
 	require.NoError(t, DB.Model(&TopUp{}).Where("id = ?", order.TopUpID).Updates(map[string]any{"credited_quota": 0, "invoice_amount": 0}).Error)

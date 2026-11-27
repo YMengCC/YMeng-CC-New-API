@@ -21,11 +21,15 @@ import (
 // redemption guarantees are exercised by model tests, not asserted by a fake.
 type catFKTestAdapter struct {
 	CatFKAdapter
-	offer    CatFKOffer
-	creates  atomic.Int32
-	queries  atomic.Int32
-	createFn func(*model.CatFKOrder, CatFKCredentials) (*CatFKCreatedOrder, error)
-	queryFn  func(*model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error)
+	offer       CatFKOffer
+	directOffer CatFKOffer
+	creates     atomic.Int32
+	queries     atomic.Int32
+	prepares    atomic.Int32
+	lastContact string
+	prepareFn   func(slotGoodsKey, baseAmount, knownConfirmedPrice string) (*CatFKDynamicSlotReady, error)
+	createFn    func(*model.CatFKOrder, CatFKCredentials) (*CatFKCreatedOrder, error)
+	queryFn     func(*model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error)
 }
 
 func (a *catFKTestAdapter) Ready() bool { return true }
@@ -33,8 +37,39 @@ func (a *catFKTestAdapter) Quote(context.Context, string, string, string) (*CatF
 	o := a.offer
 	return &o, nil
 }
-func (a *catFKTestAdapter) Create(_ context.Context, o *model.CatFKOrder, c CatFKCredentials, _ string) (*CatFKCreatedOrder, error) {
+func (a *catFKTestAdapter) QuoteDirect(_ context.Context, storeToken, _, slotGoodsKey, channelID, baseAmount string) (*CatFKOffer, error) {
+	if a.directOffer.ShopID != "" {
+		o := a.directOffer
+		return &o, nil
+	}
+	return &CatFKOffer{
+		ShopID:         storeToken,
+		ShopName:       "Direct Shop",
+		ShopURL:        "https://catfk.com/shop/" + storeToken,
+		ProductID:      slotGoodsKey,
+		ChannelID:      channelID,
+		Amount:         baseAmount,
+		OriginalAmount: baseAmount,
+		Fee:            "0.00",
+		Currency:       "CNY",
+		Quantity:       1,
+		InStock:        true,
+	}, nil
+}
+func (a *catFKTestAdapter) PrepareDirectSlot(_ context.Context, storeToken, _, slotGoodsKey, channelID, baseAmount, knownConfirmedPrice string, _, _ int) (*CatFKDynamicSlotReady, error) {
+	a.prepares.Add(1)
+	if a.prepareFn != nil {
+		return a.prepareFn(slotGoodsKey, baseAmount, knownConfirmedPrice)
+	}
+	offer, err := a.QuoteDirect(context.Background(), storeToken, "m-token", slotGoodsKey, channelID, baseAmount)
+	if err != nil {
+		return nil, err
+	}
+	return &CatFKDynamicSlotReady{Offer: *offer, ConfirmedPrice: baseAmount}, nil
+}
+func (a *catFKTestAdapter) Create(_ context.Context, o *model.CatFKOrder, c CatFKCredentials, contact string) (*CatFKCreatedOrder, error) {
 	a.creates.Add(1)
+	a.lastContact = contact
 	return a.createFn(o, c)
 }
 func (a *catFKTestAdapter) Query(_ context.Context, o *model.CatFKOrder, c CatFKCredentials) (*CatFKOrderEvidence, error) {
@@ -43,14 +78,17 @@ func (a *catFKTestAdapter) Query(_ context.Context, o *model.CatFKOrder, c CatFK
 }
 
 type catFKTestStore struct {
-	mu          sync.Mutex
-	order       *model.CatFKOrder
-	completed   int
-	completeErr error
-	completeKey string
-	updateCalls int
-	loseUpdate  bool
-	dueLimit    int
+	mu           sync.Mutex
+	order        *model.CatFKOrder
+	completed    int
+	completeErr  error
+	completeKey  string
+	completeTxID string
+	updateCalls  int
+	loseUpdate   bool
+	dueLimit     int
+	slotBusy     bool
+	slots        map[string]*model.CatFKPriceSlot
 }
 
 func cloneCatFK(o *model.CatFKOrder) *model.CatFKOrder {
@@ -138,7 +176,7 @@ func (f *catFKTestStore) Created(id int, v int64, u, p string, n int64) (bool, e
 func (f *catFKTestStore) Retry(id int, v, n int64) (bool, error) {
 	return f.Update(id, v, model.CatFKOrderUpdate{Status: f.order.Status, NextQueryAt: n})
 }
-func (f *catFKTestStore) Complete(_ int, v int64, k, _ string) (bool, error) {
+func (f *catFKTestStore) Complete(_ int, v int64, k, txID, _ string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.order.Version != v || f.order.Status != model.CatFKOrderStatusPaid {
@@ -149,18 +187,88 @@ func (f *catFKTestStore) Complete(_ int, v int64, k, _ string) (bool, error) {
 	}
 	f.completed++
 	f.completeKey = k
+	f.completeTxID = txID
 	f.order.Status = model.CatFKOrderStatusCompleted
 	return false, nil
 }
 func (f *catFKTestStore) Capacity(int, int) error { return nil }
+func (f *catFKTestStore) AcquireSlot(shopID string, goodsKeys []string, targetPrice, orderTradeNo string, now, leaseSeconds int64) (*model.CatFKPriceSlot, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.slotBusy {
+		return nil, false, nil
+	}
+	if f.slots == nil {
+		f.slots = make(map[string]*model.CatFKPriceSlot, len(goodsKeys))
+	}
+	for i, key := range goodsKeys {
+		if _, exists := f.slots[key]; !exists {
+			f.slots[key] = &model.CatFKPriceSlot{ID: i + 1, ShopID: shopID, GoodsKey: key, Status: model.CatFKSlotStatusIdle}
+		}
+	}
+	for _, key := range goodsKeys {
+		s := f.slots[key]
+		if s.Status == model.CatFKSlotStatusIdle && targetPrice != "" && s.ConfirmedPrice == targetPrice {
+			s.Status = model.CatFKSlotStatusLeased
+			s.HolderToken = "holder-" + key
+			s.OrderTradeNo = orderTradeNo
+			s.LeaseUntil = now + leaseSeconds
+			s.Version++
+			copySlot := *s
+			return &copySlot, true, nil
+		}
+	}
+	for _, key := range goodsKeys {
+		s := f.slots[key]
+		if s.Status == model.CatFKSlotStatusIdle {
+			s.Status = model.CatFKSlotStatusLeased
+			s.HolderToken = "holder-" + key
+			s.OrderTradeNo = orderTradeNo
+			s.LeaseUntil = now + leaseSeconds
+			s.Version++
+			copySlot := *s
+			return &copySlot, true, nil
+		}
+	}
+	return nil, false, nil
+}
+func (f *catFKTestStore) ReleaseSlot(id int, version int64, holderToken, confirmedPrice string, _ int64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.slots {
+		if s.ID == id && s.Version == version && s.HolderToken == holderToken && s.Status == model.CatFKSlotStatusLeased {
+			s.Status = model.CatFKSlotStatusIdle
+			s.ConfirmedPrice = confirmedPrice
+			s.HolderToken = ""
+			s.Version++
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (f *catFKTestStore) QuarantineSlot(id int, version int64, holderToken, code string, _ int64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.slots {
+		if s.ID == id && s.Version == version && s.HolderToken == holderToken && s.Status == model.CatFKSlotStatusLeased {
+			s.Status = model.CatFKSlotStatusQuarantined
+			s.ConfirmedPrice = ""
+			s.HolderToken = ""
+			s.QuarantineCode = code
+			s.Version++
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func catFKFixture(t *testing.T) (*catFKService, *catFKTestAdapter, *catFKTestStore, *operation_setting.CatFKSetting) {
 	t.Helper()
 	previousPayMethods := operation_setting.PayMethods
 	t.Cleanup(func() { operation_setting.PayMethods = previousPayMethods })
 	operation_setting.PayMethods = []map[string]string{{
-		"name": "Catfk WeChat",
-		"type": operation_setting.CatFKPaymentMethodWeChat,
+		"name":       "Catfk WeChat",
+		"type":       operation_setting.CatFKPaymentMethodWeChat,
 		"channel_id": "pay",
 	}}
 	cfg := &operation_setting.CatFKSetting{Enabled: true, StoreToken: "private-store-token", Products: []operation_setting.CatFKProduct{{ID: "tier", Name: "Credit", GoodsKey: "goods", Amount: 2.5}}, Channels: []operation_setting.CatFKChannel{{ID: "pay", Name: "WeChat Pay", PaymentType: "wxpay"}}}
@@ -178,7 +286,11 @@ func catFKFixture(t *testing.T) (*catFKService, *catFKTestAdapter, *catFKTestSto
 	return service, adapter, store, cfg
 }
 func catFKTestEvidence(o *model.CatFKOrder) CatFKOrderEvidence {
-	return CatFKOrderEvidence{UpstreamOrderID: "upstream", ShopID: o.ShopID, ProductID: o.ProductID, ChannelID: o.ChannelID, Quantity: 1, Amount: o.PriceAmount, Currency: o.Currency, Paid: true, Delivered: true, RedemptionKey: "0123456789abcdef0123456789abcdef"}
+	contact := o.ExpectedContact
+	if contact == "" {
+		contact = "123456"
+	}
+	return CatFKOrderEvidence{UpstreamOrderID: "upstream", TransactionID: "wx-tx-" + o.TradeNo, Contact: contact, ShopID: o.ShopID, ProductID: o.ProductID, ChannelID: o.ChannelID, Quantity: 1, Amount: o.PriceAmount, Currency: o.Currency, Paid: true, Delivered: true, RedemptionKey: "0123456789abcdef0123456789abcdef"}
 }
 func catFKRequest(t *testing.T, s *catFKService) CatFKPaymentRequest {
 	t.Helper()
@@ -221,7 +333,7 @@ func TestCatFKUnverifiedAdapterRejectsPaymentOperations(t *testing.T) {
 func TestCatFKChannelRequiresMatchingGeneralPaymentMethod(t *testing.T) {
 	s, _, store, _ := catFKFixture(t)
 	operation_setting.PayMethods = []map[string]string{{
-		"type": operation_setting.CatFKPaymentMethodAlipay,
+		"type":       operation_setting.CatFKPaymentMethodAlipay,
 		"channel_id": "pay",
 	}}
 	_, err := s.quote(context.Background(), 7, "tier", "pay")
@@ -229,7 +341,7 @@ func TestCatFKChannelRequiresMatchingGeneralPaymentMethod(t *testing.T) {
 	assert.Nil(t, store.order)
 
 	operation_setting.PayMethods = []map[string]string{{
-		"type": operation_setting.CatFKPaymentMethodWeChat,
+		"type":       operation_setting.CatFKPaymentMethodWeChat,
 		"channel_id": "another-channel",
 	}}
 	_, err = s.quote(context.Background(), 7, "tier", "pay")
@@ -266,6 +378,7 @@ func TestCatFKQuoteAndCreateBindings(t *testing.T) {
 				req.QuoteID = "!" + req.QuoteID
 			case "channel":
 				req.ChannelID = "other"
+				want = ErrCatFKInvalidRequest
 			case "price":
 				a.offer.Amount = "19"
 			case "stock":
@@ -410,8 +523,8 @@ func TestCatFKCreationSnapshotMismatch(t *testing.T) {
 
 func TestCatFKPendingOrderExposesOnlyTheScrapedQRCode(t *testing.T) {
 	for _, tc := range []struct{ name, scraped, want string }{
-		{"scraped", "https://qr.alipay.com/upx-code", "https://qr.alipay.com/upx-code"},
-		{"unsafe-scrape", "javascript:alert(1)", "https://payments.example/pay"},
+		{"non-native-scrape", "https://qr.alipay.com/upx-code", ""},
+		{"unsafe-scrape", "javascript:alert(1)", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, a, store, _ := catFKFixture(t)
@@ -502,7 +615,7 @@ func TestCatFKDocumentedReceiptCanSettleOnlyTheBoundPurchase(t *testing.T) {
 	payment, err := s.create(context.Background(), 7, req)
 	require.NoError(t, err)
 	assert.Equal(t, model.CatFKOrderStatusPending, payment.Status)
-	assert.Equal(t, "https://payments.example/pay", payment.PaymentQRCode, "without a scraped code the payment URL is the QR content")
+	assert.Empty(t, payment.PaymentQRCode, "WeChat payment requires a cashier-verified native QR code")
 	assert.Zero(t, store.completed)
 	a.queryFn = func(o *model.CatFKOrder, _ CatFKCredentials) (*CatFKOrderEvidence, error) {
 		e := catFKTestEvidence(o)
@@ -670,4 +783,152 @@ func TestCatFKRejectsEmbeddedOrMultipleCodes(t *testing.T) {
 		assert.Equal(t, "delivery_invalid", store.order.FailureCode)
 		assert.Zero(t, store.completed)
 	}
+}
+
+func TestCatFKDirectModeCustomAmountSlotQuarantineAndModeIsolation(t *testing.T) {
+	previousPrice := operation_setting.Price
+	previousMinTopUp := operation_setting.MinTopUp
+	t.Cleanup(func() {
+		operation_setting.Price = previousPrice
+		operation_setting.MinTopUp = previousMinTopUp
+	})
+	operation_setting.Price = 7.2
+	operation_setting.MinTopUp = 2
+
+	t.Run("redemption mode rejects custom amount", func(t *testing.T) {
+		s, _, _, _ := catFKFixture(t)
+		amount := int64(10)
+		_, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &amount, ChannelID: "pay"})
+		require.ErrorIs(t, err, ErrCatFKInvalidRequest)
+	})
+
+	t.Run("direct mode quotes without mutating slot, ignores client QQ, settles without redemption code, and survives mode switch", func(t *testing.T) {
+		s, a, store, cfg := catFKFixture(t)
+		cfg.Mode = operation_setting.CatFKModeDirect
+		cfg.StoreToken = "YMengCC"
+		cfg.MerchantToken = "secret-merchant-token"
+		cfg.DirectGoodsKeys = []string{"slot-1", "slot-2"}
+
+		amount := int64(10)
+		belowMin := int64(1)
+		_, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &belowMin, ChannelID: "pay"})
+		require.ErrorIs(t, err, ErrCatFKInvalidRequest)
+
+		q, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &amount, ChannelID: "pay"})
+		require.NoError(t, err)
+		assert.Equal(t, 72.0, q.Amount)
+		assert.Equal(t, 10.0, q.TopUpAmount)
+		assert.Zero(t, a.prepares.Load(), "quote must not touch or lock upstream slots")
+
+		a.createFn = func(o *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			e := catFKTestEvidence(o)
+			e.UpstreamOrderID = "upstream-direct-1"
+			e.Paid, e.Delivered, e.RedemptionKey = false, false, ""
+			return &CatFKCreatedOrder{
+				UpstreamOrderID: "upstream-direct-1",
+				PaymentURL:      "https://catfk.com/pay/upstream-direct-1",
+				PaymentQRCode:   "weixin://wxpay/bizpayurl?pr=directToken",
+				Credentials:     &c,
+				Evidence:        e,
+			}, nil
+		}
+		// Client-supplied QQ is ignored in direct mode; contact is bound to TradeNo.
+		payment, err := s.create(context.Background(), 7, CatFKPaymentRequest{
+			Amount:         &amount,
+			ChannelID:      "pay",
+			QuoteID:        q.QuoteID,
+			QQ:             "override-attempt",
+			IdempotencyKey: "direct-idempotency-key-1",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.CatFKOrderStatusPending, payment.Status)
+		assert.Equal(t, operation_setting.CatFKModeDirect, payment.Mode)
+		assert.Equal(t, "weixin://wxpay/bizpayurl?pr=directToken", payment.PaymentQRCode)
+		assert.Equal(t, payment.TradeNo, a.lastContact)
+		assert.Equal(t, model.CatFKSlotStatusIdle, store.slots["slot-1"].Status)
+		assert.Equal(t, "72.00", store.slots["slot-1"].ConfirmedPrice)
+
+		// Switching global config back to redemption does not alter the in-flight direct order.
+		cfg.Mode = operation_setting.CatFKModeRedemption
+		a.queryFn = func(o *model.CatFKOrder, _ CatFKCredentials) (*CatFKOrderEvidence, error) {
+			return &CatFKOrderEvidence{
+				UpstreamOrderID: "upstream-direct-1",
+				TransactionID:   "wx-tx-direct-1",
+				Contact:         o.TradeNo,
+				ShopID:          o.ShopID,
+				ProductID:       o.ProductID,
+				Quantity:        1,
+				Amount:          o.PriceAmount,
+				Paid:            true,
+				Delivered:       true,
+				RedemptionKey:   "DIRECT-PLACEHOLDER-CARD",
+			}, nil
+		}
+		require.NoError(t, s.poll(context.Background()))
+		assert.Equal(t, model.CatFKOrderStatusCompleted, store.order.Status)
+		assert.Equal(t, 1, store.completed)
+		assert.Empty(t, store.completeKey, "direct mode must ignore placeholder card text")
+		assert.Equal(t, "wx-tx-direct-1", store.completeTxID)
+	})
+
+	t.Run("direct mode rejects contact mismatch, missing transaction ID, busy slots, and quarantines ambiguous slots", func(t *testing.T) {
+		s, a, store, cfg := catFKFixture(t)
+		cfg.Mode = operation_setting.CatFKModeDirect
+		cfg.StoreToken = "YMengCC"
+		cfg.MerchantToken = "secret-merchant-token"
+		cfg.DirectGoodsKeys = []string{"slot-only"}
+
+		amount := int64(5)
+		q, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &amount, ChannelID: "pay"})
+		require.NoError(t, err)
+
+		// Exhausted slots return ErrCatFKSlotBusy without creating an order.
+		store.slotBusy = true
+		_, err = s.create(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &amount, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "direct-busy-key-1234",
+		})
+		require.ErrorIs(t, err, ErrCatFKSlotBusy)
+		assert.Nil(t, store.order)
+		store.slotBusy = false
+
+		// Ambiguous upstream order creation quarantines the slot so it cannot be reused blindly.
+		a.createFn = func(_ *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			return &CatFKCreatedOrder{Credentials: &c}, context.DeadlineExceeded
+		}
+		p, err := s.create(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &amount, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "direct-ambiguous-key",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.CatFKOrderStatusCreationUnknown, p.Status)
+		assert.Equal(t, model.CatFKSlotStatusQuarantined, store.slots["slot-only"].Status)
+
+		// Contact mismatch marks NeedsAttention without crediting.
+		wrongContact := CatFKOrderEvidence{
+			UpstreamOrderID: "up-2", TransactionID: "wx-tx-2", Contact: "wrong-contact",
+			ShopID: store.order.ShopID, ProductID: store.order.ProductID, Quantity: 1, Amount: store.order.PriceAmount,
+			Paid: true, Delivered: true,
+		}
+		require.NoError(t, s.applyEvidence(cloneCatFK(store.order), &wrongContact))
+		assert.Equal(t, model.CatFKOrderStatusNeedsAttention, store.order.Status)
+		assert.Zero(t, store.completed)
+	})
+
+	t.Run("probe-only unpaid response reschedules pending orders without settling", func(t *testing.T) {
+		s, a, store, _ := catFKFixture(t)
+		req := catFKRequest(t, s)
+		a.createFn = func(o *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			e := catFKTestEvidence(o)
+			e.Paid, e.Delivered, e.RedemptionKey = false, false, ""
+			return &CatFKCreatedOrder{UpstreamOrderID: "upstream", PaymentURL: "https://payments.example/pay", Credentials: &c, Evidence: e}, nil
+		}
+		_, err := s.create(context.Background(), 7, req)
+		require.NoError(t, err)
+		a.queryFn = func(*model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error) {
+			return &CatFKOrderEvidence{ProbeOnlyUnpaid: true}, nil
+		}
+		require.NoError(t, s.poll(context.Background()))
+		assert.Equal(t, model.CatFKOrderStatusPending, store.order.Status)
+		assert.Equal(t, s.now().Add(15*time.Second).Unix(), store.order.NextQueryAt)
+		assert.Zero(t, store.completed)
+	})
 }

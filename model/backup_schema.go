@@ -19,6 +19,7 @@ func backupModels() []any {
 		&Redemption{},
 		&TopUp{},
 		&CatFKOrder{},
+		&CatFKPriceSlot{},
 		&Ability{},
 		&Log{},
 		&AuditLog{},

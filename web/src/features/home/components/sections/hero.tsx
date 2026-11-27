@@ -55,7 +55,7 @@ export function Hero(props: HeroProps) {
         props.className
       )}
     >
-      {/* Console side: layered aurora glow and architectural grid */}
+      {/* Console side: layered aurora glow and architectural grid centered behind YMeng CC */}
       <div
         aria-hidden
         data-depth='-3'
@@ -63,16 +63,16 @@ export function Hero(props: HeroProps) {
         className='pointer-events-none absolute inset-0 -z-20 opacity-45 dark:opacity-30'
         style={{
           background: [
-            'radial-gradient(ellipse 48% 52% at 78% 22%, oklch(0.72 0.19 252 / 65%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 38% 42% at 94% 12%, oklch(0.68 0.16 205 / 50%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 42% 40% at 72% 84%, oklch(0.68 0.16 288 / 42%) 0%, transparent 72%)',
+            'radial-gradient(ellipse 52% 54% at 54% 34%, oklch(0.72 0.19 252 / 65%) 0%, transparent 72%)',
+            'radial-gradient(ellipse 38% 42% at 86% 14%, oklch(0.68 0.16 205 / 50%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 46% 42% at 58% 82%, oklch(0.68 0.16 288 / 42%) 0%, transparent 72%)',
           ].join(', '),
         }}
       />
       <div
         aria-hidden
         data-depth='-2'
-        className='pointer-events-none absolute inset-0 -z-20 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_50%_60%_at_76%_38%,black_22%,transparent_100%)] bg-[size:3.5rem_3.5rem] opacity-[0.16] dark:opacity-[0.1]'
+        className='pointer-events-none absolute inset-0 -z-20 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_58%_62%_at_55%_38%,black_24%,transparent_100%)] bg-[size:3.5rem_3.5rem] opacity-[0.16] dark:opacity-[0.1]'
       />
 
       {/* Community corner, cut off by a second seam when group links are configured */}
@@ -80,11 +80,11 @@ export function Hero(props: HeroProps) {
         <>
           <div
             aria-hidden
-            className='home-community-wedge pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
+            className='home-community-wedge pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[17.5rem] lg:block'
           />
           <div
             aria-hidden
-            className='home-community-seam pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[19.25rem] lg:block'
+            className='home-community-seam pointer-events-none absolute inset-x-0 top-0 -z-[15] hidden h-[17.5rem] lg:block'
           />
         </>
       )}
@@ -99,7 +99,7 @@ export function Hero(props: HeroProps) {
           className='absolute inset-0 opacity-60 dark:opacity-35'
           style={{
             background:
-              'radial-gradient(ellipse 55% 45% at 18% 24%, rgba(226, 179, 115, 0.22) 0%, transparent 70%)',
+              'radial-gradient(ellipse 55% 45% at 11% 24%, rgba(226, 179, 115, 0.22) 0%, transparent 70%)',
           }}
         />
       </div>
@@ -122,15 +122,16 @@ export function Hero(props: HeroProps) {
         ×
       </div>
 
-      {/* The column split is pulled left by its padding, so the console column
-          keeps its old width and the diagonal seam stays where it was. */}
-      <div className='home-hero-grid mx-auto grid max-w-7xl grid-cols-1 lg:min-h-[100svh] lg:grid-cols-2 lg:gap-x-0 lg:px-8'>
+      {/* Full-width fluid split: beginner rail pinned near the left viewport
+          edge, community tucked into the upper-right wedge, and YMeng CC
+          anchored across the visual center. */}
+      <div className='home-hero-grid grid w-full grid-cols-1 lg:min-h-[100svh] lg:grid-cols-2 lg:gap-x-0'>
         {/* The gap between the community region and the developer entry sits
             on the region itself, so an empty region leaves no stray gap. */}
         <div
           className={cn(
-            'relative flex flex-col items-start px-6 pt-24 pb-20 md:px-10 lg:col-start-2 lg:row-start-1 lg:min-w-0 lg:px-0 lg:pt-20 lg:pb-20 lg:pl-16 xl:pl-20',
-            !hasCommunity && 'lg:justify-center'
+            'relative flex flex-col items-start px-6 pt-24 pb-20 md:px-10 lg:col-start-2 lg:row-start-1 lg:min-w-0 lg:px-0 lg:pr-6 lg:pb-20 xl:pr-10 2xl:pr-14',
+            hasCommunity ? 'lg:pt-[4.25rem]' : 'lg:justify-center lg:pt-20'
           )}
         >
           {/* The community region: the join card and the chat example share
@@ -138,7 +139,7 @@ export function Hero(props: HeroProps) {
           <div
             className={cn(
               'home-community-slice relative w-full min-w-0 empty:mb-0',
-              hasCommunity ? 'mb-10 lg:mb-10' : 'mb-0'
+              hasCommunity ? 'mb-10 lg:mb-6 xl:mb-7' : 'mb-0'
             )}
           >
             {hasCommunity && (
@@ -172,12 +173,14 @@ export function Hero(props: HeroProps) {
               <CommunityChatPreview className='max-w-md lg:w-60 lg:max-w-[15rem] lg:shrink-0' />
             </div>
           </div>
-          <ConsolePanel isAuthenticated={props.isAuthenticated} />
+          <div className='home-console-stage w-full min-w-0'>
+            <ConsolePanel isAuthenticated={props.isAuthenticated} />
+          </div>
         </div>
 
         <div
           className={cn(
-            'relative flex items-center px-6 pt-20 pb-24 md:px-10 lg:col-start-1 lg:row-start-1 lg:px-0 lg:pt-20 lg:pr-20 lg:pb-20',
+            'relative flex items-center px-6 pt-20 pb-24 md:px-10 lg:col-start-1 lg:row-start-1 lg:min-w-0 lg:pt-20 lg:pr-[calc(var(--seam-top)-var(--seam-middle)+1.75rem)] lg:pb-20 lg:pl-6 xl:pl-10 2xl:pl-12',
             hasCommunity ? 'lg:items-start' : 'lg:items-center'
           )}
         >

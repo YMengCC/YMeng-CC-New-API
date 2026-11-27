@@ -14,15 +14,12 @@ func RequestCatFKQuote(c *gin.Context) {
 		common.ApiErrorT(c, "Payment compliance confirmation is required")
 		return
 	}
-	var req struct {
-		ProductID string `json:"product_id"`
-		ChannelID string `json:"channel_id"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.ProductID == "" || req.ChannelID == "" {
+	var req service.CatFKQuoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ChannelID == "" || (req.ProductID == "" && req.Amount == nil) {
 		common.ApiErrorT(c, "Invalid CatFK payment request")
 		return
 	}
-	quote, err := service.QuoteCatFK(c.Request.Context(), c.GetInt("id"), req.ProductID, req.ChannelID)
+	quote, err := service.QuoteCatFKRequest(c.Request.Context(), c.GetInt("id"), req)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -93,4 +90,13 @@ func ListCatFKPaymentChannels(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, channels)
+}
+
+func ResetCatFKPriceSlots(c *gin.Context) {
+	resetCount, err := service.ResetQuarantinedCatFKSlots()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"reset_count": resetCount})
 }

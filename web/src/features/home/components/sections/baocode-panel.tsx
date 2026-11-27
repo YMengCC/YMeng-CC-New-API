@@ -55,16 +55,16 @@ export function BaoCodePanel() {
   ]
 
   return (
-    <div className='home-paper flex w-full min-w-0 flex-col items-start text-left text-[var(--paper-body)]'>
+    <div className='home-paper flex w-full min-w-0 flex-col items-start text-left text-[var(--paper-body)] lg:max-w-[23.5rem] 2xl:max-w-[24.5rem]'>
       <div
-        className='landing-animate-fade-up mb-5 w-full opacity-0'
+        className='landing-animate-fade-up mb-5 w-full opacity-0 lg:mb-4'
         style={{ animationDelay: '0ms' }}
       >
         <BaoCodeAdvantages />
       </div>
 
       <div
-        className='landing-animate-fade-up mb-4 opacity-0'
+        className='landing-animate-fade-up mb-4 opacity-0 lg:mb-3.5'
         style={{ animationDelay: '40ms' }}
       >
         <div
@@ -88,7 +88,7 @@ export function BaoCodePanel() {
 
       <h1
         data-depth='2'
-        className='landing-animate-fade-up flex max-w-full flex-wrap items-center gap-x-[0.28em] gap-y-1.5 font-[family-name:var(--paper-serif)] text-[clamp(2.05rem,3.4vw,2.85rem)] leading-[1.12] font-semibold tracking-[-0.02em] text-[var(--paper-ink)] opacity-0'
+        className='landing-animate-fade-up flex max-w-full flex-wrap items-center gap-x-[0.28em] gap-y-1.5 font-[family-name:var(--paper-serif)] text-[clamp(2.05rem,3.4vw,2.85rem)] leading-[1.12] font-semibold tracking-[-0.02em] text-[var(--paper-ink)] opacity-0 lg:text-[clamp(1.75rem,2.1vw,2.2rem)]'
         style={{ animationDelay: '60ms' }}
       >
         <span className='inline-flex max-w-full min-w-0 items-center gap-[0.28em]'>
@@ -121,7 +121,7 @@ export function BaoCodePanel() {
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-3.5 font-[family-name:var(--paper-serif)] text-xl leading-snug font-medium text-[var(--paper-ink)]/85 opacity-0 md:text-[22px]'
+        className='landing-animate-fade-up mt-3.5 font-[family-name:var(--paper-serif)] text-xl leading-snug font-medium text-[var(--paper-ink)]/85 opacity-0 md:text-[22px] lg:mt-3 lg:text-[19px]'
         style={{ animationDelay: '120ms' }}
       >
         {t('One gateway, multiple models. Turn ideas into code.')}
@@ -129,7 +129,7 @@ export function BaoCodePanel() {
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-4 max-w-md font-[family-name:var(--paper-serif)] text-[16.5px] leading-[1.72] break-words text-[var(--paper-muted)] opacity-0'
+        className='landing-animate-fade-up mt-4 max-w-md font-[family-name:var(--paper-serif)] text-[16.5px] leading-[1.72] break-words text-[var(--paper-muted)] opacity-0 lg:mt-3 lg:text-[15.5px] lg:leading-[1.66]'
         style={{ animationDelay: '180ms' }}
       >
         {t(
@@ -140,7 +140,7 @@ export function BaoCodePanel() {
 
       <ol
         data-depth-group
-        className='landing-animate-fade-up mt-5 flex w-full max-w-md flex-col gap-2 opacity-0'
+        className='landing-animate-fade-up mt-5 flex w-full max-w-md flex-col gap-2 opacity-0 lg:mt-4'
         style={{ animationDelay: '240ms' }}
       >
         {steps.map((step, index) => (
@@ -166,7 +166,7 @@ export function BaoCodePanel() {
       </ol>
 
       <div
-        className='landing-animate-fade-up mt-6 flex flex-wrap items-center gap-3.5 opacity-0'
+        className='landing-animate-fade-up mt-6 flex flex-wrap items-center gap-3.5 opacity-0 lg:mt-5'
         style={{ animationDelay: '300ms' }}
       >
         <Button
@@ -189,7 +189,7 @@ export function BaoCodePanel() {
 
       <p
         data-depth='1'
-        className='landing-animate-fade-up mt-5 text-[13px] font-medium tracking-wide text-[var(--paper-muted)] opacity-0'
+        className='landing-animate-fade-up mt-5 text-[13px] font-medium tracking-wide text-[var(--paper-muted)] opacity-0 lg:mt-4'
         style={{ animationDelay: '360ms' }}
       >
         {['macOS', 'Windows', 'Linux', t('No API key needed')].map(

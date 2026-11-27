@@ -16,16 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Settings2Icon, ShieldCheckIcon } from 'lucide-react'
+import { PanelRightCloseIcon, ShieldCheckIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 import { OfficeFiles, type OfficeFilesProps } from './office-files'
 
 type OfficeContextPanelProps = Omit<OfficeFilesProps, 'variant'> & {
   isRunning: boolean
   model: string
+  onCollapse?: () => void
 }
 
 /** The model, execution state and workspace alongside the task timeline. */
@@ -35,20 +42,36 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
   return (
     <aside
       aria-label={t('Context')}
-      className='bg-muted/30 hidden w-72 shrink-0 flex-col border-l xl:flex 2xl:w-80'
+      className='border-border/80 bg-muted/25 hidden w-72 shrink-0 flex-col border-l xl:flex 2xl:w-80'
     >
-      <div className='flex min-h-16 items-center gap-2 border-b px-4 py-3'>
-        <Settings2Icon
-          aria-hidden='true'
-          className='text-muted-foreground size-4'
-        />
-        <div>
-          <h2 className='text-sm font-semibold'>{t('Context')}</h2>
-          <p className='text-muted-foreground mt-0.5 text-xs'>Codex</p>
-        </div>
+      <div className='border-border/80 flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3.5'>
+        <h2 className='text-foreground truncate text-xs font-semibold tracking-wide'>
+          {t('Context')}
+        </h2>
+        {props.onCollapse && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-label={t('Hide context panel')}
+                  className='text-muted-foreground hover:text-foreground size-8 shrink-0'
+                  onClick={props.onCollapse}
+                  size='icon-sm'
+                  variant='ghost'
+                />
+              }
+            >
+              <PanelRightCloseIcon className='size-4' />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('Hide context panel')}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
-      <div className='border-b p-3'>
-        <dl className='bg-background space-y-3 rounded-lg border p-3 text-xs shadow-xs'>
+
+      <div className='border-border/80 border-b p-3'>
+        <dl className='border-border/80 bg-background space-y-2.5 rounded-xl border p-3 text-xs shadow-2xs'>
           <div className='flex items-start justify-between gap-3'>
             <dt className='text-muted-foreground shrink-0'>{t('Model')}</dt>
             <dd
@@ -75,10 +98,11 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
             </dd>
           </div>
         </dl>
-        <p className='text-muted-foreground mt-3 flex items-start gap-2 px-1 text-xs leading-5'>
+
+        <p className='border-border/60 bg-background/60 text-muted-foreground mt-2.5 flex items-start gap-2 rounded-xl border px-3 py-2 text-[11px] leading-4'>
           <ShieldCheckIcon
             aria-hidden='true'
-            className='mt-0.5 size-3.5 shrink-0'
+            className='text-primary mt-0.5 size-3.5 shrink-0'
           />
           <span>
             {t(
@@ -87,6 +111,7 @@ export function OfficeContextPanel(props: OfficeContextPanelProps) {
           </span>
         </p>
       </div>
+
       <OfficeFiles
         files={props.files}
         isDeleteDisabled={props.isDeleteDisabled}

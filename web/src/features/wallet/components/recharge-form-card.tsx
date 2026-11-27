@@ -92,7 +92,11 @@ interface RechargeFormCardProps {
   waffoMinTopup?: number
   onWaffoMethodSelect?: (method: WaffoPayMethod, index: number) => void
   catfkChannel?: CatfkChannel | null
-  onCatfkPaymentSelect?: (channel: CatfkChannel, product: CatfkProduct) => void
+  onCatfkPaymentSelect?: (
+    channel: CatfkChannel,
+    product?: CatfkProduct,
+    directAmount?: number
+  ) => void
   catfkBusy?: boolean
   enableWaffoPancakeTopup?: boolean
 }
@@ -411,10 +415,25 @@ export function RechargeFormCard({
                         method.min_topup || 0,
                         getMinTopupAmount(topupInfo)
                       )
+                      const isCatfkDirect =
+                        topupInfo?.catfk?.mode === 'direct'
                       let disabledReason: string | undefined
                       let disabledLabel: string | undefined
                       if (method.channel) {
-                        if (selectedPreset === null) {
+                        if (isCatfkDirect) {
+                          if (!topupInfo?.catfk?.available) {
+                            disabledReason = t(
+                              topupInfo?.catfk?.unavailable_reason ||
+                                'Payment request failed'
+                            )
+                          } else if (minTopup > topupAmount) {
+                            disabledReason = t(
+                              'Minimum topup amount: {{amount}}',
+                              { amount: minTopup }
+                            )
+                            disabledLabel = `${t('Minimum:')} ${minTopup}`
+                          }
+                        } else if (selectedPreset === null) {
                           disabledLabel = t('Custom amounts are not supported')
                           disabledReason = disabledLabel
                         } else if (!selectedCatfkProduct) {
@@ -438,12 +457,20 @@ export function RechargeFormCard({
                           key={method.type}
                           variant='outline'
                           onClick={() => {
-                            if (method.channel && selectedCatfkProduct) {
-                              onCatfkPaymentSelect?.(
-                                method.channel,
-                                selectedCatfkProduct
-                              )
-                            } else if (!method.channel) {
+                            if (method.channel) {
+                              if (isCatfkDirect) {
+                                onCatfkPaymentSelect?.(
+                                  method.channel,
+                                  undefined,
+                                  topupAmount
+                                )
+                              } else if (selectedCatfkProduct) {
+                                onCatfkPaymentSelect?.(
+                                  method.channel,
+                                  selectedCatfkProduct
+                                )
+                              }
+                            } else {
                               onPaymentMethodSelect(method)
                             }
                           }}

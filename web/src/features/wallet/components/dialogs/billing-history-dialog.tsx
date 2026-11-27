@@ -439,19 +439,20 @@ export function BillingHistoryDialog(props: BillingHistoryDialogProps) {
                         </div>
                       </div>
 
-                      {record.payment_provider === 'catfk' && (
-                        <div className='mt-3 flex justify-end'>
-                          <Button
-                            size='sm'
-                            variant='outline'
-                            onClick={() =>
-                              setRedemptionTradeNo(record.trade_no)
-                            }
-                          >
-                            {t('View redemption code')}
-                          </Button>
-                        </div>
-                      )}
+                      {record.payment_provider === 'catfk' &&
+                        record.catfk_mode !== 'direct' && (
+                          <div className='mt-3 flex justify-end'>
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              onClick={() =>
+                                setRedemptionTradeNo(record.trade_no)
+                              }
+                            >
+                              {t('View redemption code')}
+                            </Button>
+                          </div>
+                        )}
 
                       {/* Admin Actions */}
                       {isAdmin &&

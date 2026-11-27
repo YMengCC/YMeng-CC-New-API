@@ -486,3 +486,69 @@ test('invalid persisted mappings block edits and an unconfirmed account cannot e
     'true'
   )
 })
+
+test('switching to direct-credit mode configures slots without losing product mappings and rejects overlapping keys', async () => {
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: { reset_count: 1 } },
+  })
+  const notice = vi.spyOn(toast, 'success').mockImplementation(() => 'ok')
+  const user = userEvent.setup()
+  const existingProducts = JSON.stringify([
+    { id: 'ten', name: 'Ten', goods_key: 'redeem-key', amount: 10 },
+  ])
+  let latestValues: CatFKFormValues = {
+    ...defaults,
+    CatFKProducts: existingProducts,
+  }
+  function ModeFixture() {
+    const [values, setValues] = useState<CatFKFormValues>(latestValues)
+    latestValues = values
+    return (
+      <CatFKSettingsFields
+        values={values}
+        complianceConfirmed
+        onChange={(key, value) =>
+          setValues((current) => ({ ...current, [key]: value }))
+        }
+      />
+    )
+  }
+  render(<ModeFixture />, { wrapper: Wrapper })
+  expect(screen.getByText('Ten (ten)')).toBeVisible()
+
+  await user.click(screen.getByRole('combobox', { name: 'CatFK settlement mode' }))
+  await user.click(
+    await screen.findByRole('option', {
+      name: 'Direct-credit & auto-restock mode',
+    })
+  )
+
+  expect(screen.getByLabelText('CatFK merchant token')).toBeVisible()
+  const slotInput = screen.getByRole('textbox', {
+    name: 'Direct-credit slot goods key',
+  })
+
+  // Overlapping with redemption product goods_key is blocked.
+  await user.type(slotInput, 'redeem-key')
+  await user.click(screen.getByRole('button', { name: 'Add slot' }))
+  expect(
+    screen.getByText(
+      'Direct-credit slot keys cannot overlap with redemption product keys'
+    )
+  ).toBeVisible()
+
+  // Valid item URL normalizes to goods_key and can be removed.
+  await user.clear(slotInput)
+  await user.type(slotInput, 'https://catfk.com/item/direct-slot-1/')
+  await user.click(screen.getByRole('button', { name: 'Add slot' }))
+  expect(screen.getByText('direct-slot-1')).toBeVisible()
+  expect(latestValues.CatFKProducts).toBe(existingProducts)
+  expect(latestValues.CatFKDirectGoodsKeys).toBe('["direct-slot-1"]')
+
+  await user.click(
+    screen.getByRole('button', { name: 'Reset quarantined slots' })
+  )
+  await waitFor(() =>
+    expect(notice).toHaveBeenCalledWith('Quarantined slots have been reset')
+  )
+})

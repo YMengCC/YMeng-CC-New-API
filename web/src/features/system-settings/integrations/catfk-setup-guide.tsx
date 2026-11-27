@@ -118,6 +118,16 @@ export function CatFKSetupGuide() {
         </li>
         <li className='space-y-1.5'>
           <h3 className='font-medium'>
+            {t('Direct-credit mode (optional)')}
+          </h3>
+          <p className='text-muted-foreground'>
+            {t(
+              'To skip manual code exports and enable custom recharge amounts, create 1–20 dedicated card products with Contact format set to Any, Purchase limit set to 1, and Storefront visibility set to Hidden, then enter your merchant token and slot goods keys.'
+            )}
+          </p>
+        </li>
+        <li className='space-y-1.5'>
+          <h3 className='font-medium'>
             {t('Configure Catfk payment methods')}
           </h3>
           <p className='text-muted-foreground'>

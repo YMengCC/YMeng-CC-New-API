@@ -225,3 +225,17 @@ test('the office mode falls back to chat while it is unavailable', async () => {
   await waitFor(() => expect(office.getOfficeStatus).toHaveBeenCalledTimes(1))
   expect(screen.queryByText('office view')).not.toBeInTheDocument()
 })
+
+test('the mode switch group stays centered in the header and ignores re-pressing the active mode', async () => {
+  const { onModeChange } = renderPlayground({ mode: 'chat' })
+
+  const group = await screen.findByRole('group', { name: 'Playground mode' })
+  expect(group.className).toContain('md:justify-self-center')
+
+  const chatButton = screen.getByRole('button', { name: 'Chat' })
+  expect(chatButton).toHaveAttribute('aria-pressed', 'true')
+
+  await user.click(chatButton)
+  expect(onModeChange).not.toHaveBeenCalled()
+  expect(chatButton).toHaveAttribute('aria-pressed', 'true')
+})

@@ -180,6 +180,14 @@ export function getMinTopupAmount(topupInfo: TopupInfo | null): number {
     return topupInfo.min_topup
   }
 
+  if (
+    topupInfo.catfk?.enabled &&
+    topupInfo.catfk.mode === 'direct' &&
+    topupInfo.min_topup > 0
+  ) {
+    return topupInfo.min_topup
+  }
+
   if (topupInfo.enable_stripe_topup) {
     return topupInfo.stripe_min_topup
   }

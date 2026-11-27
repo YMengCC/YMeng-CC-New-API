@@ -40,6 +40,7 @@ export async function payCatfk(request: CatfkPayRequest): Promise<CatfkOrder> {
     'CatFK payments are disabled',
     'CatFK order encryption key is not configured',
     'CatFK quote is invalid or expired',
+    'CatFK payment channel is busy, please try again shortly',
     'Payment compliance confirmation is required',
   ]
   if (
@@ -73,6 +74,9 @@ export async function getCatfkRedemption(
 
 export function safeCatfkQrCode(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 2048) return null
+  if (/^weixin:\/\/wxpay\/bizpayurl\?pr=[A-Za-z0-9_-]+$/.test(value)) {
+    return value
+  }
   try {
     const url = new URL(value)
     return url.protocol === 'https:' && !url.username && !url.password
@@ -85,7 +89,7 @@ export function safeCatfkQrCode(value: unknown): string | null {
 
 export function isValidCatfkQuote(
   quote: CatfkQuote | null,
-  amount: number
+  amount?: number
 ): quote is CatfkQuote {
   return (
     !!quote &&
@@ -95,7 +99,8 @@ export function isValidCatfkQuote(
     quote.amount > 0 &&
     /^[A-Z]{3}$/.test(quote.currency) &&
     Number.isFinite(quote.topup_amount) &&
-    quote.topup_amount === amount
+    quote.topup_amount > 0 &&
+    (amount === undefined || quote.topup_amount === amount)
   )
 }
 

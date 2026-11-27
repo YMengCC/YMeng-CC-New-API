@@ -336,8 +336,13 @@ export type BillingSettings = {
   CreemTestMode: boolean
   CreemProducts: string
   'catfk_setting.enabled': boolean
+  'catfk_setting.mode': string
   'catfk_setting.store_token': string
+  'catfk_setting.merchant_token': string
   'catfk_setting.products': string
+  'catfk_setting.direct_goods_keys': string
+  'catfk_setting.auto_restock_min': number
+  'catfk_setting.auto_restock_batch': number
   'catfk_setting.channels': string
   WaffoEnabled: boolean
   WaffoApiKey: string

@@ -298,11 +298,28 @@ it('keeps the developer entry after the community region without an absolute gap
     community.compareDocumentPosition(developerEntry) &
       Node.DOCUMENT_POSITION_FOLLOWING
   ).toBeTruthy()
-  // The split is pulled left by its padding, so the console column starts at
-  // the same gutter as before and the developer entry stays clear of the seam.
-  expect(document.querySelector('.home-hero-grid')).toHaveClass('lg:px-8')
+  // Full-width fluid hero layout: left rail pinned near the viewport edge,
+  // community slice tightened at top-right, and YMeng CC wrapped in its
+  // centered console stage.
+  const heroGrid = document.querySelector('.home-hero-grid')
+  expect(heroGrid).toHaveClass('w-full')
+  expect(heroGrid).not.toHaveClass('max-w-7xl', 'mx-auto', 'lg:px-8')
+  expect(document.querySelector('.home-community-wedge')).toHaveClass(
+    'h-[17.5rem]'
+  )
+  expect(document.querySelector('.home-community-seam')).toHaveClass(
+    'h-[17.5rem]'
+  )
+  const consoleStage = developerEntry.closest('.home-console-stage')
+  expect(consoleStage).not.toBeNull()
   const developerColumn = developerEntry.closest('.home-hero-grid > div')
   expect(developerColumn).toHaveClass('lg:min-w-0')
+  expect(developerColumn?.contains(consoleStage)).toBe(true)
+
+  const baocodePanel = screen
+    .getByRole('button', { name: /Get BaoCode/ })
+    .closest('.home-paper')
+  expect(baocodePanel).toHaveClass('lg:max-w-[23.5rem]')
 })
 
 it.each([

@@ -26,6 +26,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { IconBadge } from '@/components/ui/icon-badge'
 
 type PlaygroundEmptyStateProps = {
   onSelectPrompt: (prompt: string) => void
@@ -38,17 +39,19 @@ const starterPrompts = [
   { icon: GraduationCapIcon, text: 'Get advice' },
 ]
 
-export function PlaygroundEmptyState({
-  onSelectPrompt,
-}: PlaygroundEmptyStateProps) {
+export function PlaygroundEmptyState(props: PlaygroundEmptyStateProps) {
   const { t } = useTranslation()
 
   return (
     <div className='flex min-h-[min(520px,calc(100svh-18rem))] items-center justify-center px-1 py-8 md:py-12'>
-      <div className='grid w-full max-w-2xl gap-5 text-center'>
-        <div className='bg-muted/50 text-muted-foreground mx-auto flex size-11 items-center justify-center rounded-xl border'>
-          <MessageSquarePlusIcon className='size-5' aria-hidden='true' />
-        </div>
+      <div className='grid w-full max-w-2xl gap-6 text-center'>
+        <IconBadge
+          className='ring-primary/15 mx-auto rounded-2xl ring-1'
+          size='lg'
+          tone='primary'
+        >
+          <MessageSquarePlusIcon />
+        </IconBadge>
 
         <div className='grid gap-2'>
           <h2 className='text-xl font-semibold tracking-tight text-balance md:text-2xl'>
@@ -61,19 +64,25 @@ export function PlaygroundEmptyState({
           </p>
         </div>
 
-        <div className='grid gap-2 sm:grid-cols-2'>
+        <div className='grid gap-2.5 sm:grid-cols-2'>
           {starterPrompts.map(({ icon: Icon, text }) => {
             const prompt = t(text)
 
             return (
               <Button
-                className='h-auto min-h-11 justify-start gap-2 px-3 py-2.5 text-left whitespace-normal'
+                className='group/prompt border-border/80 bg-card/50 hover:border-primary/25 hover:bg-muted/60 h-auto min-h-12 justify-start gap-3 rounded-xl px-3.5 py-3 text-left whitespace-normal shadow-2xs transition-all'
                 key={text}
-                onClick={() => onSelectPrompt(prompt)}
+                onClick={() => props.onSelectPrompt(prompt)}
                 variant='outline'
               >
-                <Icon className='text-muted-foreground size-4' />
-                <span>{prompt}</span>
+                <IconBadge
+                  className='group-hover/prompt:bg-primary/10 group-hover/prompt:text-primary rounded-lg transition-colors'
+                  size='sm'
+                  tone='neutral'
+                >
+                  <Icon />
+                </IconBadge>
+                <span className='font-medium'>{prompt}</span>
               </Button>
             )
           })}

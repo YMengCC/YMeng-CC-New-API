@@ -20,6 +20,8 @@ import { useEffect, useRef } from 'react'
 
 import { cn } from '@/lib/utils'
 
+import { getHeroSeamX, HERO_DESKTOP_MIN_WIDTH } from '../lib/hero-seam'
+
 interface HeroParticlesProps {
   className?: string
 }
@@ -37,7 +39,6 @@ interface Particle {
   hueVariant: number
 }
 
-const DESKTOP_MIN_WIDTH = 1024
 const TABLET_MIN_WIDTH = 768
 const POINTER_RADIUS = 155
 const LINK_DISTANCE_DESKTOP = 112
@@ -68,7 +69,7 @@ function createParticle(
 
 function getTargetCount(width: number, finePointer: boolean): number {
   if (!finePointer || width < TABLET_MIN_WIDTH) return 14
-  if (width < DESKTOP_MIN_WIDTH) return 26
+  if (width < HERO_DESKTOP_MIN_WIDTH) return 26
   return 42
 }
 
@@ -78,9 +79,8 @@ function isPaperSide(
   width: number,
   height: number
 ): boolean {
-  if (width >= DESKTOP_MIN_WIDTH) {
-    const seamRatio = 0.48 - 0.14 * (y / Math.max(height, 1))
-    return x < width * seamRatio
+  if (width >= HERO_DESKTOP_MIN_WIDTH) {
+    return x < getHeroSeamX(y, width, height)
   }
   return y > height * 0.56
 }
@@ -169,7 +169,7 @@ export function HeroParticles(props: HeroParticlesProps) {
       ctx.clearRect(0, 0, width, height)
       const isDark = document.documentElement.classList.contains('dark')
       let linkDistance = 0
-      if (finePointer && width >= DESKTOP_MIN_WIDTH) {
+      if (finePointer && width >= HERO_DESKTOP_MIN_WIDTH) {
         linkDistance = LINK_DISTANCE_DESKTOP
       } else if (finePointer && width >= TABLET_MIN_WIDTH) {
         linkDistance = LINK_DISTANCE_TABLET

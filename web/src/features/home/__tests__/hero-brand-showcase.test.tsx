@@ -81,7 +81,16 @@ it('renders YMeng CC with display font styling, optical word space, and gradient
   )
 
   const heading = screen.getByRole('heading', { level: 2, name: 'YMeng CC' })
-  expect(heading).toHaveClass('home-brand-title', 'whitespace-nowrap')
+  expect(heading).toHaveClass(
+    'home-brand-title',
+    'whitespace-nowrap',
+    'lg:text-[clamp(4.4rem,6.8vw,7.5rem)]'
+  )
+  expect(heading.parentElement).toHaveClass('py-2', 'lg:py-4')
+  const brandGlow = document.querySelector('[data-home-brand-glow]')
+  expect(brandGlow).not.toBeNull()
+  expect(brandGlow).toHaveAttribute('aria-hidden', 'true')
+  expect(brandGlow).toHaveClass('pointer-events-none')
   expect(heading.textContent?.replaceAll('\u00A0', ' ')).toBe('YMeng CC')
 
   const glyphs = [...heading.querySelectorAll('[data-home-brand-glyph]')]

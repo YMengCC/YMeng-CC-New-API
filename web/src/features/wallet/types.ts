@@ -148,6 +148,7 @@ export interface CatfkChannel {
 export interface CatfkInfo {
   enabled: boolean
   available: boolean
+  mode?: 'redemption' | 'direct'
   unavailable_reason?: string
   products: CatfkProduct[]
   channels: CatfkChannel[]
@@ -169,6 +170,8 @@ export interface CatfkPaymentStatusOrder {
   status: string
   /** Display name of the payment channel the buyer chose, such as Alipay. */
   channelName: string
+  /** CatFK payment method returned by the backend, when available. */
+  paymentMethod?: string
   paymentQrCode: string | null
   /** What the buyer pays, fee included, from the confirmed quote. */
   payment: Pick<CatfkQuote, 'amount' | 'fee' | 'fee_rate'>
@@ -177,6 +180,8 @@ export interface CatfkPaymentStatusOrder {
 export interface CatfkOrder {
   trade_no: string
   status: string
+  mode?: 'redemption' | 'direct'
+  payment_method?: string
   /** Scanned to pay; the payment page itself is never opened in the browser. */
   payment_qr_code?: string
 }
@@ -188,7 +193,8 @@ export interface CatfkRedemption {
 }
 
 export interface CatfkQuoteRequest {
-  product_id: string
+  product_id?: string
+  amount?: number
   channel_id: string
 }
 
@@ -358,6 +364,7 @@ export interface TopupRecord {
   /** Payment method type */
   payment_method: string
   payment_provider?: string
+  catfk_mode?: 'redemption' | 'direct'
   /** Creation timestamp */
   create_time: number
   /** Completion timestamp */

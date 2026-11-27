@@ -212,9 +212,11 @@ it('uses the original preset buttons and keeps custom input visible while quotin
             ],
           }}
           catfkChannel={payment.channel}
-          onCatfkPaymentSelect={(selectedChannel, selectedProduct) =>
-            payment.selectProduct(selectedProduct, selectedChannel)
-          }
+          onCatfkPaymentSelect={(selectedChannel, selectedProduct) => {
+            if (selectedProduct) {
+              void payment.selectProduct(selectedProduct, selectedChannel)
+            }
+          }}
         />
         <PaymentConfirmDialog
           open={payment.open}
@@ -902,4 +904,117 @@ it('lists a wallet redemption in order history with its credited quota and no pa
   expect(
     screen.queryByRole('button', { name: 'View redemption code' })
   ).not.toBeInTheDocument()
+})
+
+it('enables custom amounts and omits the QQ field in direct mode while hiding redemption codes for direct history records', async () => {
+  const select = vi.fn()
+  function DirectWallet() {
+    const [amount, setAmount] = useState(15)
+    const [preset, setPreset] = useState<number | null>(null)
+    return (
+      <RechargeFormCard
+        {...base}
+        topupAmount={amount}
+        selectedPreset={preset}
+        onSelectPreset={(next) => {
+          setAmount(next.value)
+          setPreset(next.value)
+        }}
+        onTopupAmountChange={(next) => {
+          setAmount(next)
+          setPreset(null)
+        }}
+        topupInfo={{
+          ...topupInfo,
+          min_topup: 5,
+          pay_methods: [
+            { type: 'catfk_wxpay', channel_id: 'wechat', name: 'WeChat' },
+          ],
+          catfk: {
+            enabled: true,
+            available: true,
+            mode: 'direct',
+            products: [],
+            channels: [channel],
+          },
+        }}
+        onCatfkPaymentSelect={select}
+      />
+    )
+  }
+  const user = userEvent.setup()
+  render(<DirectWallet />)
+  expect(
+    screen.queryByText('Custom amounts are not supported')
+  ).not.toBeInTheDocument()
+  const methodButton = screen.getByRole('button', { name: 'WeChat' })
+  expect(methodButton).toBeEnabled()
+  await user.click(methodButton)
+  expect(select).toHaveBeenCalledWith(channel, undefined, 15)
+
+  const confirm = vi.fn()
+  render(
+    <PaymentConfirmDialog
+      open
+      onOpenChange={vi.fn()}
+      onConfirm={confirm}
+      topupAmount={15}
+      paymentAmount={108}
+      paymentMethod={{ type: 'catfk', name: 'WeChat' }}
+      calculating={false}
+      processing={false}
+      catfk={{
+        quote: { ...quote, topup_amount: 15, amount: 108 },
+        qq: '',
+        onQQChange: vi.fn(),
+        available: true,
+        requireQQ: false,
+      }}
+    />
+  )
+  expect(
+    screen.queryByRole('textbox', { name: /Contact method/ })
+  ).not.toBeInTheDocument()
+  const confirmBtn = screen.getByRole('button', { name: 'Confirm Payment' })
+  expect(confirmBtn).toBeEnabled()
+  await user.click(confirmBtn)
+  expect(confirm).toHaveBeenCalledOnce()
+
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        total: 2,
+        items: [
+          {
+            id: 11,
+            amount: 5000000,
+            money: 72,
+            trade_no: 'catfk-direct-history',
+            payment_method: 'catfk_wxpay',
+            payment_provider: 'catfk',
+            catfk_mode: 'direct',
+            status: 'success',
+            create_time: 1,
+          },
+          {
+            id: 12,
+            amount: 5000000,
+            money: 72,
+            trade_no: 'catfk-redemption-history',
+            payment_method: 'catfk_wxpay',
+            payment_provider: 'catfk',
+            catfk_mode: 'redemption',
+            status: 'success',
+            create_time: 1,
+          },
+        ],
+      },
+    },
+  })
+  render(<BillingHistoryDialog open onOpenChange={vi.fn()} />, { wrapper })
+  await screen.findByText('catfk-direct-history')
+  expect(
+    screen.getAllByRole('button', { name: 'View redemption code' })
+  ).toHaveLength(1)
 })

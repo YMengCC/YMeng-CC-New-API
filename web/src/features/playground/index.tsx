@@ -17,24 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import {
-  BriefcaseBusinessIcon,
-  HistoryIcon,
-  MessagesSquareIcon,
-  PlusIcon,
-} from 'lucide-react'
+import { HistoryIcon, PlusIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { IconBadge } from '@/components/ui/icon-badge'
 import {
   Sheet,
   SheetContent,
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getOfficeStatus, OfficeView } from '@/features/office'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -43,6 +37,8 @@ import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundHistorySidebar } from './components/history/playground-history-sidebar'
 import { PlaygroundGenerationForm } from './components/input/playground-generation-form'
 import { PlaygroundInput } from './components/input/playground-input'
+import { PlaygroundHeader } from './components/playground-header'
+import { DEFAULT_CONVERSATION_TITLE } from './constants'
 import {
   useChatHandler,
   useMediaGeneration,
@@ -190,79 +186,49 @@ export function Playground(props: PlaygroundProps) {
     onSelectConversation: selectConversation,
   }
 
+  const activeConversation = history.conversations.find(
+    (conversation) => conversation.id === history.activeId
+  )
+  const activeConversationTitle =
+    !activeConversation ||
+    activeConversation.title === DEFAULT_CONVERSATION_TITLE
+      ? t(DEFAULT_CONVERSATION_TITLE)
+      : activeConversation.title
+
   const pageHeader = (
-    <header className='bg-background flex shrink-0 flex-col gap-3 border-b px-3 py-3 sm:px-4 md:min-h-18 md:flex-row md:items-center md:justify-between'>
-      <div className='flex min-w-0 items-center gap-3'>
-        <IconBadge size='lg' tone='primary'>
-          {isOffice ? <BriefcaseBusinessIcon /> : <MessagesSquareIcon />}
-        </IconBadge>
-        <div className='min-w-0'>
-          <h1 className='truncate text-sm font-semibold sm:text-base'>
-            {t('Playground')}
-          </h1>
-          <p className='text-muted-foreground truncate text-xs'>
-            {isOffice ? t('Work with Codex') : t('Chat with AI models')}
-          </p>
-        </div>
-      </div>
-      {isOfficeAvailable && (
-        <ToggleGroup
-          aria-label={t('Playground mode')}
-          className='bg-muted/70 grid w-full grid-cols-2 gap-1 rounded-xl border p-1 md:w-auto'
-          onValueChange={(value) => {
-            // Pressing the selected mode again keeps it selected.
-            if (value.length) props.onModeChange(value[0] as PlaygroundMode)
-          }}
-          spacing={1}
-          value={[isOffice ? 'office' : 'chat']}
-        >
-          <ToggleGroupItem
-            className='aria-pressed:bg-background aria-pressed:text-foreground h-10 min-w-0 gap-2 rounded-lg px-3 aria-pressed:shadow-xs md:min-w-32'
-            value='chat'
-          >
-            <MessagesSquareIcon aria-hidden='true' />
-            {t('Chat')}
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            className='aria-pressed:bg-background aria-pressed:text-foreground h-10 min-w-0 gap-2 rounded-lg px-3 aria-pressed:shadow-xs md:min-w-32'
-            value='office'
-          >
-            <BriefcaseBusinessIcon aria-hidden='true' />
-            {t('Office')}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
-    </header>
+    <PlaygroundHeader
+      isOffice={isOffice}
+      isOfficeAvailable={isOfficeAvailable}
+      onModeChange={props.onModeChange}
+    />
   )
 
   if (isOffice) {
     return (
-      <div className='bg-muted/30 flex size-full min-h-0 flex-col'>
+      <div className='bg-background flex size-full min-h-0 flex-col overflow-hidden'>
         {pageHeader}
-        <div className='min-h-0 flex-1 p-2 sm:p-3 lg:p-4'>
-          <div className='bg-background relative size-full min-h-0 overflow-hidden rounded-xl border shadow-xs'>
-            <OfficeView />
-          </div>
+        <div className='relative min-h-0 flex-1 overflow-hidden'>
+          <OfficeView />
         </div>
       </div>
     )
   }
 
   return (
-    <div className='bg-muted/30 flex size-full min-h-0 flex-col'>
+    <div className='bg-background flex size-full min-h-0 flex-col overflow-hidden'>
       {pageHeader}
-      <div className='min-h-0 flex-1 p-2 sm:p-3 lg:p-4'>
-        <div className='bg-background relative flex size-full min-h-0 overflow-hidden rounded-xl border shadow-xs'>
-          <div className='hidden md:flex'>
-            <PlaygroundHistorySidebar
-              {...sidebarProps}
-              isCollapsed={isHistoryCollapsed}
-              onToggleCollapsed={setHistoryCollapsed}
-            />
-          </div>
+      <div className='relative flex min-h-0 flex-1 overflow-hidden'>
+        <div className='hidden md:flex'>
+          <PlaygroundHistorySidebar
+            {...sidebarProps}
+            isCollapsed={isHistoryCollapsed}
+            onToggleCollapsed={setHistoryCollapsed}
+          />
+        </div>
 
-          <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-            <div className='flex items-center gap-2 border-b px-3 py-2 md:hidden'>
+        <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+          <div className='border-border/80 bg-background flex h-12 shrink-0 items-center gap-2.5 border-b px-3 md:px-4'>
+            <div className='md:hidden'>
               <Sheet
                 onOpenChange={setIsMobileHistoryOpen}
                 open={isMobileHistoryOpen}
@@ -272,7 +238,7 @@ export function Playground(props: PlaygroundProps) {
                     <Button
                       aria-label={t('Show conversation history')}
                       size='icon-sm'
-                      variant='outline'
+                      variant='ghost'
                     />
                   }
                 >
@@ -284,18 +250,32 @@ export function Playground(props: PlaygroundProps) {
                   </SheetTitle>
                   <PlaygroundHistorySidebar
                     {...sidebarProps}
-                    className='w-full border-r-0'
+                    className='bg-background w-full border-r-0'
                     isCollapsed={false}
                     onToggleCollapsed={() => setIsMobileHistoryOpen(false)}
                   />
                 </SheetContent>
               </Sheet>
-              <span className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium'>
-                {t('Conversation history')}
-              </span>
+            </div>
+
+            <h2 className='min-w-0 flex-1 truncate text-sm font-semibold'>
+              {activeConversationTitle}
+            </h2>
+
+            {config.model && (
+              <Badge
+                className='hidden max-w-52 font-mono text-[11px] font-normal sm:inline-flex'
+                title={config.model}
+                variant='outline'
+              >
+                <span className='truncate'>{config.model}</span>
+              </Badge>
+            )}
+
+            <div className='md:hidden'>
               <Button
                 aria-label={t('New chat')}
-                className='gap-2'
+                className='gap-1.5'
                 disabled={isChatBusy}
                 onClick={startNewConversation}
                 size='sm'
@@ -305,68 +285,66 @@ export function Playground(props: PlaygroundProps) {
                 {t('New chat')}
               </Button>
             </div>
+          </div>
 
-            {/* Full-width scroll container: scrolling works even over side whitespace */}
-            <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-              <PlaygroundChat
-                key={history.activeId}
-                messages={messages}
-                isLoadingMessages={isLoadingMessages}
-                onRegenerateMessage={handleRegenerateMessage}
-                onEditMessage={handleEditMessage}
-                onDeleteMessage={handleDeleteMessage}
-                onSelectPrompt={
-                  modelMode === 'chat'
-                    ? (prompt) => void handleSendMessage(prompt)
-                    : undefined
-                }
+          {/* Full-width scroll container: scrolling works even over side whitespace */}
+          <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <PlaygroundChat
+              key={history.activeId}
+              messages={messages}
+              isLoadingMessages={isLoadingMessages}
+              onRegenerateMessage={handleRegenerateMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+              onSelectPrompt={
+                modelMode === 'chat'
+                  ? (prompt) => void handleSendMessage(prompt)
+                  : undefined
+              }
+              isGenerating={combinedGenerating}
+              editingKey={editingMessageKey}
+              onCancelEdit={handleEditOpenChange}
+              onSaveEdit={(newContent) => applyEdit(newContent, false)}
+              onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+            />
+          </div>
+
+          {/* Input area: center content and constrain to the same container width */}
+          <div className='mx-auto w-full max-w-4xl'>
+            {modelMode === 'chat' ? (
+              <PlaygroundInput
+                config={config}
+                disabled={combinedGenerating}
+                groups={groups}
+                groupValue={config.group}
                 isGenerating={combinedGenerating}
-                editingKey={editingMessageKey}
-                onCancelEdit={handleEditOpenChange}
-                onSaveEdit={(newContent) => applyEdit(newContent, false)}
-                onSaveEditAndSubmit={(newContent) =>
-                  applyEdit(newContent, true)
-                }
+                isModelLoading={isLoadingModels}
+                modelValue={config.model}
+                models={models}
+                onGroupChange={(value) => updateConfig('group', value)}
+                onConfigChange={updateConfig}
+                onClearMessages={handleClearMessages}
+                onModelChange={(value) => updateConfig('model', value)}
+                onStop={stopAll}
+                onSubmit={handleSendMessage}
+                hasMessages={messages.length > 0}
               />
-            </div>
-
-            {/* Input area: center content and constrain to the same container width */}
-            <div className='mx-auto w-full max-w-4xl'>
-              {modelMode === 'chat' ? (
-                <PlaygroundInput
-                  config={config}
-                  disabled={combinedGenerating}
-                  groups={groups}
-                  groupValue={config.group}
-                  isGenerating={combinedGenerating}
-                  isModelLoading={isLoadingModels}
-                  modelValue={config.model}
-                  models={models}
-                  onGroupChange={(value) => updateConfig('group', value)}
-                  onConfigChange={updateConfig}
-                  onClearMessages={handleClearMessages}
-                  onModelChange={(value) => updateConfig('model', value)}
-                  onStop={stopAll}
-                  onSubmit={handleSendMessage}
-                  hasMessages={messages.length > 0}
-                />
-              ) : (
-                <PlaygroundGenerationForm
-                  config={config}
-                  disabled={combinedGenerating}
-                  groups={groups}
-                  isGenerating={isMediaGenerating}
-                  isModelLoading={isLoadingModels}
-                  mode={modelMode}
-                  models={models}
-                  onGroupChange={(value) => updateConfig('group', value)}
-                  onModelChange={(value) => updateConfig('model', value)}
-                  onStop={stopMediaGeneration}
-                  onSubmitImage={generateImage}
-                  onSubmitVideo={generateVideo}
-                />
-              )}
-            </div>
+            ) : (
+              <PlaygroundGenerationForm
+                config={config}
+                disabled={combinedGenerating}
+                groups={groups}
+                isGenerating={isMediaGenerating}
+                isModelLoading={isLoadingModels}
+                mode={modelMode}
+                models={models}
+                onGroupChange={(value) => updateConfig('group', value)}
+                onModelChange={(value) => updateConfig('model', value)}
+                onStop={stopMediaGeneration}
+                onSubmitImage={generateImage}
+                onSubmitVideo={generateVideo}
+              />
+            )}
           </div>
         </div>
       </div>

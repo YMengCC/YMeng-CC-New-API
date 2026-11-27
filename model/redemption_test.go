@@ -297,7 +297,7 @@ func TestCatFKDatabaseMatrix(t *testing.T) {
 			common.SetDatabaseTypes(common.DatabaseType(dialect), common.DatabaseType(dialect))
 			initCol()
 			t.Cleanup(func() {
-				require.NoError(t, db.Migrator().DropTable(&CatFKOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}))
+				require.NoError(t, db.Migrator().DropTable(&CatFKPriceSlot{}, &CatFKOrder{}, &TopUp{}, &Redemption{}, &Log{}, &User{}))
 				DB, LOG_DB = previousDB, previousLogDB
 				common.SetDatabaseTypes(previousMainType, previousLogType)
 				initCol()
@@ -310,31 +310,85 @@ func TestCatFKDatabaseMatrix(t *testing.T) {
 			}
 			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
 			t.Logf("database version: %s", version)
-			// Simulate an existing pre-CatFK database before adding the detail table.
+			// Simulate an existing pre-CatFK database and pre-dual-mode CatFKOrder rows before upgrading.
 			require.NoError(t, db.AutoMigrate(&User{}, &TopUp{}, &Redemption{}, &Log{}))
 			legacy := &TopUp{UserId: 123, Amount: 2, Money: 2.5, TradeNo: "legacy-before-catfk", PaymentProvider: PaymentProviderEpay, Status: common.TopUpStatusPending}
 			require.NoError(t, db.Create(legacy).Error)
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).AutoMigrate(&catFKOrderLegacyV1{}))
+			legacyOrderTopUp := &TopUp{UserId: 123, Amount: 500, Money: 10.0, TradeNo: "legacy-catfk-v1", PaymentMethod: PaymentMethodCatFK, PaymentProvider: PaymentProviderCatFK, Status: common.TopUpStatusPending, CreateTime: 1700000000}
+			require.NoError(t, db.Create(legacyOrderTopUp).Error)
+			upstreamV1 := "upstream-legacy-v1"
+			require.NoError(t, db.Table(db.NamingStrategy.TableName("cat_fk_orders")).Create(&catFKOrderLegacyV1{
+				TopUpID: legacyOrderTopUp.Id, UserID: 123, TradeNo: "legacy-catfk-v1", TierID: "tier", ProductID: "product", ChannelID: "1",
+				ExpectedQuota: 500, PriceAmount: "10.00", Currency: "CNY", ShopID: "shop-v1", PaymentMethod: PaymentMethodCatFK,
+				UpstreamOrderID: &upstreamV1, Status: CatFKOrderStatusPaid, Version: 1, IdempotencyKey: "legacy-idem-v1",
+				CreatedAt: 1700000000, UpdatedAt: 1700000000,
+			}).Error)
 			for range 2 {
-				require.NoError(t, db.AutoMigrate(&CatFKOrder{}, &TopUp{}, &Redemption{}))
+				require.NoError(t, db.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}, &TopUp{}, &Redemption{}))
 			}
 			assert.Equal(t, int64(2), GetTopUpById(legacy.Id).Amount)
+			upgradedV1, err := GetCatFKOrderByTradeNo("legacy-catfk-v1")
+			require.NoError(t, err)
+			assert.Empty(t, upgradedV1.Mode)
+			assert.Empty(t, upgradedV1.ExpectedContact)
+			assert.Nil(t, upgradedV1.TransactionID)
+			require.NoError(t, db.Delete(&CatFKOrder{}, "id = ?", upgradedV1.ID).Error)
+			require.NoError(t, db.Delete(&TopUp{}, "id = ?", legacyOrderTopUp.Id).Error)
+			tables, err := BackupTableNames(db)
+			require.NoError(t, err)
+			assert.Contains(t, tables, db.NamingStrategy.TableName("cat_fk_orders"))
+			assert.Contains(t, tables, db.NamingStrategy.TableName("cat_fk_price_slots"))
 			t.Run("ordinary_redemption", TestRedeemCreditsQuotaExactlyOnce)
 			t.Run("invoice_rollback", TestRedeemRollsBackInvoiceSnapshotFailure)
 			t.Run("persistence", TestCatFKOrderPersistenceAndRecovery)
 			t.Run("completion", TestCatFKCompletionIsAtomicAndIdempotent)
 			t.Run("rollback", TestCatFKCompletionRollsBackFailures)
 			t.Run("unique_and_concurrent", TestCatFKUniqueLinksAndConcurrentCompletion)
+			t.Run("direct_and_tx_replay", TestCatFKDirectSettlementAndTransactionReplay)
+			t.Run("price_slot_leases", TestCatFKPriceSlotLeaseAndQuarantine)
 		})
 	}
 }
 
+type catFKOrderLegacyV1 struct {
+	ID                   int     `gorm:"primaryKey"`
+	TopUpID              int     `gorm:"uniqueIndex;not null"`
+	UserID               int     `gorm:"index;uniqueIndex:idx_catfk_user_idempotency,priority:1;not null"`
+	TradeNo              string  `gorm:"type:varchar(191);uniqueIndex;not null"`
+	TierID               string  `gorm:"type:varchar(191);not null"`
+	ProductID            string  `gorm:"type:varchar(191);not null"`
+	ChannelID            string  `gorm:"type:varchar(191);not null"`
+	ExpectedQuota        int     `gorm:"not null"`
+	PriceAmount          string  `gorm:"type:varchar(64);not null"`
+	Currency             string  `gorm:"type:varchar(16);not null"`
+	ShopID               string  `gorm:"type:varchar(128);uniqueIndex:idx_catfk_shop_upstream,priority:1;not null"`
+	ShopName             string  `gorm:"type:varchar(255)"`
+	ShopURL              string  `gorm:"type:text"`
+	PaymentMethod        string  `gorm:"type:varchar(50)"`
+	PaymentURL           string  `gorm:"type:text"`
+	PaymentQRCode        string  `gorm:"type:text"`
+	UpstreamOrderID      *string `gorm:"type:varchar(128);uniqueIndex:idx_catfk_shop_upstream,priority:2"`
+	RedemptionID         *int    `gorm:"uniqueIndex"`
+	Status               string  `gorm:"type:varchar(32);index:idx_catfk_due,priority:1;not null"`
+	NextQueryAt          int64   `gorm:"index:idx_catfk_due,priority:2;not null"`
+	LeaseUntil           int64   `gorm:"not null"`
+	Version              int64   `gorm:"not null"`
+	CredentialCiphertext string  `gorm:"type:text"`
+	IdempotencyKey       string  `gorm:"type:varchar(191);uniqueIndex:idx_catfk_user_idempotency,priority:2;not null"`
+	FailureCode          string  `gorm:"type:varchar(64)"`
+	CreatedAt            int64   `gorm:"autoCreateTime:false;not null"`
+	UpdatedAt            int64   `gorm:"autoUpdateTime:false;not null"`
+}
+
 func setupCatFKOrderFixture(t *testing.T, userID int, suffix string) *CatFKOrder {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}))
+	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}))
 	order, existed, err := CreateCatFKOrder(&CatFKOrder{
 		UserID: userID, TradeNo: "catfk-" + suffix, IdempotencyKey: "request-" + suffix,
 		TierID: "tier", ProductID: "product", ChannelID: "channel", ExpectedQuota: 500,
 		PriceAmount: "2.50", Currency: "CNY", ShopID: "shop", ShopName: "Snapshot shop", ShopURL: "https://example.com",
+		Mode: CatFKOrderModeRedemption, ExpectedContact: "123456",
 		CredentialCiphertext: "encrypted-credentials",
 	})
 	require.NoError(t, err)
@@ -422,20 +476,24 @@ func TestCatFKOrderPersistenceAndRecovery(t *testing.T) {
 func TestCatFKCompletionIsAtomicAndIdempotent(t *testing.T) {
 	userID, key := setupRedeemFixture(t, 500)
 	order := setupCatFKOrderFixture(t, userID, "complete")
-	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
+	_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-complete", "")
 	require.ErrorIs(t, err, ErrCatFKOrderConflict)
 	order = markCatFKOrderPaid(t, order)
 	assert.Equal(t, "https://qr.alipay.com/upx-code", order.PaymentQRCode)
 	_, err = GetCatFKRedemptionForUser(userID, order.TradeNo)
 	require.ErrorIs(t, err, ErrCatFKOrderConflict, "a code is shown only after completion")
-	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version-1, key, "")
+	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version-1, key, "tx-complete", "")
 	require.ErrorIs(t, err, ErrCatFKOrderConflict)
-	already, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
+	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "", "")
+	require.ErrorIs(t, err, ErrCatFKTransactionRequired, "new orders require an official transaction ID")
+	already, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-complete", "")
 	require.NoError(t, err)
 	assert.False(t, already)
-	already, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, "", "")
+	already, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, "", "tx-complete", "")
 	require.NoError(t, err)
 	assert.True(t, already)
+	_, err = CompleteVerifiedCatFKOrder(order.ID, order.Version, "", "tx-other", "")
+	require.ErrorIs(t, err, ErrCatFKOrderConflict)
 	stored, err := GetCatFKOrderForUser(userID, order.TradeNo)
 	require.NoError(t, err)
 	assert.Equal(t, CatFKOrderStatusCompleted, stored.Status)
@@ -490,7 +548,7 @@ func TestCatFKCompletionRollsBackFailures(t *testing.T) {
 			}
 			var before Redemption
 			require.NoError(t, DB.Where(commonKeyCol+" = ?", key).First(&before).Error)
-			_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "")
+			_, err := CompleteVerifiedCatFKOrder(order.ID, order.Version, key, "tx-"+scenario, "")
 			require.Error(t, err)
 			stored, err := GetCatFKOrderByTradeNo(order.TradeNo)
 			require.NoError(t, err)
@@ -527,7 +585,7 @@ func TestCatFKUniqueLinksAndConcurrentCompletion(t *testing.T) {
 	results := make(chan bool, 2)
 	for range 2 {
 		wg.Go(func() {
-			already, err := CompleteVerifiedCatFKOrder(first.ID, first.Version, key, "")
+			already, err := CompleteVerifiedCatFKOrder(first.ID, first.Version, key, "tx-first", "")
 			results <- err == nil && !already
 		})
 	}
@@ -547,7 +605,7 @@ func TestCatFKUniqueLinksAndConcurrentCompletion(t *testing.T) {
 	require.True(t, ok)
 	second, err = GetCatFKOrderByTradeNo(second.TradeNo)
 	require.NoError(t, err)
-	_, err = CompleteVerifiedCatFKOrder(second.ID, second.Version, key, "")
+	_, err = CompleteVerifiedCatFKOrder(second.ID, second.Version, key, "tx-second", "")
 	require.ErrorIs(t, err, ErrRedemptionUsed, "the same local code cannot fund another purchase")
 	stored, err := GetCatFKOrderByTradeNo(second.TradeNo)
 	require.NoError(t, err)
@@ -560,6 +618,165 @@ func TestCatFKUniqueLinksAndConcurrentCompletion(t *testing.T) {
 	var user User
 	require.NoError(t, DB.First(&user, "id = ?", userID).Error)
 	assert.Equal(t, 500, user.Quota)
+}
+
+func TestCatFKDirectSettlementAndTransactionReplay(t *testing.T) {
+	userID, key := setupRedeemFixture(t, 500)
+	require.NoError(t, DB.AutoMigrate(&CatFKOrder{}, &CatFKPriceSlot{}))
+
+	// 1. Direct-mode order credits wallet directly, hides redemption lookup, and populates CatFKMode on TopUp history.
+	directOrder, existed, err := CreateCatFKOrder(&CatFKOrder{
+		UserID: userID, TradeNo: "catfk_direct_1", IdempotencyKey: "idem-direct-1",
+		TierID: "direct:10", ProductID: "slot-1", ChannelID: "1", ExpectedQuota: 600,
+		PriceAmount: "70.00", Currency: "CNY", ShopID: "shop", ShopName: "Direct Shop",
+		PaymentMethod: PaymentMethodCatFKWeChat, Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_1",
+		CredentialCiphertext: "encrypted",
+	})
+	require.NoError(t, err)
+	require.False(t, existed)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Delete(&CatFKOrder{}, "id = ?", directOrder.ID).Error)
+		require.NoError(t, DB.Delete(&TopUp{}, "id = ?", directOrder.TopUpID).Error)
+	})
+
+	_, err = GetCatFKRedemptionForUser(userID, directOrder.TradeNo)
+	require.ErrorIs(t, err, ErrCatFKDirectOrderNoRedemption)
+	directOrder = markCatFKOrderPaid(t, directOrder)
+	_, err = CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "", "")
+	require.ErrorIs(t, err, ErrCatFKTransactionRequired)
+	already, err := CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
+	require.NoError(t, err)
+	assert.False(t, already)
+	already, err = CompleteVerifiedCatFKOrder(directOrder.ID, directOrder.Version, "", "wx-official-tx-1", "")
+	require.NoError(t, err)
+	assert.True(t, already)
+
+	storedDirect, err := GetCatFKOrderByTradeNo(directOrder.TradeNo)
+	require.NoError(t, err)
+	assert.Equal(t, CatFKOrderStatusCompleted, storedDirect.Status)
+	assert.Nil(t, storedDirect.RedemptionID)
+	require.NotNil(t, storedDirect.TransactionID)
+	assert.Equal(t, "wx-official-tx-1", *storedDirect.TransactionID)
+	_, err = GetCatFKRedemptionForUser(userID, directOrder.TradeNo)
+	require.ErrorIs(t, err, ErrCatFKDirectOrderNoRedemption)
+
+	topups, total, err := GetUserTopUps(userID, &common.PageInfo{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+	assert.Equal(t, CatFKOrderModeDirect, topups[0].CatFKMode)
+
+	// 2. Cross-mode transaction_id replay must fail and roll back without crediting wallet or consuming redemption code.
+	replayRedemption := markCatFKOrderPaid(t, setupCatFKOrderFixture(t, userID, "tx-replay-redemption"))
+	_, err = CompleteVerifiedCatFKOrder(replayRedemption.ID, replayRedemption.Version, key, "wx-official-tx-1", "")
+	require.ErrorIs(t, err, ErrCatFKTransactionReplay)
+
+	// 3. Concurrent direct orders competing on the same transaction_id settle at most one.
+	d1, _, err := CreateCatFKOrder(&CatFKOrder{
+		UserID: userID, TradeNo: "catfk_direct_race_1", IdempotencyKey: "idem-race-1",
+		TierID: "direct:5", ProductID: "slot-1", ChannelID: "1", ExpectedQuota: 200,
+		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_race_1",
+	})
+	require.NoError(t, err)
+	d2, _, err := CreateCatFKOrder(&CatFKOrder{
+		UserID: userID, TradeNo: "catfk_direct_race_2", IdempotencyKey: "idem-race-2",
+		TierID: "direct:5", ProductID: "slot-2", ChannelID: "1", ExpectedQuota: 200,
+		PriceAmount: "35.00", Currency: "CNY", ShopID: "shop", Mode: CatFKOrderModeDirect, ExpectedContact: "catfk_direct_race_2",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Delete(&CatFKOrder{}, "id IN ?", []int{d1.ID, d2.ID}).Error)
+		require.NoError(t, DB.Delete(&TopUp{}, "id IN ?", []int{d1.TopUpID, d2.TopUpID}).Error)
+	})
+	d1 = markCatFKOrderPaid(t, d1)
+	d2 = markCatFKOrderPaid(t, d2)
+
+	var wg sync.WaitGroup
+	wins := make(chan bool, 2)
+	for _, candidate := range []*CatFKOrder{d1, d2} {
+		wg.Go(func() {
+			done, settleErr := CompleteVerifiedCatFKOrder(candidate.ID, candidate.Version, "", "wx-shared-race-tx", "")
+			wins <- settleErr == nil && !done
+		})
+	}
+	wg.Wait()
+	close(wins)
+	winCount := 0
+	for won := range wins {
+		if won {
+			winCount++
+		}
+	}
+	assert.Equal(t, 1, winCount)
+
+	// 4. Pre-upgrade in-flight redemption order (empty Mode and ExpectedContact) still completes without TransactionID.
+	legacyInFlight, _, err := CreateCatFKOrder(&CatFKOrder{
+		UserID: userID, TradeNo: "catfk_preupgrade", IdempotencyKey: "idem-preupgrade",
+		TierID: "tier", ProductID: "product", ChannelID: "1", ExpectedQuota: 500,
+		PriceAmount: "2.50", Currency: "CNY", ShopID: "shop",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Delete(&CatFKOrder{}, "id = ?", legacyInFlight.ID).Error)
+		require.NoError(t, DB.Delete(&TopUp{}, "id = ?", legacyInFlight.TopUpID).Error)
+	})
+	legacyInFlight = markCatFKOrderPaid(t, legacyInFlight)
+	_, err = CompleteVerifiedCatFKOrder(legacyInFlight.ID, legacyInFlight.Version, key, "", "")
+	require.NoError(t, err)
+
+	var user User
+	require.NoError(t, DB.First(&user, "id = ?", userID).Error)
+	assert.Equal(t, 600+200+500, user.Quota)
+}
+
+func TestCatFKPriceSlotLeaseAndQuarantine(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&CatFKPriceSlot{}))
+	t.Cleanup(func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&CatFKPriceSlot{}).Error)
+	})
+	now := int64(1700000000)
+	keys := []string{"slot-a", "slot-b"}
+
+	first, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "10.00", "order-1", now, 60)
+	require.NoError(t, err)
+	require.True(t, ok)
+	second, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "20.00", "order-2", now, 60)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.NotEqual(t, first.GoodsKey, second.GoodsKey)
+
+	// Exhausted pool returns ok=false without overwriting active leases.
+	_, ok, err = AcquireCatFKPriceSlot("shop-1", keys, "30.00", "order-3", now, 60)
+	require.NoError(t, err)
+	assert.False(t, ok)
+
+	// Clean release records confirmed price and prefers matching price on next acquire.
+	released, err := ReleaseCatFKPriceSlot(second.ID, second.Version, second.HolderToken, "20.00", now+10)
+	require.NoError(t, err)
+	assert.True(t, released)
+
+	// Expired lease on first is quarantined, NOT reused! Only second ("20.00") is acquired.
+	reused, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "20.00", "order-4", now+61, 60)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, second.GoodsKey, reused.GoodsKey)
+
+	_, ok, err = AcquireCatFKPriceSlot("shop-1", keys, "10.00", "order-5", now+61, 60)
+	require.NoError(t, err)
+	assert.False(t, ok, "expired slot must stay quarantined until explicitly reset")
+
+	var quarantinedSlot CatFKPriceSlot
+	require.NoError(t, DB.First(&quarantinedSlot, "id = ?", first.ID).Error)
+	assert.Equal(t, CatFKSlotStatusQuarantined, quarantinedSlot.Status)
+	assert.Equal(t, "lease_expired", quarantinedSlot.QuarantineCode)
+
+	resetCount, err := ResetQuarantinedCatFKPriceSlots("shop-1", now+62)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resetCount)
+
+	recovered, ok, err := AcquireCatFKPriceSlot("shop-1", keys, "15.00", "order-6", now+63, 60)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, first.GoodsKey, recovered.GoodsKey)
 }
 
 // Exactly one of several concurrent redeems of the same code may win, and
