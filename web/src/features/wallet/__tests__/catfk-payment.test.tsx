@@ -272,3 +272,96 @@ it('quotes and confirms custom or preset amounts in direct mode without requirin
   expect(result.current.statusOrder?.tradeNo).toBe('direct-trade')
   expect(result.current.statusOrder?.amount).toBe(15)
 })
+
+it('seamlessly falls back from direct quote to redemption confirmation when auto mode detects an expired merchant token', async () => {
+  const fallbackQuote = {
+    quote_id: 'q-fallback',
+    amount: 72,
+    currency: 'CNY',
+    topup_amount: 10,
+    mode: 'redemption' as const,
+    product_id: 'ten',
+  }
+  const onModeFallback = vi.fn()
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { success: true, data: fallbackQuote } })
+    .mockResolvedValueOnce(pendingOrder('fallback-trade'))
+  vi.spyOn(api, 'get').mockResolvedValue(
+    orderRead('fallback-trade', 'pending')
+  )
+
+  const { result } = renderHook(
+    () =>
+      useCatfkPayment(
+        { ...info, mode: 'direct', configured_mode: 'auto' },
+        1,
+        undefined,
+        onModeFallback
+      ),
+    { wrapper }
+  )
+  await act(() => result.current.selectDirectAmount(10, channel))
+  expect(result.current.open).toBe(true)
+  expect(onModeFallback).toHaveBeenCalledOnce()
+
+  // QQ is required once the quote falls back to redemption mode.
+  await act(() => result.current.confirm())
+  expect(post).toHaveBeenCalledTimes(1)
+
+  act(() => result.current.setQQ('123456'))
+  await act(() => result.current.confirm())
+
+  expect(post).toHaveBeenNthCalledWith(
+    2,
+    '/api/user/catfk/pay',
+    expect.objectContaining({
+      product_id: 'ten',
+      channel_id: 'wechat',
+      quote_id: 'q-fallback',
+      qq: '123456',
+    })
+  )
+  expect(result.current.statusOrder?.tradeNo).toBe('fallback-trade')
+})
+
+it('treats rate-limit and max-amount responses as pre-creation rejections and rotates the idempotency key on retry', async () => {
+  const directQuote = {
+    quote_id: 'q-limit',
+    amount: 72,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { success: true, data: directQuote } })
+    .mockResolvedValueOnce({
+      data: {
+        success: false,
+        message: 'Too many Catfk payment requests, please try again shortly',
+        message_key:
+          'Too many Catfk payment requests, please try again shortly',
+      },
+    })
+    .mockResolvedValueOnce(pendingOrder('after-rate-limit'))
+  vi.spyOn(api, 'get').mockResolvedValue(
+    orderRead('after-rate-limit', 'pending')
+  )
+
+  const { result } = renderHook(
+    () => useCatfkPayment({ ...info, mode: 'direct' }, 1),
+    { wrapper }
+  )
+  await act(() => result.current.selectDirectAmount(10, channel))
+  await act(() => result.current.confirm())
+  expect(result.current.statusOrder).toBeNull()
+  expect(result.current.open).toBe(true)
+
+  await act(() => result.current.confirm())
+  const firstKey = (post.mock.calls[1][1] as { idempotency_key: string })
+    .idempotency_key
+  const secondKey = (post.mock.calls[2][1] as { idempotency_key: string })
+    .idempotency_key
+  expect(secondKey).not.toBe(firstKey)
+  expect(result.current.statusOrder?.tradeNo).toBe('after-rate-limit')
+})

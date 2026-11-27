@@ -41,6 +41,9 @@ export async function payCatfk(request: CatfkPayRequest): Promise<CatfkOrder> {
     'CatFK order encryption key is not configured',
     'CatFK quote is invalid or expired',
     'CatFK payment channel is busy, please try again shortly',
+    'Too many Catfk payment requests, please try again shortly',
+    'Catfk single payment cannot exceed ¥{{amount}}',
+    'Custom amounts are temporarily unavailable, please select a preset amount',
     'Payment compliance confirmation is required',
   ]
   if (

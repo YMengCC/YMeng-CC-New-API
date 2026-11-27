@@ -324,6 +324,7 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.POST("/catfk/channels", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.ListCatFKPaymentChannels)
 			optionRoute.POST("/catfk/slots/reset", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.ResetCatFKPriceSlots)
+			optionRoute.POST("/catfk/merchant-token/check", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.CheckCatFKMerchantToken)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)

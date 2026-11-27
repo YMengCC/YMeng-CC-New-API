@@ -30,11 +30,14 @@ type CatFKChannel struct {
 const (
 	CatFKModeRedemption = "redemption"
 	CatFKModeDirect     = "direct"
+	CatFKModeAuto       = "auto"
 )
 
 const (
-	CatFKDefaultAutoRestockMin   = 5
-	CatFKDefaultAutoRestockBatch = 20
+	CatFKDefaultAutoRestockMin     = 5
+	CatFKDefaultAutoRestockBatch   = 20
+	CatFKDefaultMaxAmountCNY       = 5000.0
+	CatFKDefaultMaxOrdersPerMinute = 15
 )
 
 const (
@@ -114,24 +117,28 @@ func IsCatFKPaymentMethod(method string) bool {
 }
 
 type CatFKSetting struct {
-	Enabled          bool           `json:"enabled"`
-	StoreToken       string         `json:"store_token"`
-	MerchantToken    string         `json:"merchant_token"`
-	Products         []CatFKProduct `json:"products"`
-	DirectGoodsKeys  []string       `json:"direct_goods_keys"`
-	AutoRestockMin   int            `json:"auto_restock_min"`
-	AutoRestockBatch int            `json:"auto_restock_batch"`
-	Channels         []CatFKChannel `json:"channels"`
-	Mode             string         `json:"mode"`
+	Enabled            bool           `json:"enabled"`
+	StoreToken         string         `json:"store_token"`
+	MerchantToken      string         `json:"merchant_token"`
+	Products           []CatFKProduct `json:"products"`
+	DirectGoodsKeys    []string       `json:"direct_goods_keys"`
+	AutoRestockMin     int            `json:"auto_restock_min"`
+	AutoRestockBatch   int            `json:"auto_restock_batch"`
+	MaxAmountCNY       float64        `json:"max_amount_cny"`
+	MaxOrdersPerMinute int            `json:"max_orders_per_minute"`
+	Channels           []CatFKChannel `json:"channels"`
+	Mode               string         `json:"mode"`
 }
 
 var catfkSetting = CatFKSetting{
-	Products:         []CatFKProduct{},
-	DirectGoodsKeys:  []string{},
-	AutoRestockMin:   CatFKDefaultAutoRestockMin,
-	AutoRestockBatch: CatFKDefaultAutoRestockBatch,
-	Channels:         []CatFKChannel{},
-	Mode:             CatFKModeRedemption,
+	Products:           []CatFKProduct{},
+	DirectGoodsKeys:    []string{},
+	AutoRestockMin:     CatFKDefaultAutoRestockMin,
+	AutoRestockBatch:   CatFKDefaultAutoRestockBatch,
+	MaxAmountCNY:       CatFKDefaultMaxAmountCNY,
+	MaxOrdersPerMinute: CatFKDefaultMaxOrdersPerMinute,
+	Channels:           []CatFKChannel{},
+	Mode:               CatFKModeRedemption,
 }
 var catfkProductIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 var catfkStoreTokenPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
@@ -239,8 +246,18 @@ func ValidateCatFKOption(key, value string) error {
 		if err != nil || n < 1 || n > 500 {
 			return common.NewMessage("Invalid CatFK settings")
 		}
+	case "catfk_setting.max_amount_cny":
+		amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil || math.IsNaN(amount) || math.IsInf(amount, 0) || amount < 1 || amount > 1000000 {
+			return common.NewMessage("Invalid CatFK settings")
+		}
+	case "catfk_setting.max_orders_per_minute":
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n < 1 || n > 600 {
+			return common.NewMessage("Invalid CatFK settings")
+		}
 	case "catfk_setting.mode":
-		if value != CatFKModeRedemption && value != CatFKModeDirect {
+		if value != CatFKModeRedemption && value != CatFKModeDirect && value != CatFKModeAuto {
 			return common.NewMessage("Invalid CatFK settings")
 		}
 	case "catfk_setting.channels":

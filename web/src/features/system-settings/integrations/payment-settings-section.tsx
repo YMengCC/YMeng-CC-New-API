@@ -172,7 +172,7 @@ const paymentSchema = z.object({
     }
   }),
   CatFKEnabled: z.boolean(),
-  CatFKMode: z.enum(['redemption', 'direct']),
+  CatFKMode: z.enum(['redemption', 'direct', 'auto']),
   CatFKStoreToken: z.string().max(4096),
   CatFKMerchantToken: z.string().max(4096),
   CatFKProducts: z.string().refine((value) => {
@@ -193,6 +193,8 @@ const paymentSchema = z.object({
   }, 'Invalid CatFK direct slot settings'),
   CatFKAutoRestockMin: z.coerce.number().int().min(1).max(1000),
   CatFKAutoRestockBatch: z.coerce.number().int().min(1).max(500),
+  CatFKMaxAmountCNY: z.coerce.number().min(1).max(1000000),
+  CatFKMaxOrdersPerMinute: z.coerce.number().int().min(1).max(600),
   CatFKChannels: z.string().refine((value) => {
     try {
       parseCatFKChannels(value)
@@ -244,6 +246,8 @@ type PaymentSettingsDefaultValues = Omit<
   | 'CatFKDirectGoodsKeys'
   | 'CatFKAutoRestockMin'
   | 'CatFKAutoRestockBatch'
+  | 'CatFKMaxAmountCNY'
+  | 'CatFKMaxOrdersPerMinute'
 > &
   Partial<
     Pick<
@@ -253,6 +257,8 @@ type PaymentSettingsDefaultValues = Omit<
       | 'CatFKDirectGoodsKeys'
       | 'CatFKAutoRestockMin'
       | 'CatFKAutoRestockBatch'
+      | 'CatFKMaxAmountCNY'
+      | 'CatFKMaxOrdersPerMinute'
     >
   >
 
@@ -293,6 +299,8 @@ export function PaymentSettingsSection({
       CatFKDirectGoodsKeys: defaultValues.CatFKDirectGoodsKeys ?? '[]',
       CatFKAutoRestockMin: defaultValues.CatFKAutoRestockMin ?? 5,
       CatFKAutoRestockBatch: defaultValues.CatFKAutoRestockBatch ?? 20,
+      CatFKMaxAmountCNY: defaultValues.CatFKMaxAmountCNY ?? 5000,
+      CatFKMaxOrdersPerMinute: defaultValues.CatFKMaxOrdersPerMinute ?? 15,
       ...waffoDefaultValues,
       ...waffoPancakeDefaultValues,
     }),
@@ -549,6 +557,8 @@ export function PaymentSettingsSection({
       CatFKDirectGoodsKeys: values.CatFKDirectGoodsKeys,
       CatFKAutoRestockMin: values.CatFKAutoRestockMin,
       CatFKAutoRestockBatch: values.CatFKAutoRestockBatch,
+      CatFKMaxAmountCNY: values.CatFKMaxAmountCNY,
+      CatFKMaxOrdersPerMinute: values.CatFKMaxOrdersPerMinute,
       CatFKChannels: values.CatFKChannels,
       WaffoEnabled: values.WaffoEnabled,
       WaffoSandbox: values.WaffoSandbox,
@@ -603,6 +613,8 @@ export function PaymentSettingsSection({
       CatFKDirectGoodsKeys: initialRef.current.CatFKDirectGoodsKeys,
       CatFKAutoRestockMin: initialRef.current.CatFKAutoRestockMin,
       CatFKAutoRestockBatch: initialRef.current.CatFKAutoRestockBatch,
+      CatFKMaxAmountCNY: initialRef.current.CatFKMaxAmountCNY,
+      CatFKMaxOrdersPerMinute: initialRef.current.CatFKMaxOrdersPerMinute,
       CatFKChannels: initialRef.current.CatFKChannels,
       WaffoEnabled: initialRef.current.WaffoEnabled,
       WaffoSandbox: initialRef.current.WaffoSandbox,
@@ -869,6 +881,20 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'catfk_setting.auto_restock_batch',
         value: sanitized.CatFKAutoRestockBatch,
+      })
+    }
+    if (sanitized.CatFKMaxAmountCNY !== initial.CatFKMaxAmountCNY) {
+      updates.push({
+        key: 'catfk_setting.max_amount_cny',
+        value: sanitized.CatFKMaxAmountCNY,
+      })
+    }
+    if (
+      sanitized.CatFKMaxOrdersPerMinute !== initial.CatFKMaxOrdersPerMinute
+    ) {
+      updates.push({
+        key: 'catfk_setting.max_orders_per_minute',
+        value: sanitized.CatFKMaxOrdersPerMinute,
       })
     }
     if (
@@ -1820,6 +1846,10 @@ export function PaymentSettingsSection({
                   CatFKDirectGoodsKeys: form.watch('CatFKDirectGoodsKeys'),
                   CatFKAutoRestockMin: form.watch('CatFKAutoRestockMin'),
                   CatFKAutoRestockBatch: form.watch('CatFKAutoRestockBatch'),
+                  CatFKMaxAmountCNY: form.watch('CatFKMaxAmountCNY'),
+                  CatFKMaxOrdersPerMinute: form.watch(
+                    'CatFKMaxOrdersPerMinute'
+                  ),
                   CatFKChannels: form.watch('CatFKChannels'),
                 }}
                 complianceConfirmed={complianceConfirmed}
@@ -1831,14 +1861,19 @@ export function PaymentSettingsSection({
                       shouldValidate: true,
                     })
                   } else if (key === 'CatFKMode') {
-                    form.setValue(
-                      key,
-                      value === 'direct' ? 'direct' : 'redemption',
-                      { shouldDirty: true, shouldValidate: true }
-                    )
+                    const nextMode =
+                      value === 'direct' || value === 'auto'
+                        ? value
+                        : 'redemption'
+                    form.setValue(key, nextMode, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
                   } else if (
                     key === 'CatFKAutoRestockMin' ||
-                    key === 'CatFKAutoRestockBatch'
+                    key === 'CatFKAutoRestockBatch' ||
+                    key === 'CatFKMaxAmountCNY' ||
+                    key === 'CatFKMaxOrdersPerMinute'
                   ) {
                     form.setValue(key, Number(value), {
                       shouldDirty: true,

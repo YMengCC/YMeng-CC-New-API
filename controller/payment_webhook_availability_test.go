@@ -305,6 +305,10 @@ func TestCatFKSettingsRejectInvalidMappings(t *testing.T) {
 		{"direct_goods_keys", `["https://other.example/item/slot-1"]`},
 		{"auto_restock_min", "0"},
 		{"auto_restock_batch", "501"},
+		{"max_amount_cny", "0"},
+		{"max_amount_cny", "1000001"},
+		{"max_orders_per_minute", "0"},
+		{"max_orders_per_minute", "601"},
 		{"channels", `[{"id":"alipay","name":"Ali"},{"id":"alipay","name":"Other"}]`},
 		{"store_token", "invalid\nheader"},
 		{"merchant_token", "invalid\nheader"},
@@ -316,6 +320,8 @@ func TestCatFKSettingsRejectInvalidMappings(t *testing.T) {
 	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.products", `[{"id":"tier","name":"Credit","goods_key":"goods","amount":1.5}]`))
 	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.direct_goods_keys", `["slot-a","https://catfk.com/item/slot-b"]`))
 	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.mode", operation_setting.CatFKModeDirect))
+	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.max_amount_cny", "5000"))
+	require.NoError(t, operation_setting.ValidateCatFKOption("catfk_setting.max_orders_per_minute", "15"))
 }
 
 func TestCatFKStoreTokenIsNotReturnedByOptions(t *testing.T) {

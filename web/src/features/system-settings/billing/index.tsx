@@ -94,6 +94,8 @@ const defaultBillingSettings: BillingSettings = {
   'catfk_setting.direct_goods_keys': '[]',
   'catfk_setting.auto_restock_min': 5,
   'catfk_setting.auto_restock_batch': 20,
+  'catfk_setting.max_amount_cny': 5000,
+  'catfk_setting.max_orders_per_minute': 15,
   'catfk_setting.channels': '[]',
   WaffoEnabled: false,
   WaffoApiKey: '',

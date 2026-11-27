@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -23,18 +24,28 @@ import (
 )
 
 var (
-	ErrCatFKProtocolUnverified error = common.NewMessage("CatFK protocol is not verified")
-	ErrCatFKDisabled           error = common.NewMessage("CatFK payments are disabled")
-	ErrCatFKEncryptionKey      error = common.NewMessage("CatFK order encryption key is not configured")
-	ErrCatFKInvalidRequest     error = common.NewMessage("Invalid CatFK payment request")
-	ErrCatFKInvalidQuote       error = common.NewMessage("CatFK quote is invalid or expired")
-	ErrCatFKOrderUnavailable   error = common.NewMessage("CatFK order is unavailable")
-	ErrCatFKSlotBusy           error = common.NewMessage("CatFK payment channel is busy, please try again shortly")
-	ErrCatFKVerification       error = common.NewMessage("CatFK payment requires attention")
-	ErrCatFKRedemptionPending  error = common.NewMessage("Redemption code is not available yet")
+	ErrCatFKProtocolUnverified   error = common.NewMessage("CatFK protocol is not verified")
+	ErrCatFKDisabled             error = common.NewMessage("CatFK payments are disabled")
+	ErrCatFKEncryptionKey        error = common.NewMessage("CatFK order encryption key is not configured")
+	ErrCatFKInvalidRequest       error = common.NewMessage("Invalid CatFK payment request")
+	ErrCatFKInvalidQuote         error = common.NewMessage("CatFK quote is invalid or expired")
+	ErrCatFKOrderUnavailable     error = common.NewMessage("CatFK order is unavailable")
+	ErrCatFKSlotBusy             error = common.NewMessage("CatFK payment channel is busy, please try again shortly")
+	ErrCatFKRateLimited          error = common.NewMessage("Too many Catfk payment requests, please try again shortly")
+	ErrCatFKCustomAmountFallback error = common.NewMessage("Custom amounts are temporarily unavailable, please select a preset amount")
+	ErrCatFKVerification         error = common.NewMessage("CatFK payment requires attention")
+	ErrCatFKRedemptionPending    error = common.NewMessage("Redemption code is not available yet")
 
-	errCatFKSlotAmbiguous = errors.New("catfk slot remote state is ambiguous")
+	errCatFKSlotAmbiguous       = errors.New("catfk slot remote state is ambiguous")
+	errCatFKMerchantAuthExpired = errors.New("catfk merchant token is invalid or expired")
+	errCatFKOutOfStock          = errors.New("catfk goods out of stock")
 )
+
+const catFKMaxAmountMessageKey = "Catfk single payment cannot exceed ¥{{amount}}"
+
+func catFKMaxAmountError(limit decimal.Decimal) error {
+	return common.NewMessage(catFKMaxAmountMessageKey, map[string]any{"amount": limit.StringFixed(2)})
+}
 
 type CatFKQuoteRequest struct {
 	ProductID string `json:"product_id"`
@@ -47,6 +58,8 @@ type CatFKQuote struct {
 	Amount      float64 `json:"amount"`
 	Currency    string  `json:"currency"`
 	TopUpAmount float64 `json:"topup_amount"`
+	Mode        string  `json:"mode,omitempty"`
+	ProductID   string  `json:"product_id,omitempty"`
 	// Fee is included in Amount; FeeRate is its percentage of the goods price.
 	Fee     *float64 `json:"fee,omitempty"`
 	FeeRate *float64 `json:"fee_rate,omitempty"`
@@ -86,9 +99,20 @@ type CatFKInfo struct {
 	Enabled           bool                             `json:"enabled"`
 	Available         bool                             `json:"available"`
 	Mode              string                           `json:"mode"`
+	ConfiguredMode    string                           `json:"configured_mode,omitempty"`
+	FallbackActive    bool                             `json:"fallback_active,omitempty"`
+	MaxAmountCNY      float64                          `json:"max_amount_cny,omitempty"`
 	UnavailableReason string                           `json:"unavailable_reason"`
 	Products          []CatFKPublicProduct             `json:"products"`
 	Channels          []operation_setting.CatFKChannel `json:"channels"`
+}
+
+type CatFKMerchantTokenStatus struct {
+	Configured     bool   `json:"configured"`
+	Valid          bool   `json:"valid"`
+	ConfiguredMode string `json:"configured_mode"`
+	EffectiveMode  string `json:"effective_mode"`
+	FallbackActive bool   `json:"fallback_active"`
 }
 
 type CatFKDynamicSlotReady struct {
@@ -103,6 +127,8 @@ type CatFKAdapter interface {
 	Quote(context.Context, string, string, string) (*CatFKOffer, error)
 	QuoteDirect(ctx context.Context, storeToken, merchantToken, slotGoodsKey, channelID, baseAmount string) (*CatFKOffer, error)
 	PrepareDirectSlot(ctx context.Context, storeToken, merchantToken, slotGoodsKey, channelID, baseAmount, knownConfirmedPrice string, minStock, restockBatch int) (*CatFKDynamicSlotReady, error)
+	ReplenishDirectSlot(ctx context.Context, storeToken, merchantToken, slotGoodsKey string, minStock, restockBatch int, force bool) (int, error)
+	CheckMerchantToken(ctx context.Context, merchantToken string) (bool, error)
 	Create(context.Context, *model.CatFKOrder, CatFKCredentials, string) (*CatFKCreatedOrder, error)
 	Query(context.Context, *model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error)
 	Channels(context.Context, string) ([]operation_setting.CatFKChannel, error)
@@ -169,6 +195,12 @@ func (catFKUnverifiedAdapter) QuoteDirect(context.Context, string, string, strin
 func (catFKUnverifiedAdapter) PrepareDirectSlot(context.Context, string, string, string, string, string, string, int, int) (*CatFKDynamicSlotReady, error) {
 	return nil, ErrCatFKProtocolUnverified
 }
+func (catFKUnverifiedAdapter) ReplenishDirectSlot(context.Context, string, string, string, int, int, bool) (int, error) {
+	return 0, ErrCatFKProtocolUnverified
+}
+func (catFKUnverifiedAdapter) CheckMerchantToken(context.Context, string) (bool, error) {
+	return false, ErrCatFKProtocolUnverified
+}
 func (catFKUnverifiedAdapter) Create(context.Context, *model.CatFKOrder, CatFKCredentials, string) (*CatFKCreatedOrder, error) {
 	return nil, ErrCatFKProtocolUnverified
 }
@@ -232,6 +264,135 @@ func (catFKModelStore) QuarantineSlot(id int, version int64, holderToken, code s
 	return model.QuarantineCatFKPriceSlot(id, version, holderToken, code, now)
 }
 
+type catFKMerchantHealthTracker struct {
+	mu        sync.Mutex
+	tokenHash string
+	checked   bool
+	valid     bool
+	checkedAt int64
+}
+
+func catFKMerchantTokenHash(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(trimmed)))
+}
+
+func (h *catFKMerchantHealthTracker) isInvalid(rawToken string) bool {
+	hash := catFKMerchantTokenHash(rawToken)
+	if hash == "" {
+		return true
+	}
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.tokenHash != hash {
+		return false
+	}
+	return h.checked && !h.valid
+}
+
+func (h *catFKMerchantHealthTracker) shouldProbe(rawToken string, now int64) bool {
+	hash := catFKMerchantTokenHash(rawToken)
+	if hash == "" || h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.tokenHash != hash || !h.checked {
+		return true
+	}
+	return now-h.checkedAt >= 60
+}
+
+func (h *catFKMerchantHealthTracker) record(rawToken string, valid bool, now int64) {
+	if h == nil {
+		return
+	}
+	hash := catFKMerchantTokenHash(rawToken)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.tokenHash = hash
+	h.checked = hash != ""
+	h.valid = valid && hash != ""
+	h.checkedAt = now
+}
+
+func (h *catFKMerchantHealthTracker) reset() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	*h = catFKMerchantHealthTracker{}
+}
+
+type catFKOrderRateLimiter struct {
+	mu      sync.Mutex
+	buckets map[string][]int64
+}
+
+func (l *catFKOrderRateLimiter) allow(nowUnix int64, limit int, keys ...string) bool {
+	if l == nil || limit <= 0 {
+		return true
+	}
+	cutoff := nowUnix - 60
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.buckets == nil {
+		l.buckets = make(map[string][]int64)
+	}
+	activeKeys := make([]string, 0, len(keys))
+	seen := make(map[string]bool, len(keys))
+	for _, raw := range keys {
+		k := strings.TrimSpace(raw)
+		if k == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		activeKeys = append(activeKeys, k)
+	}
+	for _, k := range activeKeys {
+		existing := l.buckets[k]
+		kept := existing[:0]
+		for _, ts := range existing {
+			if ts > cutoff {
+				kept = append(kept, ts)
+			}
+		}
+		l.buckets[k] = kept
+		if len(kept) >= limit {
+			return false
+		}
+	}
+	for _, k := range activeKeys {
+		l.buckets[k] = append(l.buckets[k], nowUnix)
+	}
+	if len(l.buckets) > 5000 {
+		for k, list := range l.buckets {
+			if len(list) == 0 || list[len(list)-1] <= cutoff {
+				delete(l.buckets, k)
+			}
+		}
+	}
+	return true
+}
+
+var (
+	defaultCatFKMerchantHealth catFKMerchantHealthTracker
+	defaultCatFKOrderLimiter   catFKOrderRateLimiter
+	defaultCatFKHTTPAdapter    = newCatFKHTTPAdapter()
+)
+
+func NotifyCatFKMerchantTokenUpdated() {
+	defaultCatFKMerchantHealth.reset()
+	defaultCatFKHTTPAdapter.ResetCache()
+}
+
 type catFKService struct {
 	adapter   CatFKAdapter
 	store     catFKStore
@@ -239,20 +400,61 @@ type catFKService struct {
 	now       func() time.Time
 	key       func() ([]byte, error)
 	userGroup func(int) (string, error)
+	health    *catFKMerchantHealthTracker
+	limiter   *catFKOrderRateLimiter
+	async     func(func())
+	lazyMu    sync.Mutex
+}
+
+func (s *catFKService) healthTracker() *catFKMerchantHealthTracker {
+	s.lazyMu.Lock()
+	defer s.lazyMu.Unlock()
+	if s.health == nil {
+		s.health = &catFKMerchantHealthTracker{}
+	}
+	return s.health
+}
+
+func (s *catFKService) rateLimiter() *catFKOrderRateLimiter {
+	s.lazyMu.Lock()
+	defer s.lazyMu.Unlock()
+	if s.limiter == nil {
+		s.limiter = &catFKOrderRateLimiter{}
+	}
+	return s.limiter
+}
+
+func (s *catFKService) runAsync(fn func()) {
+	if fn == nil {
+		return
+	}
+	if s != nil && s.async != nil {
+		s.async(fn)
+		return
+	}
+	fn()
 }
 
 func catFKProductionService() *catFKService {
 	return &catFKService{
-		adapter:   newCatFKHTTPAdapter(),
+		adapter:   defaultCatFKHTTPAdapter,
 		store:     catFKModelStore{},
 		setting:   operation_setting.GetCatFKSetting,
 		now:       time.Now,
 		key:       catFKEncryptionKey,
 		userGroup: func(uid int) (string, error) { return model.GetUserGroup(uid, true) },
+		health:    &defaultCatFKMerchantHealth,
+		limiter:   &defaultCatFKOrderLimiter,
+		async: func(fn func()) {
+			go func() {
+				defer func() { _ = recover() }()
+				fn()
+			}()
+		},
 	}
 }
 
-func CatFKProtocolReady() bool { return newCatFKHTTPAdapter().Ready() }
+func CatFKProtocolReady() bool { return defaultCatFKHTTPAdapter.Ready() }
 
 func catFKModeFromOrder(order *model.CatFKOrder) string {
 	if order != nil && order.Mode == operation_setting.CatFKModeDirect {
@@ -261,11 +463,91 @@ func catFKModeFromOrder(order *model.CatFKOrder) string {
 	return operation_setting.CatFKModeRedemption
 }
 
-func catFKMode(cfg *operation_setting.CatFKSetting) string {
-	if cfg != nil && cfg.Mode == operation_setting.CatFKModeDirect {
-		return operation_setting.CatFKModeDirect
+func catFKConfiguredMode(cfg *operation_setting.CatFKSetting) string {
+	if cfg == nil {
+		return operation_setting.CatFKModeRedemption
 	}
-	return operation_setting.CatFKModeRedemption
+	switch cfg.Mode {
+	case operation_setting.CatFKModeDirect, operation_setting.CatFKModeAuto:
+		return cfg.Mode
+	default:
+		return operation_setting.CatFKModeRedemption
+	}
+}
+
+func (s *catFKService) effectiveMode(cfg *operation_setting.CatFKSetting) (string, bool) {
+	configured := catFKConfiguredMode(cfg)
+	switch configured {
+	case operation_setting.CatFKModeDirect:
+		return operation_setting.CatFKModeDirect, false
+	case operation_setting.CatFKModeAuto:
+		merchantToken := strings.TrimSpace(cfg.MerchantToken)
+		hasDirect := merchantToken != "" && len(catFKValidDirectSlotKeys(cfg)) > 0
+		if hasDirect && !s.healthTracker().isInvalid(merchantToken) {
+			return operation_setting.CatFKModeDirect, false
+		}
+		return operation_setting.CatFKModeRedemption, true
+	default:
+		return operation_setting.CatFKModeRedemption, false
+	}
+}
+
+func (s *catFKService) probeAutoMerchantTokenIfDue(ctx context.Context) {
+	cfg := s.setting()
+	if cfg == nil || !cfg.Enabled || catFKConfiguredMode(cfg) != operation_setting.CatFKModeAuto {
+		return
+	}
+	merchantToken := strings.TrimSpace(cfg.MerchantToken)
+	now := s.now().Unix()
+	if !s.healthTracker().shouldProbe(merchantToken, now) {
+		return
+	}
+	valid, err := s.adapter.CheckMerchantToken(ctx, merchantToken)
+	if err != nil {
+		// Transient network errors must not flap customer mode.
+		return
+	}
+	s.healthTracker().record(merchantToken, valid, now)
+}
+
+func CheckCatFKMerchantTokenStatus(ctx context.Context, candidateToken string) (*CatFKMerchantTokenStatus, error) {
+	if !CatFKProtocolReady() {
+		return nil, ErrCatFKProtocolUnverified
+	}
+	svc := catFKProductionService()
+	cfg := svc.setting()
+	configuredMode := catFKConfiguredMode(cfg)
+	token := strings.TrimSpace(candidateToken)
+	persistResult := false
+	if token == "" {
+		token = strings.TrimSpace(cfg.MerchantToken)
+		persistResult = true
+	}
+	if token == "" {
+		effMode, fallback := svc.effectiveMode(cfg)
+		return &CatFKMerchantTokenStatus{
+			Configured:     false,
+			Valid:          false,
+			ConfiguredMode: configuredMode,
+			EffectiveMode:  effMode,
+			FallbackActive: fallback,
+		}, nil
+	}
+	valid, err := svc.adapter.CheckMerchantToken(ctx, token)
+	if err != nil {
+		return nil, catFKPublicError(err)
+	}
+	if persistResult {
+		svc.healthTracker().record(token, valid, svc.now().Unix())
+	}
+	effMode, fallback := svc.effectiveMode(cfg)
+	return &CatFKMerchantTokenStatus{
+		Configured:     true,
+		Valid:          valid,
+		ConfiguredMode: configuredMode,
+		EffectiveMode:  effMode,
+		FallbackActive: fallback,
+	}, nil
 }
 
 func catFKValidDirectSlotKeys(cfg *operation_setting.CatFKSetting) []string {
@@ -333,7 +615,8 @@ func CatFKUnavailableReason() string {
 	if !CatFKProtocolReady() {
 		return ErrCatFKProtocolUnverified.Error()
 	}
-	cfg := operation_setting.GetCatFKSetting()
+	svc := catFKProductionService()
+	cfg := svc.setting()
 	if !cfg.Enabled {
 		return ErrCatFKDisabled.Error()
 	}
@@ -344,12 +627,25 @@ func CatFKUnavailableReason() string {
 	if err != nil || token == "" {
 		return "Invalid CatFK settings"
 	}
-	if catFKMode(cfg) == operation_setting.CatFKModeDirect {
+	configured := catFKConfiguredMode(cfg)
+	effMode, _ := svc.effectiveMode(cfg)
+	switch configured {
+	case operation_setting.CatFKModeDirect:
 		if strings.TrimSpace(cfg.MerchantToken) == "" || len(catFKValidDirectSlotKeys(cfg)) == 0 {
 			return "Direct-credit mode requires a CatFK merchant token and dedicated slot goods keys"
 		}
-	} else if len(cfg.Products) == 0 {
-		return "Invalid CatFK settings"
+	case operation_setting.CatFKModeAuto:
+		if effMode == operation_setting.CatFKModeDirect {
+			if strings.TrimSpace(cfg.MerchantToken) == "" || len(catFKValidDirectSlotKeys(cfg)) == 0 {
+				return "Invalid CatFK settings"
+			}
+		} else if len(cfg.Products) == 0 {
+			return "Invalid CatFK settings"
+		}
+	default:
+		if len(cfg.Products) == 0 {
+			return "Invalid CatFK settings"
+		}
 	}
 	configuredChannel := false
 	for _, channel := range cfg.Channels {
@@ -365,12 +661,18 @@ func CatFKUnavailableReason() string {
 }
 
 func CatFKPublicInfo() CatFKInfo {
-	cfg := operation_setting.GetCatFKSetting()
+	svc := catFKProductionService()
+	cfg := svc.setting()
 	reason := CatFKUnavailableReason()
+	effMode, fallback := svc.effectiveMode(cfg)
+	maxCNY, _ := catFKMaxCNYDecimal(cfg).Float64()
 	info := CatFKInfo{
 		Enabled:           cfg.Enabled && operation_setting.IsPaymentComplianceConfirmed(),
 		Available:         reason == "",
-		Mode:              catFKMode(cfg),
+		Mode:              effMode,
+		ConfiguredMode:    catFKConfiguredMode(cfg),
+		FallbackActive:    fallback,
+		MaxAmountCNY:      maxCNY,
 		UnavailableReason: reason,
 		Products:          []CatFKPublicProduct{},
 		Channels:          []operation_setting.CatFKChannel{},
@@ -406,7 +708,11 @@ func QuoteCatFKRequest(ctx context.Context, userID int, req CatFKQuoteRequest) (
 }
 
 func CreateCatFKPayment(ctx context.Context, userID int, req CatFKPaymentRequest) (*CatFKPayment, error) {
-	p, err := catFKProductionService().create(ctx, userID, req)
+	return CreateCatFKPaymentWithIP(ctx, userID, req, "")
+}
+
+func CreateCatFKPaymentWithIP(ctx context.Context, userID int, req CatFKPaymentRequest, clientIP string) (*CatFKPayment, error) {
+	p, err := catFKProductionService().createWithIP(ctx, userID, req, clientIP)
 	return p, catFKPublicError(err)
 }
 
@@ -556,6 +862,13 @@ func catFKConfigHash(cfg *operation_setting.CatFKSetting) string {
 	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 
+func catFKMaxCNYDecimal(cfg *operation_setting.CatFKSetting) decimal.Decimal {
+	if cfg != nil && cfg.MaxAmountCNY >= 1 && cfg.MaxAmountCNY <= 1000000 && !math.IsNaN(cfg.MaxAmountCNY) && !math.IsInf(cfg.MaxAmountCNY, 0) {
+		return decimal.NewFromFloat(cfg.MaxAmountCNY).Round(2)
+	}
+	return decimal.NewFromFloat(operation_setting.CatFKDefaultMaxAmountCNY)
+}
+
 func (s *catFKService) computeDirectPricing(userID int, amount int64) (quota int, topUpUSD float64, baseCNY decimal.Decimal, err error) {
 	if amount <= 0 || common.QuotaPerUnit <= 0 {
 		return 0, 0, decimal.Zero, ErrCatFKInvalidRequest
@@ -613,11 +926,45 @@ func (s *catFKService) computeDirectPricing(userID int, amount int64) (quota int
 	if baseCNY.LessThan(decimal.RequireFromString("0.01")) || baseCNY.GreaterThan(decimal.NewFromInt(1000000)) {
 		return 0, 0, decimal.Zero, ErrCatFKInvalidRequest
 	}
+	maxCNY := catFKMaxCNYDecimal(s.setting())
+	if baseCNY.GreaterThan(maxCNY) {
+		return 0, 0, decimal.Zero, catFKMaxAmountError(maxCNY)
+	}
 	return quota, topUpUSD, baseCNY, nil
 }
 
 func (s *catFKService) quote(ctx context.Context, userID int, productID, channelID string) (*CatFKQuote, error) {
 	return s.quoteRequest(ctx, userID, CatFKQuoteRequest{ProductID: productID, ChannelID: channelID})
+}
+
+func (s *catFKService) quoteRedemptionProduct(ctx context.Context, userID int, cfg *operation_setting.CatFKSetting, product *operation_setting.CatFKProduct, channelID string) (quota int, topUpAmount float64, offer *CatFKOffer, err error) {
+	if product == nil || product.GoodsKey == "" || math.IsNaN(product.Amount) || math.IsInf(product.Amount, 0) || product.Amount <= 0 {
+		return 0, 0, nil, ErrCatFKInvalidRequest
+	}
+	quota, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromFloat(product.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
+	if err != nil || quota <= 0 {
+		return 0, 0, nil, ErrCatFKInvalidRequest
+	}
+	if err = s.store.Capacity(userID, quota); err != nil {
+		return 0, 0, nil, err
+	}
+	offer, err = s.adapter.Quote(ctx, cfg.StoreToken, product.GoodsKey, channelID)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	if offer == nil || offer.ShopID == "" || offer.ProductID != product.GoodsKey || offer.ChannelID != channelID || offer.Currency == "" || offer.Quantity != 1 || !offer.InStock {
+		return 0, 0, nil, ErrCatFKVerification
+	}
+	return quota, product.Amount, offer, nil
+}
+
+func findCatFKProductByAmount(products []operation_setting.CatFKProduct, usdAmount float64) *operation_setting.CatFKProduct {
+	for i := range products {
+		if math.Abs(products[i].Amount-usdAmount) < 1e-9 {
+			return &products[i]
+		}
+	}
+	return nil
 }
 
 func (s *catFKService) quoteRequest(ctx context.Context, userID int, req CatFKQuoteRequest) (*CatFKQuote, error) {
@@ -635,7 +982,8 @@ func (s *catFKService) quoteRequest(ctx context.Context, userID int, req CatFKQu
 	if userID <= 0 || !catFKConfiguredChannel(cfg, req.ChannelID) {
 		return nil, ErrCatFKInvalidRequest
 	}
-	mode := catFKMode(cfg)
+	configuredMode := catFKConfiguredMode(cfg)
+	mode, _ := s.effectiveMode(cfg)
 	var (
 		tierID        string
 		productID     string
@@ -647,8 +995,15 @@ func (s *catFKService) quoteRequest(ctx context.Context, userID int, req CatFKQu
 	)
 	if mode == operation_setting.CatFKModeDirect {
 		if req.Amount == nil || *req.Amount <= 0 || req.ProductID != "" {
-			return nil, ErrCatFKInvalidRequest
+			// In auto mode, also accept explicit product_id quotes if a client sent a redemption request.
+			if configuredMode == operation_setting.CatFKModeAuto && req.Amount == nil && req.ProductID != "" {
+				mode = operation_setting.CatFKModeRedemption
+			} else {
+				return nil, ErrCatFKInvalidRequest
+			}
 		}
+	}
+	if mode == operation_setting.CatFKModeDirect {
 		storeToken, tokenErr := operation_setting.NormalizeCatFKStoreToken(cfg.StoreToken)
 		slotKeys := catFKValidDirectSlotKeys(cfg)
 		merchantToken := strings.TrimSpace(cfg.MerchantToken)
@@ -668,46 +1023,74 @@ func (s *catFKService) quoteRequest(ctx context.Context, userID int, req CatFKQu
 		tierID = fmt.Sprintf("direct:%d", requestAmount)
 		offer, err = s.adapter.QuoteDirect(ctx, storeToken, merchantToken, slotKeys[0], req.ChannelID, baseAmount)
 		if err != nil {
-			return nil, err
-		}
-		if offer == nil || offer.ShopID == "" || !slices.Contains(slotKeys, offer.ProductID) || offer.ChannelID != req.ChannelID || offer.Currency == "" || offer.Quantity != 1 || !offer.InStock {
-			return nil, ErrCatFKVerification
-		}
-	} else {
-		if req.Amount != nil || req.ProductID == "" {
-			return nil, ErrCatFKInvalidRequest
-		}
-		var product *operation_setting.CatFKProduct
-		for i := range cfg.Products {
-			if cfg.Products[i].ID == req.ProductID {
-				product = &cfg.Products[i]
-				break
+			if configuredMode == operation_setting.CatFKModeAuto && errors.Is(err, errCatFKMerchantAuthExpired) {
+				s.healthTracker().record(merchantToken, false, s.now().Unix())
+				matched := findCatFKProductByAmount(cfg.Products, topUpAmount)
+				if matched == nil {
+					return nil, ErrCatFKCustomAmountFallback
+				}
+				mode = operation_setting.CatFKModeRedemption
+				requestAmount = 0
+				baseAmount = ""
+				tierID = matched.ID
+				productID = matched.ID
+				quota, topUpAmount, offer, err = s.quoteRedemptionProduct(ctx, userID, cfg, matched, req.ChannelID)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		} else {
+			s.healthTracker().record(merchantToken, true, s.now().Unix())
+			if offer == nil || offer.ShopID == "" || !slices.Contains(slotKeys, offer.ProductID) || offer.ChannelID != req.ChannelID || offer.Currency == "" || offer.Quantity != 1 || !offer.InStock {
+				return nil, ErrCatFKVerification
 			}
 		}
-		if product == nil || product.GoodsKey == "" || math.IsNaN(product.Amount) || math.IsInf(product.Amount, 0) || product.Amount <= 0 {
+	} else {
+		var product *operation_setting.CatFKProduct
+		if req.Amount != nil {
+			if configuredMode != operation_setting.CatFKModeAuto || *req.Amount <= 0 || req.ProductID != "" {
+				return nil, ErrCatFKInvalidRequest
+			}
+			_, requestedUSD, _, priceErr := s.computeDirectPricing(userID, *req.Amount)
+			if priceErr != nil {
+				return nil, priceErr
+			}
+			product = findCatFKProductByAmount(cfg.Products, requestedUSD)
+			if product == nil {
+				return nil, ErrCatFKCustomAmountFallback
+			}
+		} else {
+			if req.ProductID == "" {
+				return nil, ErrCatFKInvalidRequest
+			}
+			for i := range cfg.Products {
+				if cfg.Products[i].ID == req.ProductID {
+					product = &cfg.Products[i]
+					break
+				}
+			}
+		}
+		if product == nil {
 			return nil, ErrCatFKInvalidRequest
 		}
-		quota, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromFloat(product.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
-		if err != nil || quota <= 0 {
-			return nil, ErrCatFKInvalidRequest
-		}
-		if err = s.store.Capacity(userID, quota); err != nil {
-			return nil, err
-		}
-		tierID = req.ProductID
-		productID = req.ProductID
-		topUpAmount = product.Amount
-		offer, err = s.adapter.Quote(ctx, cfg.StoreToken, product.GoodsKey, req.ChannelID)
+		tierID = product.ID
+		productID = product.ID
+		quota, topUpAmount, offer, err = s.quoteRedemptionProduct(ctx, userID, cfg, product, req.ChannelID)
 		if err != nil {
 			return nil, err
-		}
-		if offer == nil || offer.ShopID == "" || offer.ProductID != product.GoodsKey || offer.ChannelID != req.ChannelID || offer.Currency == "" || offer.Quantity != 1 || !offer.InStock {
-			return nil, ErrCatFKVerification
 		}
 	}
 	amount, err := decimal.NewFromString(offer.Amount)
 	if err != nil || !amount.IsPositive() {
 		return nil, ErrCatFKVerification
+	}
+	if mode == operation_setting.CatFKModeDirect {
+		maxCNY := catFKMaxCNYDecimal(cfg)
+		if amount.GreaterThan(maxCNY) {
+			return nil, catFKMaxAmountError(maxCNY)
+		}
 	}
 	amountFloat, _ := amount.Float64()
 	if math.IsInf(amountFloat, 0) || math.IsNaN(amountFloat) {
@@ -731,7 +1114,14 @@ func (s *catFKService) quoteRequest(ctx context.Context, userID int, req CatFKQu
 	if err != nil {
 		return nil, err
 	}
-	result := &CatFKQuote{QuoteID: token, Amount: amountFloat, Currency: offer.Currency, TopUpAmount: topUpAmount}
+	result := &CatFKQuote{
+		QuoteID:     token,
+		Amount:      amountFloat,
+		Currency:    offer.Currency,
+		TopUpAmount: topUpAmount,
+		Mode:        mode,
+		ProductID:   productID,
+	}
 	original, originalErr := decimal.NewFromString(offer.OriginalAmount)
 	fee, feeErr := decimal.NewFromString(offer.Fee)
 	if originalErr == nil && feeErr == nil && original.IsPositive() && original.Add(fee).Equal(amount) {
@@ -761,6 +1151,10 @@ func catFKAmountsEqual(a, b string) bool {
 }
 
 func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentRequest) (*CatFKPayment, error) {
+	return s.createWithIP(ctx, userID, req, "")
+}
+
+func (s *catFKService) createWithIP(ctx context.Context, userID int, req CatFKPaymentRequest, clientIP string) (*CatFKPayment, error) {
 	if !s.adapter.Ready() {
 		return nil, ErrCatFKProtocolUnverified
 	}
@@ -795,15 +1189,14 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 	if !cfg.Enabled {
 		return nil, ErrCatFKDisabled
 	}
-	mode := catFKMode(cfg)
-	if mode == operation_setting.CatFKModeRedemption {
-		if req.Amount != nil || !isValidCatFKQQ(req.QQ) {
-			return nil, ErrCatFKInvalidRequest
-		}
-	} else if req.Amount == nil || *req.Amount <= 0 || req.ProductID != "" {
+	if !catFKConfiguredChannel(cfg, req.ChannelID) {
 		return nil, ErrCatFKInvalidRequest
 	}
-	if !catFKConfiguredChannel(cfg, req.ChannelID) {
+	configuredMode := catFKConfiguredMode(cfg)
+	if configuredMode == operation_setting.CatFKModeRedemption && (req.Amount != nil || !isValidCatFKQQ(req.QQ)) {
+		return nil, ErrCatFKInvalidRequest
+	}
+	if configuredMode == operation_setting.CatFKModeDirect && (req.Amount == nil || *req.Amount <= 0 || req.ProductID != "") {
 		return nil, ErrCatFKInvalidRequest
 	}
 	key, err := s.key()
@@ -811,11 +1204,41 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 		return nil, err
 	}
 	var snap catFKQuoteSnapshot
-	if err = catFKOpen(key, "catfk/quote/v1", req.QuoteID, &snap); err != nil || snap.UserID != userID || snap.TierID != expectedTierID || snap.ChannelID != req.ChannelID || snap.Mode != mode || snap.ConfigHash != catFKConfigHash(cfg) || snap.ExpiresAt <= s.now().Unix() {
+	if err = catFKOpen(key, "catfk/quote/v1", req.QuoteID, &snap); err != nil || snap.UserID != userID || snap.TierID != expectedTierID || snap.ChannelID != req.ChannelID || snap.ConfigHash != catFKConfigHash(cfg) || snap.ExpiresAt <= s.now().Unix() {
 		return nil, ErrCatFKInvalidQuote
+	}
+	mode := snap.Mode
+	if mode != operation_setting.CatFKModeRedemption && mode != operation_setting.CatFKModeDirect {
+		return nil, ErrCatFKInvalidQuote
+	}
+	if configuredMode != operation_setting.CatFKModeAuto && mode != configuredMode {
+		return nil, ErrCatFKInvalidQuote
+	}
+	if mode == operation_setting.CatFKModeRedemption {
+		if req.Amount != nil || !isValidCatFKQQ(req.QQ) {
+			return nil, ErrCatFKInvalidRequest
+		}
+	} else {
+		if req.Amount == nil || *req.Amount <= 0 || req.ProductID != "" {
+			return nil, ErrCatFKInvalidRequest
+		}
+		if configuredMode == operation_setting.CatFKModeAuto && s.healthTracker().isInvalid(cfg.MerchantToken) {
+			return nil, ErrCatFKInvalidQuote
+		}
 	}
 	if err = s.store.Capacity(userID, snap.Quota); err != nil {
 		return nil, err
+	}
+	maxOrdersPerMin := cfg.MaxOrdersPerMinute
+	if maxOrdersPerMin <= 0 {
+		maxOrdersPerMin = operation_setting.CatFKDefaultMaxOrdersPerMinute
+	}
+	ipKey := ""
+	if trimmedIP := strings.TrimSpace(clientIP); trimmedIP != "" {
+		ipKey = "ip:" + trimmedIP
+	}
+	if !s.rateLimiter().allow(s.now().Unix(), maxOrdersPerMin, fmt.Sprintf("user:%d", userID), ipKey) {
+		return nil, ErrCatFKRateLimited
 	}
 
 	trade := "catfk_" + common.GetUUID()
@@ -857,6 +1280,14 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 		}
 		ready, prepErr := s.adapter.PrepareDirectSlot(ctx, storeToken, merchantToken, slot.GoodsKey, req.ChannelID, snap.BaseAmount, slot.ConfirmedPrice, minStock, restockBatch)
 		if prepErr != nil {
+			if errors.Is(prepErr, errCatFKMerchantAuthExpired) {
+				s.healthTracker().record(merchantToken, false, s.now().Unix())
+				_, _ = s.store.ReleaseSlot(slot.ID, slot.Version, slot.HolderToken, slot.ConfirmedPrice, s.now().Unix())
+				if configuredMode == operation_setting.CatFKModeAuto {
+					return nil, ErrCatFKInvalidQuote
+				}
+				return nil, ErrCatFKOrderUnavailable
+			}
 			if errors.Is(prepErr, errCatFKSlotAmbiguous) {
 				_, _ = s.store.QuarantineSlot(slot.ID, slot.Version, slot.HolderToken, "prepare_ambiguous", s.now().Unix())
 			} else {
@@ -864,6 +1295,7 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 			}
 			return nil, prepErr
 		}
+		s.healthTracker().record(merchantToken, true, s.now().Unix())
 		if ready == nil || !ready.Offer.InStock || ready.Offer.Quantity != 1 || ready.Offer.ShopID != snap.Offer.ShopID || ready.Offer.ProductID != slot.GoodsKey || ready.Offer.ChannelID != snap.Offer.ChannelID || !catFKAmountsEqual(ready.Offer.Amount, snap.Offer.Amount) || ready.Offer.Currency != snap.Offer.Currency {
 			confirmed := slot.ConfirmedPrice
 			if ready != nil && ready.ConfirmedPrice != "" {
@@ -961,7 +1393,36 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 	}
 	createCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	result, createErr := s.adapter.Create(createCtx, claimed, credentials, expectedContact)
+	if mode == operation_setting.CatFKModeDirect && errors.Is(createErr, errCatFKOutOfStock) && (result == nil || result.UpstreamOrderID == "") {
+		storeToken, _ := operation_setting.NormalizeCatFKStoreToken(cfg.StoreToken)
+		merchantToken := strings.TrimSpace(cfg.MerchantToken)
+		minStock := cfg.AutoRestockMin
+		if minStock <= 0 {
+			minStock = operation_setting.CatFKDefaultAutoRestockMin
+		}
+		restockBatch := cfg.AutoRestockBatch
+		if restockBatch <= 0 {
+			restockBatch = operation_setting.CatFKDefaultAutoRestockBatch
+		}
+		if _, restockErr := s.adapter.ReplenishDirectSlot(createCtx, storeToken, merchantToken, selectedGoodsKey, minStock, restockBatch, true); restockErr != nil {
+			if errors.Is(restockErr, errCatFKMerchantAuthExpired) {
+				s.healthTracker().record(merchantToken, false, s.now().Unix())
+			}
+		} else {
+			retryCredentials := credentials
+			if result != nil && result.Credentials != nil {
+				retryCredentials = *result.Credentials
+			}
+			result, createErr = s.adapter.Create(createCtx, claimed, retryCredentials, expectedContact)
+		}
+	}
 	cancel()
+
+	if errors.Is(createErr, errCatFKOutOfStock) && (result == nil || result.UpstreamOrderID == "") {
+		releaseSlotClean()
+		_, _ = s.store.Update(claimed.ID, claimed.Version, model.CatFKOrderUpdate{Status: model.CatFKOrderStatusExpired, NextQueryAt: 0})
+		return nil, ErrCatFKOrderUnavailable
+	}
 
 	update := model.CatFKOrderUpdate{Status: model.CatFKOrderStatusCreationUnknown, FailureCode: "creation_unknown", NextQueryAt: s.now().Add(time.Minute).Unix()}
 	// A received identifier is valuable for recovery even if the verification
@@ -1022,9 +1483,18 @@ func (s *catFKService) create(ctx context.Context, userID int, req CatFKPaymentR
 
 func catFKValidPaymentQRCode(raw, paymentMethod string) bool {
 	if paymentMethod == model.PaymentMethodCatFKWeChat {
-		return len(raw) <= 2048 && catFKWeChatQRPattern.MatchString(raw)
+		return len(raw) <= 2048 && (catFKWeChatQRPattern.MatchString(raw) || catFKValidWeChatJspayQR(raw))
 	}
 	return len(raw) <= 2048 && catFKValidPaymentURL(raw)
+}
+
+func catFKValidWeChatJspayQR(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != "catfk.com" || u.User != nil || u.Fragment != "" || u.RawPath != "" || u.Path != "/payApi/WeixinJspay/pay.html" {
+		return false
+	}
+	params, err := url.ParseQuery(u.RawQuery)
+	return err == nil && len(params) == 1 && len(params["trade_no"]) == 1 && catFKCashierTradeNoPattern.MatchString(params.Get("trade_no"))
 }
 
 func catFKValidPaymentURL(raw string) bool {
@@ -1037,8 +1507,12 @@ func catFKPublicError(err error) error {
 		return nil
 	}
 	switch err {
-	case ErrCatFKProtocolUnverified, ErrCatFKDisabled, ErrCatFKEncryptionKey, ErrCatFKInvalidRequest, ErrCatFKInvalidQuote, ErrCatFKVerification, ErrCatFKOrderUnavailable, ErrCatFKSlotBusy, ErrCatFKRedemptionPending:
+	case ErrCatFKProtocolUnverified, ErrCatFKDisabled, ErrCatFKEncryptionKey, ErrCatFKInvalidRequest, ErrCatFKInvalidQuote, ErrCatFKVerification, ErrCatFKOrderUnavailable, ErrCatFKSlotBusy, ErrCatFKRateLimited, ErrCatFKCustomAmountFallback, ErrCatFKRedemptionPending:
 		return err
+	}
+	var msg *common.Message
+	if errors.As(err, &msg) && msg.Key == catFKMaxAmountMessageKey {
+		return msg
 	}
 	return ErrCatFKOrderUnavailable
 }

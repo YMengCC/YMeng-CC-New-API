@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
@@ -36,6 +38,7 @@ func (s *catFKService) poll(ctx context.Context) error {
 	if !s.adapter.Ready() {
 		return ErrCatFKProtocolUnverified
 	}
+	s.probeAutoMerchantTokenIfDue(ctx)
 	key, err := s.key()
 	if err != nil {
 		return err
@@ -246,5 +249,41 @@ func (s *catFKService) applyEvidence(order *model.CatFKOrder, e *CatFKOrderEvide
 		_, retryErr := s.store.Retry(order.ID, order.Version, s.now().Add(time.Minute).Unix())
 		return retryErr
 	}
+	if isDirect {
+		s.replenishAfterDirectSettlement(order.ShopID, order.ProductID)
+	}
 	return nil
+}
+
+func (s *catFKService) replenishAfterDirectSettlement(shopID, goodsKey string) {
+	cfg := s.setting()
+	if cfg == nil {
+		return
+	}
+	merchantToken := strings.TrimSpace(cfg.MerchantToken)
+	if merchantToken == "" || s.healthTracker().isInvalid(merchantToken) {
+		return
+	}
+	storeToken, err := operation_setting.NormalizeCatFKStoreToken(cfg.StoreToken)
+	if err != nil || storeToken == "" || storeToken != shopID {
+		return
+	}
+	if !slices.Contains(catFKValidDirectSlotKeys(cfg), goodsKey) {
+		return
+	}
+	minStock := cfg.AutoRestockMin
+	if minStock <= 0 {
+		minStock = operation_setting.CatFKDefaultAutoRestockMin
+	}
+	restockBatch := cfg.AutoRestockBatch
+	if restockBatch <= 0 {
+		restockBatch = operation_setting.CatFKDefaultAutoRestockBatch
+	}
+	s.runAsync(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, restockErr := s.adapter.ReplenishDirectSlot(ctx, storeToken, merchantToken, goodsKey, minStock, restockBatch, false); errors.Is(restockErr, errCatFKMerchantAuthExpired) {
+			s.healthTracker().record(merchantToken, false, s.now().Unix())
+		}
+	})
 }

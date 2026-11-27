@@ -37,7 +37,7 @@ func RequestCatFKPay(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid CatFK payment request")
 		return
 	}
-	payment, err := service.CreateCatFKPayment(c.Request.Context(), c.GetInt("id"), req)
+	payment, err := service.CreateCatFKPaymentWithIP(c.Request.Context(), c.GetInt("id"), req, c.ClientIP())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -99,4 +99,20 @@ func ResetCatFKPriceSlots(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{"reset_count": resetCount})
+}
+
+func CheckCatFKMerchantToken(c *gin.Context) {
+	var req struct {
+		MerchantToken string `json:"merchant_token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorT(c, "Invalid CatFK payment request")
+		return
+	}
+	status, err := service.CheckCatFKMerchantTokenStatus(c.Request.Context(), req.MerchantToken)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, status)
 }

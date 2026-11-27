@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const catfkModeSchema = z.enum(['redemption', 'direct'])
+export const catfkModeSchema = z.enum(['redemption', 'direct', 'auto'])
 export type CatFKMode = z.infer<typeof catfkModeSchema>
 
 export const catfkProductSchema = z.object({

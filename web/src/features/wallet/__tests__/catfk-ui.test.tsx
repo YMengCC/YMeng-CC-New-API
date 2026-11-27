@@ -449,7 +449,7 @@ it('loads the display fee from the selected payment method configuration', async
         ...topupInfo,
         pay_methods: [
           { type: 'alipay', name: 'Alipay', fee_percent: '2.5' },
-          { type: 'catfk', name: 'Yunmao', fee_percent: '99' },
+          { type: 'catfk', name: 'Catfk', fee_percent: '99' },
         ],
       },
     },

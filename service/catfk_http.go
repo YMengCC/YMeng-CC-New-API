@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -23,15 +25,218 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-const catFKResponseLimit = 2 << 20
+const (
+	catFKResponseLimit  = 2 << 20
+	catFKShopCacheTTL   = 5 * time.Minute
+	catFKDetailCacheTTL = 5 * time.Minute
+	catFKGoodsIDTTL     = 10 * time.Minute
+)
+
+type catFKCachedShop struct {
+	shop      catFKShop
+	expiresAt time.Time
+}
+
+type catFKCachedChannels struct {
+	channels  []catFKChannelWire
+	expiresAt time.Time
+}
+
+type catFKCachedGoodsID struct {
+	id        int
+	expiresAt time.Time
+}
+
+type catFKCachedDetail struct {
+	detail    catFKMerchantGoodsDetail
+	expiresAt time.Time
+}
+
+type catFKMerchantCache struct {
+	mu       sync.Mutex
+	shops    map[string]catFKCachedShop
+	channels map[string]catFKCachedChannels
+	goodsIDs map[string]catFKCachedGoodsID
+	details  map[string]catFKCachedDetail
+}
+
+func newCatFKMerchantCache() *catFKMerchantCache {
+	return &catFKMerchantCache{
+		shops:    make(map[string]catFKCachedShop),
+		channels: make(map[string]catFKCachedChannels),
+		goodsIDs: make(map[string]catFKCachedGoodsID),
+		details:  make(map[string]catFKCachedDetail),
+	}
+}
+
+func (c *catFKMerchantCache) reset() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.shops = make(map[string]catFKCachedShop)
+	c.channels = make(map[string]catFKCachedChannels)
+	c.goodsIDs = make(map[string]catFKCachedGoodsID)
+	c.details = make(map[string]catFKCachedDetail)
+}
+
+func (c *catFKMerchantCache) getShop(storeToken string, now time.Time) (catFKShop, bool) {
+	if c == nil {
+		return catFKShop{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.shops[storeToken]
+	if !ok || !now.Before(entry.expiresAt) {
+		return catFKShop{}, false
+	}
+	return entry.shop, true
+}
+
+func (c *catFKMerchantCache) setShop(storeToken string, shop catFKShop, now time.Time) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.shops[storeToken] = catFKCachedShop{shop: shop, expiresAt: now.Add(catFKShopCacheTTL)}
+}
+
+func (c *catFKMerchantCache) getChannels(storeToken string, now time.Time) ([]catFKChannelWire, bool) {
+	if c == nil {
+		return nil, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.channels[storeToken]
+	if !ok || !now.Before(entry.expiresAt) {
+		return nil, false
+	}
+	copied := make([]catFKChannelWire, len(entry.channels))
+	copy(copied, entry.channels)
+	return copied, true
+}
+
+func (c *catFKMerchantCache) setChannels(storeToken string, channels []catFKChannelWire, now time.Time) {
+	if c == nil {
+		return
+	}
+	copied := make([]catFKChannelWire, len(channels))
+	copy(copied, channels)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.channels[storeToken] = catFKCachedChannels{channels: copied, expiresAt: now.Add(catFKShopCacheTTL)}
+}
+
+func (c *catFKMerchantCache) getGoodsID(scope, goodsKey string, now time.Time) (int, bool) {
+	if c == nil {
+		return 0, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.goodsIDs[scope+":"+goodsKey]
+	if !ok || !now.Before(entry.expiresAt) {
+		return 0, false
+	}
+	return entry.id, true
+}
+
+func (c *catFKMerchantCache) setGoodsID(scope, goodsKey string, id int, now time.Time) {
+	if c == nil || id <= 0 || goodsKey == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.goodsIDs[scope+":"+goodsKey] = catFKCachedGoodsID{id: id, expiresAt: now.Add(catFKGoodsIDTTL)}
+}
+
+func (c *catFKMerchantCache) getDetail(scope string, goodsID int, now time.Time) (catFKMerchantGoodsDetail, bool) {
+	if c == nil {
+		return catFKMerchantGoodsDetail{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.details[scope+":"+strconv.Itoa(goodsID)]
+	if !ok || !now.Before(entry.expiresAt) {
+		return catFKMerchantGoodsDetail{}, false
+	}
+	return entry.detail, true
+}
+
+func (c *catFKMerchantCache) setDetail(scope string, detail catFKMerchantGoodsDetail, now time.Time) {
+	if c == nil || detail.ID <= 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.details[scope+":"+strconv.Itoa(detail.ID)] = catFKCachedDetail{detail: detail, expiresAt: now.Add(catFKDetailCacheTTL)}
+}
+
+func (c *catFKMerchantCache) invalidateDetail(scope string, goodsID int) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.details, scope+":"+strconv.Itoa(goodsID))
+}
+
+func (c *catFKMerchantCache) invalidateScope(scope string) {
+	if c == nil || scope == "" {
+		return
+	}
+	prefix := scope + ":"
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.goodsIDs {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.goodsIDs, k)
+		}
+	}
+	for k := range c.details {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.details, k)
+		}
+	}
+}
 
 type catFKHTTPAdapter struct {
-	baseURL string
-	now     func() time.Time
+	baseURL      string
+	now          func() time.Time
+	cache        *catFKMerchantCache
+	restockMu    sync.Mutex
+	restockLocks map[string]*sync.Mutex
 }
 
 func newCatFKHTTPAdapter() *catFKHTTPAdapter {
-	return &catFKHTTPAdapter{baseURL: "https://catfk.com", now: time.Now}
+	return &catFKHTTPAdapter{
+		baseURL:      "https://catfk.com",
+		now:          time.Now,
+		cache:        newCatFKMerchantCache(),
+		restockLocks: make(map[string]*sync.Mutex),
+	}
+}
+
+func (a *catFKHTTPAdapter) ResetCache() {
+	if a != nil && a.cache != nil {
+		a.cache.reset()
+	}
+}
+
+func (a *catFKHTTPAdapter) lockRestockKey(key string) func() {
+	a.restockMu.Lock()
+	if a.restockLocks == nil {
+		a.restockLocks = make(map[string]*sync.Mutex)
+	}
+	m, ok := a.restockLocks[key]
+	if !ok {
+		m = &sync.Mutex{}
+		a.restockLocks[key] = m
+	}
+	a.restockMu.Unlock()
+	m.Lock()
+	return m.Unlock
 }
 
 func (a *catFKHTTPAdapter) currentTime() time.Time {
@@ -68,6 +273,21 @@ type catFKEnvelope struct {
 	Code *int            `json:"code"`
 	Msg  string          `json:"msg"`
 	Data json.RawMessage `json:"data"`
+}
+
+func catFKIsOutOfStockMsg(msg string) bool {
+	trimmed := strings.TrimSpace(msg)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.Contains(trimmed, "库存") ||
+		strings.Contains(trimmed, "卡密") ||
+		strings.Contains(trimmed, "不足") ||
+		strings.Contains(trimmed, "售罄") ||
+		strings.Contains(trimmed, "缺货") ||
+		strings.Contains(lower, "out of stock") ||
+		strings.Contains(lower, "sold out")
 }
 
 func catFKIsSingleAttemptWritePath(path string) bool {
@@ -112,14 +332,20 @@ func (a *catFKHTTPAdapter) postWithHeaders(ctx context.Context, client *http.Cli
 			}
 			return callErr
 		}
-		if path == "/shopApi/Pay/query" {
-			// Payment confirmation is represented by the envelope code itself.
+		if path == "/shopApi/Pay/query" || path == "/merchantApi/user/checkToken" {
+			// Status probes expose confirmation via the envelope code itself.
 			payment, ok := result.(*catFKEnvelope)
 			if !ok {
 				return ErrCatFKInvalidRequest
 			}
 			*payment = *envelope
 			return nil
+		}
+		if strings.HasPrefix(path, "/merchantApi/") && (*envelope.Code == 401 || *envelope.Code == -1) {
+			return errCatFKMerchantAuthExpired
+		}
+		if path == "/shopApi/Pay/order" && *envelope.Code != 1 && catFKIsOutOfStockMsg(envelope.Msg) {
+			return errCatFKOutOfStock
 		}
 		if *envelope.Code != 1 {
 			return ErrCatFKOrderUnavailable
@@ -156,6 +382,9 @@ func (a *catFKHTTPAdapter) postOnce(ctx context.Context, client *http.Client, vi
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		if strings.HasPrefix(path, "/merchantApi/") && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) {
+			return nil, false, errCatFKMerchantAuthExpired
+		}
 		retry := response.StatusCode == http.StatusRequestTimeout || response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
 		return nil, retry, ErrCatFKOrderUnavailable
 	}
@@ -317,7 +546,69 @@ func (a *catFKHTTPAdapter) merchantHeaders(merchantToken, refererPath string) ma
 	}
 }
 
-func (a *catFKHTTPAdapter) lookupMerchantGoodsItem(ctx context.Context, client *http.Client, merchantToken, goodsKey string) (*catFKMerchantGoodsItem, error) {
+func (a *catFKHTTPAdapter) CheckMerchantToken(ctx context.Context, merchantToken string) (bool, error) {
+	merchantToken = strings.TrimSpace(merchantToken)
+	if merchantToken == "" {
+		return false, ErrCatFKInvalidRequest
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	client, err := a.client(CatFKCredentials{})
+	if err != nil {
+		return false, err
+	}
+	var probe catFKEnvelope
+	err = a.postWithHeaders(ctx, client, "", "/merchantApi/user/checkToken", a.merchantHeaders(merchantToken, "/merchant/dashboard/workplace"), map[string]any{}, &probe)
+	if errors.Is(err, errCatFKMerchantAuthExpired) {
+		return false, nil
+	}
+	if err != nil || probe.Code == nil {
+		return false, ErrCatFKOrderUnavailable
+	}
+	if *probe.Code == 1 {
+		return true, nil
+	}
+	if *probe.Code == 0 || *probe.Code == 401 || *probe.Code == -1 {
+		return false, nil
+	}
+	return false, ErrCatFKOrderUnavailable
+}
+
+func catFKMerchantScope(storeToken, merchantToken string) string {
+	return storeToken + ":" + catFKMerchantTokenHash(merchantToken)
+}
+
+func (a *catFKHTTPAdapter) getShopInfo(ctx context.Context, client *http.Client, storeToken string) (*catFKShop, error) {
+	now := a.currentTime()
+	if cached, ok := a.cache.getShop(storeToken, now); ok {
+		return &cached, nil
+	}
+	var shop catFKShop
+	if err := a.post(ctx, client, "", "/shopApi/Shop/info", map[string]any{"token": storeToken}, &shop); err != nil {
+		return nil, err
+	}
+	if shop.Token != storeToken || shop.Link != "https://catfk.com/shop/"+storeToken {
+		return nil, ErrCatFKVerification
+	}
+	a.cache.setShop(storeToken, shop, now)
+	return &shop, nil
+}
+
+func (a *catFKHTTPAdapter) getCachedRawChannels(ctx context.Context, client *http.Client, storeToken string) ([]catFKChannelWire, error) {
+	now := a.currentTime()
+	if cached, ok := a.cache.getChannels(storeToken, now); ok {
+		return cached, nil
+	}
+	wire, err := a.fetchRawChannels(ctx, client, storeToken)
+	if err != nil {
+		return nil, err
+	}
+	a.cache.setChannels(storeToken, wire, now)
+	return wire, nil
+}
+
+func (a *catFKHTTPAdapter) lookupMerchantGoodsItem(ctx context.Context, client *http.Client, scope, merchantToken, goodsKey string) (*catFKMerchantGoodsItem, error) {
+	now := a.currentTime()
 	for page := 1; page <= 20; page++ {
 		var list struct {
 			Total int                      `json:"total"`
@@ -332,15 +623,25 @@ func (a *catFKHTTPAdapter) lookupMerchantGoodsItem(ctx context.Context, client *
 			"is_proxy":   "0",
 		}, &list)
 		if err != nil {
+			if errors.Is(err, errCatFKMerchantAuthExpired) {
+				a.cache.invalidateScope(scope)
+			}
 			return nil, err
 		}
+		var matched *catFKMerchantGoodsItem
 		for i := range list.List {
+			if list.List[i].ID > 0 && list.List[i].GoodsKey != "" {
+				a.cache.setGoodsID(scope, list.List[i].GoodsKey, list.List[i].ID, now)
+			}
 			if list.List[i].GoodsKey == goodsKey {
 				if list.List[i].ID <= 0 || list.List[i].Extend.StockCount == nil || *list.List[i].Extend.StockCount < 0 {
 					return nil, ErrCatFKVerification
 				}
-				return &list.List[i], nil
+				matched = &list.List[i]
 			}
+		}
+		if matched != nil {
+			return matched, nil
 		}
 		if len(list.List) == 0 || page*100 >= list.Total {
 			break
@@ -349,39 +650,122 @@ func (a *catFKHTTPAdapter) lookupMerchantGoodsItem(ctx context.Context, client *
 	return nil, ErrCatFKVerification
 }
 
-func (a *catFKHTTPAdapter) fetchVerifiedDirectGoods(ctx context.Context, client *http.Client, storeToken, merchantToken, slotGoodsKey string) (*catFKShop, *catFKGoods, *catFKMerchantGoodsItem, *catFKMerchantGoodsDetail, error) {
-	var shop catFKShop
-	if err := a.post(ctx, client, "", "/shopApi/Shop/info", map[string]any{"token": storeToken}, &shop); err != nil {
-		return nil, nil, nil, nil, err
+func (a *catFKHTTPAdapter) resolveMerchantGoodsID(ctx context.Context, client *http.Client, scope, merchantToken, goodsKey string) (int, error) {
+	if cachedID, ok := a.cache.getGoodsID(scope, goodsKey, a.currentTime()); ok {
+		return cachedID, nil
 	}
-	if shop.Token != storeToken || shop.Link != "https://catfk.com/shop/"+storeToken {
-		return nil, nil, nil, nil, ErrCatFKVerification
-	}
-	var goods catFKGoods
-	if err := a.post(ctx, client, "", "/shopApi/Shop/goodsInfo", map[string]any{"goods_key": slotGoodsKey}, &goods); err != nil {
-		return nil, nil, nil, nil, err
-	}
-	// Dedicated direct-credit slots must allow non-QQ order identifiers ("any")
-	// and belong to the configured shop.
-	if goods.Key != slotGoodsKey || goods.User.Token != storeToken || goods.Type != "card" || goods.Status != 1 || goods.ContactFormat != "any" || goods.Extend.LimitCount != 1 {
-		return nil, nil, nil, nil, ErrCatFKVerification
-	}
-	item, err := a.lookupMerchantGoodsItem(ctx, client, merchantToken, slotGoodsKey)
+	item, err := a.lookupMerchantGoodsItem(ctx, client, scope, merchantToken, goodsKey)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return 0, err
+	}
+	return item.ID, nil
+}
+
+func (a *catFKHTTPAdapter) getVerifiedMerchantDetail(ctx context.Context, client *http.Client, scope, merchantToken, slotGoodsKey string, goodsID int) (*catFKMerchantGoodsDetail, error) {
+	now := a.currentTime()
+	if cached, ok := a.cache.getDetail(scope, goodsID, now); ok {
+		if cached.ID == goodsID && cached.GoodsKey == slotGoodsKey && cached.GoodsType == "card" && cached.Show == 0 && cached.ContactFormat == "any" && cached.Extend.LimitCount == 1 {
+			return &cached, nil
+		}
+		a.cache.invalidateDetail(scope, goodsID)
 	}
 	var detail catFKMerchantGoodsDetail
-	err = a.postWithHeaders(ctx, client, "", "/merchantApi/Goods/info", a.merchantHeaders(merchantToken, fmt.Sprintf("/merchant/goods/create?goods_type=card&id=%d", item.ID)), map[string]any{"id": strconv.Itoa(item.ID)}, &detail)
+	err := a.postWithHeaders(ctx, client, "", "/merchantApi/Goods/info", a.merchantHeaders(merchantToken, fmt.Sprintf("/merchant/goods/create?goods_type=card&id=%d", goodsID)), map[string]any{"id": strconv.Itoa(goodsID)}, &detail)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		if errors.Is(err, errCatFKMerchantAuthExpired) {
+			a.cache.invalidateScope(scope)
+		}
+		return nil, err
 	}
 	// Dedicated direct-credit slots must be hidden from the public shop listing
 	// (show == 0) so external visitors cannot buy placeholder cards, and prevents
 	// accidental mutation of public real-code products.
-	if detail.ID != item.ID || detail.GoodsKey != slotGoodsKey || detail.GoodsType != "card" || detail.Show != 0 || detail.ContactFormat != "any" || detail.Extend.LimitCount != 1 {
-		return nil, nil, nil, nil, ErrCatFKVerification
+	if detail.ID != goodsID || detail.GoodsKey != slotGoodsKey || detail.GoodsType != "card" || detail.Show != 0 || detail.ContactFormat != "any" || detail.Extend.LimitCount != 1 {
+		return nil, ErrCatFKVerification
 	}
-	return &shop, &goods, item, &detail, nil
+	a.cache.setDetail(scope, detail, now)
+	return &detail, nil
+}
+
+func (a *catFKHTTPAdapter) fetchVerifiedStorefrontDirectGoods(ctx context.Context, client *http.Client, storeToken, slotGoodsKey string) (*catFKShop, *catFKGoods, error) {
+	shop, err := a.getShopInfo(ctx, client, storeToken)
+	if err != nil {
+		return nil, nil, err
+	}
+	var goods catFKGoods
+	if err := a.post(ctx, client, "", "/shopApi/Shop/goodsInfo", map[string]any{"goods_key": slotGoodsKey}, &goods); err != nil {
+		return nil, nil, err
+	}
+	// Dedicated direct-credit slots must allow non-QQ order identifiers ("any")
+	// and belong to the configured shop.
+	if goods.Key != slotGoodsKey || goods.User.Token != storeToken || goods.Type != "card" || goods.Status != 1 || goods.ContactFormat != "any" || goods.Extend.LimitCount != 1 {
+		return nil, nil, ErrCatFKVerification
+	}
+	return shop, &goods, nil
+}
+
+func (a *catFKHTTPAdapter) replenishPlaceholderStock(ctx context.Context, client *http.Client, scope, merchantToken, slotGoodsKey string, goodsID, restockBatch int) error {
+	batchTag := strings.ToUpper(strconv.FormatInt(a.currentTime().Unix(), 36))
+	var builder strings.Builder
+	for i := range restockBatch {
+		if i > 0 {
+			builder.WriteByte('\n')
+		}
+		builder.WriteString(fmt.Sprintf("DIRECT-%s-%03d-%s", batchTag, i+1, common.GetRandomString(8)))
+	}
+	addErr := a.postWithHeaders(ctx, client, "", "/merchantApi/GoodsCardStorage/add", a.merchantHeaders(merchantToken, "/merchant/goods/goods_card_storage_add"), map[string]any{
+		"goods_id":      goodsID,
+		"content":       builder.String(),
+		"first":         0,
+		"remove_repeat": 0,
+	}, nil)
+	if addErr != nil {
+		if errors.Is(addErr, errCatFKMerchantAuthExpired) {
+			a.cache.invalidateScope(scope)
+			return addErr
+		}
+		// On timeout or disconnect, check remote stock first instead of blindly re-adding.
+		rechecked, checkErr := a.lookupMerchantGoodsItem(ctx, client, scope, merchantToken, slotGoodsKey)
+		if checkErr != nil {
+			return fmt.Errorf("%w: %v", errCatFKSlotAmbiguous, addErr)
+		}
+		if *rechecked.Extend.StockCount <= 0 {
+			return ErrCatFKOrderUnavailable
+		}
+	}
+	return nil
+}
+
+func (a *catFKHTTPAdapter) ReplenishDirectSlot(ctx context.Context, storeToken, merchantToken, slotGoodsKey string, minStock, restockBatch int, force bool) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	storeToken, err := operation_setting.NormalizeCatFKStoreToken(storeToken)
+	merchantToken = strings.TrimSpace(merchantToken)
+	if err != nil || storeToken == "" || merchantToken == "" || slotGoodsKey == "" || minStock < 1 || restockBatch < 1 {
+		return 0, ErrCatFKInvalidRequest
+	}
+	unlock := a.lockRestockKey(storeToken + ":" + slotGoodsKey)
+	defer unlock()
+	client, err := a.client(CatFKCredentials{})
+	if err != nil {
+		return 0, err
+	}
+	scope := catFKMerchantScope(storeToken, merchantToken)
+	item, err := a.lookupMerchantGoodsItem(ctx, client, scope, merchantToken, slotGoodsKey)
+	if err != nil {
+		return 0, err
+	}
+	detail, err := a.getVerifiedMerchantDetail(ctx, client, scope, merchantToken, slotGoodsKey, item.ID)
+	if err != nil {
+		return 0, err
+	}
+	if !force && *item.Extend.StockCount >= minStock {
+		return 0, nil
+	}
+	if err := a.replenishPlaceholderStock(ctx, client, scope, merchantToken, slotGoodsKey, detail.ID, restockBatch); err != nil {
+		return 0, err
+	}
+	return restockBatch, nil
 }
 
 func (a *catFKHTTPAdapter) QuoteDirect(ctx context.Context, storeToken, merchantToken, slotGoodsKey, channelID, baseAmount string) (*CatFKOffer, error) {
@@ -398,11 +782,20 @@ func (a *catFKHTTPAdapter) QuoteDirect(ctx context.Context, storeToken, merchant
 	if err != nil {
 		return nil, err
 	}
-	shop, _, _, detail, err := a.fetchVerifiedDirectGoods(ctx, client, storeToken, merchantToken, slotGoodsKey)
+	shop, _, err := a.fetchVerifiedStorefrontDirectGoods(ctx, client, storeToken, slotGoodsKey)
 	if err != nil {
 		return nil, err
 	}
-	rawChannels, err := a.fetchRawChannels(ctx, client, storeToken)
+	scope := catFKMerchantScope(storeToken, merchantToken)
+	goodsID, err := a.resolveMerchantGoodsID(ctx, client, scope, merchantToken, slotGoodsKey)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := a.getVerifiedMerchantDetail(ctx, client, scope, merchantToken, slotGoodsKey, goodsID)
+	if err != nil {
+		return nil, err
+	}
+	rawChannels, err := a.getCachedRawChannels(ctx, client, storeToken)
 	if err != nil {
 		return nil, err
 	}
@@ -426,6 +819,7 @@ func (a *catFKHTTPAdapter) QuoteDirect(ctx context.Context, storeToken, merchant
 	var samplePrice struct {
 		OriginalAmount *decimal.Decimal `json:"original_amount"`
 		Fee            *decimal.Decimal `json:"fee"`
+		FeePayer       *int             `json:"fee_payer"`
 		TotalAmount    *decimal.Decimal `json:"total_amount"`
 	}
 	if err = a.post(ctx, client, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": slotGoodsKey, "quantity": 1, "coupon_code": "", "channel_id": id}, &samplePrice); err != nil {
@@ -434,8 +828,29 @@ func (a *catFKHTTPAdapter) QuoteDirect(ctx context.Context, storeToken, merchant
 	if samplePrice.TotalAmount == nil || !samplePrice.TotalAmount.IsPositive() {
 		return nil, ErrCatFKVerification
 	}
+	var buyerPaysFee bool
+	if samplePrice.FeePayer != nil {
+		switch *samplePrice.FeePayer {
+		case 1:
+			buyerPaysFee = true
+		case 0:
+			buyerPaysFee = false
+		default:
+			return nil, ErrCatFKVerification
+		}
+	} else {
+		switch detail.FeePayer {
+		case 1:
+			buyerPaysFee = true
+		case 0:
+			buyerPaysFee = false
+		case -1:
+			buyerPaysFee = samplePrice.OriginalAmount != nil && samplePrice.Fee != nil && samplePrice.Fee.IsPositive() && samplePrice.OriginalAmount.Add(*samplePrice.Fee).Equal(*samplePrice.TotalAmount)
+		default:
+			return nil, ErrCatFKVerification
+		}
+	}
 	fee := decimal.Zero
-	buyerPaysFee := detail.FeePayer == 1 || (detail.FeePayer == -1 && samplePrice.Fee != nil && samplePrice.Fee.IsPositive())
 	if buyerPaysFee {
 		if matchedChannel.Rate != nil && !matchedChannel.Rate.IsNegative() {
 			fee = baseDecimal.Mul(*matchedChannel.Rate).Div(decimal.NewFromInt(100)).Round(2)
@@ -449,19 +864,22 @@ func (a *catFKHTTPAdapter) QuoteDirect(ctx context.Context, storeToken, merchant
 	if !total.IsPositive() || total.GreaterThan(decimal.NewFromInt(1000000000)) {
 		return nil, ErrCatFKVerification
 	}
-	return &CatFKOffer{
-		ShopID:         storeToken,
-		ShopName:       shop.Nickname,
-		ShopURL:        shop.Link,
-		ProductID:      slotGoodsKey,
-		ChannelID:      channelID,
-		Amount:         total.StringFixed(2),
-		OriginalAmount: baseDecimal.StringFixed(2),
-		Fee:            fee.StringFixed(2),
-		Currency:       "CNY",
-		Quantity:       1,
-		InStock:        true,
-	}, nil
+	offer := &CatFKOffer{
+		ShopID:    storeToken,
+		ShopName:  shop.Nickname,
+		ShopURL:   shop.Link,
+		ProductID: slotGoodsKey,
+		ChannelID: channelID,
+		Amount:    total.StringFixed(2),
+		Currency:  "CNY",
+		Quantity:  1,
+		InStock:   true,
+	}
+	if fee.IsPositive() {
+		offer.OriginalAmount = baseDecimal.StringFixed(2)
+		offer.Fee = fee.StringFixed(2)
+	}
+	return offer, nil
 }
 
 func (a *catFKHTTPAdapter) PrepareDirectSlot(ctx context.Context, storeToken, merchantToken, slotGoodsKey, channelID, baseAmount, knownConfirmedPrice string, minStock, restockBatch int) (*CatFKDynamicSlotReady, error) {
@@ -478,38 +896,29 @@ func (a *catFKHTTPAdapter) PrepareDirectSlot(ctx context.Context, storeToken, me
 	if err != nil {
 		return nil, err
 	}
-	shop, _, item, detail, err := a.fetchVerifiedDirectGoods(ctx, client, storeToken, merchantToken, slotGoodsKey)
+	shop, _, err := a.fetchVerifiedStorefrontDirectGoods(ctx, client, storeToken, slotGoodsKey)
 	if err != nil {
 		return nil, err
 	}
-	beforeStock := *item.Extend.StockCount
-	if beforeStock < minStock {
-		batchTag := strings.ToUpper(strconv.FormatInt(a.currentTime().Unix(), 36))
-		var builder strings.Builder
-		for i := range restockBatch {
-			if i > 0 {
-				builder.WriteByte('\n')
-			}
-			builder.WriteString(fmt.Sprintf("DIRECT-%s-%03d-%s", batchTag, i+1, common.GetRandomString(8)))
-		}
-		addErr := a.postWithHeaders(ctx, client, "", "/merchantApi/GoodsCardStorage/add", a.merchantHeaders(merchantToken, "/merchant/goods/goods_card_storage_add"), map[string]any{
-			"goods_id":      detail.ID,
-			"content":       builder.String(),
-			"first":         0,
-			"remove_repeat": 0,
-		}, nil)
-		if addErr != nil {
-			// On timeout or disconnect, check remote stock first instead of blindly re-adding.
-			rechecked, checkErr := a.lookupMerchantGoodsItem(ctx, client, merchantToken, slotGoodsKey)
-			if checkErr != nil {
-				return nil, fmt.Errorf("%w: %v", errCatFKSlotAmbiguous, addErr)
-			}
-			afterStock := *rechecked.Extend.StockCount
-			if afterStock <= 0 {
-				return nil, ErrCatFKOrderUnavailable
-			}
+	scope := catFKMerchantScope(storeToken, merchantToken)
+	unlock := a.lockRestockKey(storeToken + ":" + slotGoodsKey)
+	item, err := a.lookupMerchantGoodsItem(ctx, client, scope, merchantToken, slotGoodsKey)
+	if err != nil {
+		unlock()
+		return nil, err
+	}
+	detail, err := a.getVerifiedMerchantDetail(ctx, client, scope, merchantToken, slotGoodsKey, item.ID)
+	if err != nil {
+		unlock()
+		return nil, err
+	}
+	if *item.Extend.StockCount < minStock {
+		if restockErr := a.replenishPlaceholderStock(ctx, client, scope, merchantToken, slotGoodsKey, detail.ID, restockBatch); restockErr != nil {
+			unlock()
+			return nil, restockErr
 		}
 	}
+	unlock()
 
 	needPriceUpdate := knownConfirmedPrice != baseDecimal.StringFixed(2) ||
 		!detail.Price.Equal(baseDecimal) ||
@@ -558,8 +967,22 @@ func (a *catFKHTTPAdapter) PrepareDirectSlot(ctx context.Context, storeToken, me
 			},
 		}
 		if updateErr := a.postWithHeaders(ctx, client, "", "/merchantApi/Goods/update", a.merchantHeaders(merchantToken, fmt.Sprintf("/merchant/goods/create?goods_type=card&id=%d", detail.ID)), payload, nil); updateErr != nil {
+			a.cache.invalidateDetail(scope, detail.ID)
+			if errors.Is(updateErr, errCatFKMerchantAuthExpired) {
+				a.cache.invalidateScope(scope)
+				return nil, updateErr
+			}
 			return nil, fmt.Errorf("%w: %v", errCatFKSlotAmbiguous, updateErr)
 		}
+		updatedDetail := *detail
+		updatedDetail.Price = baseDecimal
+		updatedDetail.MarketPrice = baseDecimal
+		updatedDetail.CouponStatus = 0
+		updatedDetail.Status = 1
+		updatedDetail.Show = 0
+		updatedDetail.ContactFormat = "any"
+		updatedDetail.Extend.LockCard = 0
+		a.cache.setDetail(scope, updatedDetail, a.currentTime())
 	}
 
 	// Read back both storefront goodsInfo and getGoodsPrice to prove the updated
@@ -723,6 +1146,9 @@ func (a *catFKHTTPAdapter) Create(ctx context.Context, order *model.CatFKOrder, 
 	credentials.Cookie = string(cookies)
 	result := &CatFKCreatedOrder{UpstreamOrderID: wire.TradeNo, PaymentURL: wire.PayURL, Credentials: &credentials}
 	if err != nil {
+		if errors.Is(err, errCatFKOutOfStock) && wire.TradeNo != "" {
+			return result, ErrCatFKOrderUnavailable
+		}
 		return result, err
 	}
 	if wire.TradeNo == "" || !catFKValidPaymentURL(wire.PayURL) || wire.TotalAmount == nil {
@@ -740,9 +1166,9 @@ func (a *catFKHTTPAdapter) Create(ctx context.Context, order *model.CatFKOrder, 
 	}
 	if err == nil && evidence != nil && !evidence.Paid && !evidence.Expired && catFKMatchesPurchase(&orderCopy, evidence) {
 		if order.PaymentMethod == model.PaymentMethodCatFKWeChat {
-			result.PaymentQRCode, err = a.paymentQRCode(ctx, wire.PayURL, order)
+			result.PaymentQRCode, err = a.paymentQRCode(ctx, wire.PayURL, &orderCopy)
 		} else {
-			result.PaymentQRCode, _ = a.paymentQRCode(ctx, wire.PayURL, order)
+			result.PaymentQRCode, _ = a.paymentQRCode(ctx, wire.PayURL, &orderCopy)
 		}
 	}
 	// Capture cookies from both creation and its immediate verification query.
@@ -812,7 +1238,7 @@ func (a *catFKHTTPAdapter) paymentQRCode(ctx context.Context, payURL string, ord
 			return "", ErrCatFKVerification
 		}
 		if wechat {
-			if u.Path != "/payApi/WeixinNative/pay.html" {
+			if u.Path != "/payApi/WeixinNative/pay.html" && u.Path != "/payApi/WeixinJspay/pay.html" {
 				return "", ErrCatFKVerification
 			}
 			return catFKWeChatCashierQR(doc, u, order)
@@ -859,6 +1285,35 @@ func (a *catFKHTTPAdapter) paymentQRCode(ctx context.Context, payURL string, ord
 
 var catFKWeChatQRPattern = regexp.MustCompile(`^weixin://wxpay/bizpayurl\?pr=[A-Za-z0-9_-]+$`)
 var catFKCashierPricePattern = regexp.MustCompile(`^[0-9]{1,16}(\.[0-9]{1,2})?$`)
+var catFKCashierTradeNoPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+func catFKValidExtractedWeChatQR(code string, page *url.URL, order *model.CatFKOrder) bool {
+	if catFKWeChatQRPattern.MatchString(code) {
+		return true
+	}
+	if page.Path != "/payApi/WeixinJspay/pay.html" {
+		return false
+	}
+	qrURL, err := url.Parse(code)
+	if err != nil || qrURL.Scheme != page.Scheme || qrURL.Host != page.Host || qrURL.User != nil || qrURL.Fragment != "" || qrURL.RawPath != "" || qrURL.Path != "/payApi/WeixinJspay/pay.html" {
+		return false
+	}
+	qrParams, err := url.ParseQuery(qrURL.RawQuery)
+	if err != nil || len(qrParams) != 1 || len(qrParams["trade_no"]) != 1 {
+		return false
+	}
+	tradeNo := qrParams.Get("trade_no")
+	if !catFKCashierTradeNoPattern.MatchString(tradeNo) {
+		return false
+	}
+	if order != nil && order.UpstreamOrderID != nil && *order.UpstreamOrderID != "" && tradeNo != *order.UpstreamOrderID {
+		return false
+	}
+	if pageParams, pageErr := url.ParseQuery(page.RawQuery); pageErr == nil && pageParams.Get("trade_no") != "" && tradeNo != pageParams.Get("trade_no") {
+		return false
+	}
+	return true
+}
 
 func catFKWeChatCashierQR(doc *html.Node, page *url.URL, order *model.CatFKOrder) (string, error) {
 	var code, price string
@@ -891,7 +1346,7 @@ func catFKWeChatCashierQR(doc *html.Node, page *url.URL, order *model.CatFKOrder
 		}
 		code = params.Get("str")
 		for range 2 {
-			if strings.HasPrefix(code, "weixin://") {
+			if strings.HasPrefix(code, "weixin://") || strings.HasPrefix(code, "https://") || strings.HasPrefix(code, "http://") {
 				break
 			}
 			decoded, unescapeErr := url.QueryUnescape(code)
@@ -903,7 +1358,7 @@ func catFKWeChatCashierQR(doc *html.Node, page *url.URL, order *model.CatFKOrder
 			}
 			code = decoded
 		}
-		if len(code) > 2048 || !catFKWeChatQRPattern.MatchString(code) {
+		if len(code) > 2048 || !catFKValidExtractedWeChatQR(code, page, order) {
 			return "", ErrCatFKVerification
 		}
 	}

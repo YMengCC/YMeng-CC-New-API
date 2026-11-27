@@ -12,6 +12,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -171,35 +172,54 @@ func TestCatFKHTTPPaymentQRCodeFollowsTheCashierChain(t *testing.T) {
 func TestCatFKHTTPWeChatCashierVerifiesQuotedTotal(t *testing.T) {
 	const native = "weixin://wxpay/bizpayurl?pr=testToken"
 	for _, tc := range []struct {
-		name, price, payload string
-		valid                bool
+		name, path, price, payload string
+		valid                      bool
 	}{
-		{"exact total", "10.18", native, true},
-		{"different total", "10.17", native, false},
-		{"missing total", "", native, false},
-		{"unexpected scheme", "10.18", "https://example.com/pay", false},
-		{"unexpected argument", "10.18", native + "&extra=1", false},
+		{"exact total native", "/payApi/WeixinNative/pay.html", "10.18", native, true},
+		{"different total", "/payApi/WeixinNative/pay.html", "10.17", native, false},
+		{"missing total", "/payApi/WeixinNative/pay.html", "", native, false},
+		{"unexpected scheme", "/payApi/WeixinNative/pay.html", "10.18", "https://example.com/pay", false},
+		{"unexpected argument", "/payApi/WeixinNative/pay.html", "10.18", native + "&extra=1", false},
+		{"exact total jspay", "/payApi/WeixinJspay/pay.html?trade_no=CAT1", "10.18", "__SELF_JSPAY_CAT1__", true},
+		{"jspay mismatched trade_no", "/payApi/WeixinJspay/pay.html?trade_no=CAT1", "10.18", "__SELF_JSPAY_OTHER__", false},
+		{"jspay url on native path", "/payApi/WeixinNative/pay.html", "10.18", "__SELF_JSPAY_CAT1__", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			var serverURL string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "/payApi/WeixinNative/pay.html", r.URL.Path)
-				image := "/payApi/common/generateQrcode.html?str=" + url.QueryEscape(url.QueryEscape(tc.payload))
-				_, _ = w.Write([]byte(`<div class="price"><span>` + tc.price + `</span></div><img src="` + image + `">`))
+				payload := tc.payload
+				switch payload {
+				case "__SELF_JSPAY_CAT1__":
+					payload = serverURL + "/payApi/WeixinJspay/pay.html?trade_no=CAT1"
+				case "__SELF_JSPAY_OTHER__":
+					payload = serverURL + "/payApi/WeixinJspay/pay.html?trade_no=CAT2"
+				}
+				image := "/payApi/common/generateQrcode.html?str=" + url.QueryEscape(url.QueryEscape(payload))
+				_, _ = w.Write([]byte(`<div class="price"><span>` + tc.price + `</span> <span>元</span></div><img src="` + image + `">`))
 			}))
+			serverURL = server.URL
 			defer server.Close()
 			adapter := newCatFKHTTPAdapter()
 			adapter.baseURL = server.URL
-			order := &model.CatFKOrder{PaymentMethod: model.PaymentMethodCatFKWeChat, Currency: "CNY", PriceAmount: "10.18"}
-			code, err := adapter.paymentQRCode(context.Background(), server.URL+"/payApi/WeixinNative/pay.html", order)
+			upstreamID := "CAT1"
+			order := &model.CatFKOrder{UpstreamOrderID: &upstreamID, PaymentMethod: model.PaymentMethodCatFKWeChat, Currency: "CNY", PriceAmount: "10.18"}
+			code, err := adapter.paymentQRCode(context.Background(), server.URL+tc.path, order)
 			if tc.valid {
 				require.NoError(t, err)
-				assert.Equal(t, native, code)
+				if tc.payload == "__SELF_JSPAY_CAT1__" {
+					assert.Equal(t, server.URL+"/payApi/WeixinJspay/pay.html?trade_no=CAT1", code)
+				} else {
+					assert.Equal(t, native, code)
+				}
 			} else {
 				require.ErrorIs(t, err, ErrCatFKVerification)
 				assert.Empty(t, code)
 			}
 		})
 	}
+	assert.True(t, catFKValidPaymentQRCode("https://catfk.com/payApi/WeixinJspay/pay.html?trade_no=CAT261127LW6MJE", model.PaymentMethodCatFKWeChat))
+	assert.False(t, catFKValidPaymentQRCode("https://example.com/payApi/WeixinJspay/pay.html?trade_no=CAT261127LW6MJE", model.PaymentMethodCatFKWeChat))
+	assert.False(t, catFKValidPaymentQRCode("https://catfk.com/shop/YMengCC", model.PaymentMethodCatFKWeChat))
 }
 
 func TestCatFKHTTPPaymentQRCodeVisitsOnlyCatFKAndAlipay(t *testing.T) {
@@ -457,7 +477,7 @@ func TestCatFKHTTPQueryProbesLightweightUntilPaidOrNearExpiry(t *testing.T) {
 }
 
 func TestCatFKHTTPDirectSlotRestockPriceUpdateAndVisibilityChecks(t *testing.T) {
-	for _, scenario := range []string{"success-with-fee", "restock-timeout-recovered", "public-goods-rejected"} {
+	for _, scenario := range []string{"success-with-fee", "seller-pays-fee-default", "restock-timeout-recovered", "public-goods-rejected"} {
 		t.Run(scenario, func(t *testing.T) {
 			var stock atomic.Int32
 			stock.Store(2)
@@ -482,7 +502,11 @@ func TestCatFKHTTPDirectSlotRestockPriceUpdateAndVisibilityChecks(t *testing.T) 
 				case "/shopApi/Shop/getGoodsPrice":
 					base, _ := strconv.ParseFloat(currentPrice.Load().(string), 64)
 					fee := float64(int(base*2+0.5)) / 100
-					data = map[string]any{"original_amount": base, "fee": fee, "total_amount": base + fee}
+					if scenario == "seller-pays-fee-default" {
+						data = map[string]any{"original_amount": base, "fee": fee, "fee_payer": 0, "total_amount": base}
+					} else {
+						data = map[string]any{"original_amount": base, "fee": fee, "fee_payer": 1, "total_amount": base + fee}
+					}
 				case "/merchantApi/Goods/list":
 					assert.Equal(t, "secret-merchant-token", r.Header.Get("merchant-token"))
 					data = map[string]any{"total": 1, "list": []any{
@@ -494,10 +518,14 @@ func TestCatFKHTTPDirectSlotRestockPriceUpdateAndVisibilityChecks(t *testing.T) 
 					if scenario == "public-goods-rejected" {
 						show = 1
 					}
+					feePayer := 1
+					if scenario == "seller-pays-fee-default" {
+						feePayer = -1
+					}
 					data = map[string]any{
 						"id": 99, "goods_type": "card", "goods_key": "slot1", "category_id": 1, "name": "Direct Slot",
 						"price": currentPrice.Load(), "market_price": currentPrice.Load(), "coupon_status": 1, "status": 1,
-						"fee_payer": 1, "show": show, "contact_format": "any",
+						"fee_payer": feePayer, "show": show, "contact_format": "any",
 						"extend": map[string]any{"lock_card": 1, "limit_count": 1},
 					}
 				case "/merchantApi/GoodsCardStorage/add":
@@ -539,17 +567,152 @@ func TestCatFKHTTPDirectSlotRestockPriceUpdateAndVisibilityChecks(t *testing.T) 
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, "15.30", quoted.Amount)
-			assert.Equal(t, "15.00", quoted.OriginalAmount)
-			assert.Equal(t, "0.30", quoted.Fee)
+			if scenario == "seller-pays-fee-default" {
+				assert.Equal(t, "15.00", quoted.Amount)
+				assert.Empty(t, quoted.OriginalAmount)
+				assert.Empty(t, quoted.Fee)
+			} else {
+				assert.Equal(t, "15.30", quoted.Amount)
+				assert.Equal(t, "15.00", quoted.OriginalAmount)
+				assert.Equal(t, "0.30", quoted.Fee)
+			}
 			assert.Zero(t, updateCalls.Load(), "QuoteDirect must never mutate remote slot price")
 
 			ready, err := adapter.PrepareDirectSlot(context.Background(), "YMengCC", "secret-merchant-token", "slot1", "4", "15.00", "", 5, 10)
 			require.NoError(t, err)
-			assert.Equal(t, "15.30", ready.Offer.Amount)
+			assert.Equal(t, quoted.Amount, ready.Offer.Amount)
 			assert.Equal(t, "15.00", ready.ConfirmedPrice)
 			assert.EqualValues(t, 1, addCalls.Load(), "timeout recovery must check remote stock instead of re-sending card add")
 			assert.EqualValues(t, 1, updateCalls.Load())
 		})
 	}
+}
+
+func TestCatFKHTTPCheckMerchantTokenAndAuthExpiryDetection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tok := r.Header.Get("merchant-token")
+		switch r.URL.Path {
+		case "/merchantApi/user/checkToken":
+			if tok == "valid-token" {
+				_, _ = w.Write([]byte(`{"code":1,"data":null,"msg":"success"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"code":0,"data":null,"msg":"Token失效！"}`))
+		case "/shopApi/Shop/info":
+			_, _ = w.Write([]byte(`{"code":1,"data":{"token":"YMengCC","nickname":"YMeng CC","link":"https://catfk.com/shop/YMengCC"}}`))
+		case "/shopApi/Shop/goodsInfo":
+			_, _ = w.Write([]byte(`{"code":1,"data":{"goods_key":"slot1","goods_type":"card","status":1,"price":"10.00","contact_format":"any","user":{"token":"YMengCC"},"extend":{"limit_count":1}}}`))
+		case "/merchantApi/Goods/list":
+			_, _ = w.Write([]byte(`{"code":401,"data":null,"msg":"请先登录！"}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	adapter := newCatFKHTTPAdapter()
+	adapter.baseURL = server.URL
+
+	valid, err := adapter.CheckMerchantToken(context.Background(), "valid-token")
+	require.NoError(t, err)
+	assert.True(t, valid)
+
+	valid, err = adapter.CheckMerchantToken(context.Background(), "expired-token")
+	require.NoError(t, err)
+	assert.False(t, valid)
+
+	_, err = adapter.QuoteDirect(context.Background(), "YMengCC", "expired-token", "slot1", "1", "10.00")
+	require.ErrorIs(t, err, errCatFKMerchantAuthExpired)
+}
+
+func TestCatFKHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
+	var shopCalls, channelCalls, listCalls, detailCalls, orderCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var data any
+		switch r.URL.Path {
+		case "/shopApi/Shop/info":
+			shopCalls.Add(1)
+			data = map[string]any{"token": "YMengCC", "nickname": "YMeng CC", "link": "https://catfk.com/shop/YMengCC"}
+		case "/shopApi/Shop/goodsInfo":
+			data = map[string]any{
+				"goods_key": "slot1", "goods_type": "card", "status": 1, "price": "10.00",
+				"contact_format": "any", "user": map[string]any{"token": "YMengCC"}, "extend": map[string]any{"limit_count": 1},
+			}
+		case "/shopApi/Shop/getUserChannel":
+			channelCalls.Add(1)
+			data = []any{
+				map[string]any{"id": 1, "code": "AlipayPc", "show_name": "支付宝", "rate": 1.8, "status": 1, "custom_status": 1},
+			}
+		case "/shopApi/Shop/getGoodsPrice":
+			data = map[string]any{"original_amount": 10.0, "fee": 0.18, "fee_payer": 0, "total_amount": 10.0}
+		case "/merchantApi/Goods/list":
+			listCalls.Add(1)
+			data = map[string]any{"total": 1, "list": []any{
+				map[string]any{"id": 77, "goods_key": "slot1", "price": "10.00", "status": 1, "extend": map[string]any{"stock_count": 10}},
+			}}
+		case "/merchantApi/Goods/info":
+			detailCalls.Add(1)
+			data = map[string]any{
+				"id": 77, "goods_type": "card", "goods_key": "slot1", "category_id": 1, "name": "Direct Slot",
+				"price": "10.00", "market_price": "10.00", "coupon_status": 0, "status": 1,
+				"fee_payer": 0, "show": 0, "contact_format": "any",
+				"extend": map[string]any{"lock_card": 0, "limit_count": 1},
+			}
+		case "/shopApi/Pay/order":
+			orderCalls.Add(1)
+			_, _ = w.Write([]byte(`{"code":0,"msg":"商品库存不足！","data":null}`))
+			return
+		default:
+			t.Errorf("unexpected endpoint %s", r.URL.Path)
+		}
+		body, err := common.Marshal(map[string]any{"code": 1, "data": data})
+		require.NoError(t, err)
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	adapter := newCatFKHTTPAdapter()
+	adapter.baseURL = server.URL
+	now := time.Unix(1700000000, 0)
+	adapter.now = func() time.Time { return now }
+
+	// First QuoteDirect warms shop, channels, goods_id, and merchant detail caches.
+	_, err := adapter.QuoteDirect(context.Background(), "YMengCC", "valid-merchant-token", "slot1", "1", "10.00")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, shopCalls.Load())
+	assert.EqualValues(t, 1, channelCalls.Load())
+	assert.EqualValues(t, 1, listCalls.Load())
+	assert.EqualValues(t, 1, detailCalls.Load())
+
+	// Second QuoteDirect reuses cached metadata and makes zero merchant API calls.
+	_, err = adapter.QuoteDirect(context.Background(), "YMengCC", "valid-merchant-token", "slot1", "1", "20.00")
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, shopCalls.Load())
+	assert.EqualValues(t, 1, channelCalls.Load())
+	assert.EqualValues(t, 1, listCalls.Load())
+	assert.EqualValues(t, 1, detailCalls.Load())
+
+	// PrepareDirectSlot checks live stock via Goods/list but skips redundant Shop/info and Goods/info.
+	_, err = adapter.PrepareDirectSlot(context.Background(), "YMengCC", "valid-merchant-token", "slot1", "1", "10.00", "10.00", 5, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, shopCalls.Load())
+	assert.EqualValues(t, 2, listCalls.Load())
+	assert.EqualValues(t, 1, detailCalls.Load())
+
+	// Out-of-stock rejection on /shopApi/Pay/order surfaces errCatFKOutOfStock when no trade_no was created.
+	order := &model.CatFKOrder{
+		TradeNo:       "catfk_123456",
+		ProductID:     "slot1",
+		ChannelID:     "1",
+		PriceAmount:   "10.00",
+		Currency:      "CNY",
+		ShopID:        "YMengCC",
+		PaymentMethod: model.PaymentMethodCatFKAlipay,
+		Mode:          operation_setting.CatFKModeDirect,
+	}
+	created, err := adapter.Create(context.Background(), order, CatFKCredentials{Visitor: "v1", Password: "p1"}, "catfk_123456")
+	require.ErrorIs(t, err, errCatFKOutOfStock)
+	require.NotNil(t, created)
+	assert.Empty(t, created.UpstreamOrderID)
+	assert.EqualValues(t, 1, orderCalls.Load())
 }

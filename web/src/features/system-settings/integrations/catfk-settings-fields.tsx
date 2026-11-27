@@ -43,6 +43,8 @@ export type CatFKFormValues = {
   CatFKDirectGoodsKeys?: string
   CatFKAutoRestockMin?: number
   CatFKAutoRestockBatch?: number
+  CatFKMaxAmountCNY?: number
+  CatFKMaxOrdersPerMinute?: number
   CatFKChannels: string
 }
 
@@ -63,6 +65,22 @@ export function CatFKSettingsFields(props: Props) {
   const [deleting, setDeleting] = useState<CatFKProduct | null>(null)
   const [slotDraft, setSlotDraft] = useState('')
   const [slotError, setSlotError] = useState<string | null>(null)
+  const [numericDrafts, setNumericDrafts] = useState<
+    Partial<
+      Record<
+        | 'CatFKAutoRestockMin'
+        | 'CatFKAutoRestockBatch'
+        | 'CatFKMaxAmountCNY'
+        | 'CatFKMaxOrdersPerMinute',
+        string
+      >
+    >
+  >({})
+  const [tokenStatus, setTokenStatus] = useState<{
+    configured: boolean
+    valid: boolean
+    fallback_active: boolean
+  } | null>(null)
   const [channelResult, setChannelResult] = useState<{
     token: string
     channels: CatFKChannel[]
@@ -74,10 +92,16 @@ export function CatFKSettingsFields(props: Props) {
     generation.current += 1
   }
   const mode: CatFKMode =
-    props.values.CatFKMode === 'direct' ? 'direct' : 'redemption'
+    props.values.CatFKMode === 'direct' || props.values.CatFKMode === 'auto'
+      ? props.values.CatFKMode
+      : 'redemption'
+  const showDirectSection = mode === 'direct' || mode === 'auto'
+  const showRedemptionSection = mode === 'redemption' || mode === 'auto'
   const merchantToken = props.values.CatFKMerchantToken ?? ''
   const autoRestockMin = props.values.CatFKAutoRestockMin ?? 5
   const autoRestockBatch = props.values.CatFKAutoRestockBatch ?? 20
+  const maxAmountCNY = props.values.CatFKMaxAmountCNY ?? 5000
+  const maxOrdersPerMinute = props.values.CatFKMaxOrdersPerMinute ?? 15
   const available =
     channelResult?.token === props.values.CatFKStoreToken
       ? channelResult.channels
@@ -133,6 +157,48 @@ export function CatFKSettingsFields(props: Props) {
     },
     onError: (error) => handleServerError(error),
   })
+
+  const checkMerchantToken = useMutation({
+    mutationFn: async (candidate: string) => {
+      const response = await api.post<{
+        success: boolean
+        message?: string
+        data?: {
+          configured: boolean
+          valid: boolean
+          fallback_active: boolean
+        }
+      }>('/api/option/catfk/merchant-token/check', {
+        merchant_token: candidate.trim(),
+      })
+      return requireServerSuccess(response.data).data
+    },
+    onSuccess: (result) => {
+      if (!result) return
+      setTokenStatus(result)
+      if (!result.configured) {
+        toast.info(t('No Catfk merchant token is configured yet'))
+      } else if (result.valid) {
+        toast.success(t('Catfk merchant token is valid'))
+      } else {
+        toast.error(t('Catfk merchant token is invalid or expired'))
+      }
+    },
+    onError: (error) => handleServerError(error),
+  })
+
+  let modeDescription = t(
+    'Redemption-code mode sells mapped fixed-tier products, requires a QQ number for buyer order lookup on CatFK, and redeems real New API codes.'
+  )
+  if (mode === 'direct') {
+    modeDescription = t(
+      'Direct-credit mode supports preset and custom amounts without requiring a QQ number, automatically replenishes placeholder stock, and leaves existing in-flight orders on their original mode.'
+    )
+  } else if (mode === 'auto') {
+    modeDescription = t(
+      'Auto fallback mode runs direct-credit by default, silently falls back to redemption-code mode when the merchant token expires, and resumes direct-credit automatically once the token is updated.'
+    )
+  }
 
   function handleAddDirectSlot() {
     const normalized = normalizeCatFKGoodsKey(slotDraft)
@@ -194,10 +260,20 @@ export function CatFKSettingsFields(props: Props) {
               value: 'direct',
               label: t('Direct-credit & auto-restock mode'),
             },
+            {
+              value: 'auto',
+              label: t(
+                'Auto fallback mode (direct first, fallback to redemption)'
+              ),
+            },
           ]}
           value={mode}
           onValueChange={(value) => {
-            if (value === 'redemption' || value === 'direct') {
+            if (
+              value === 'redemption' ||
+              value === 'direct' ||
+              value === 'auto'
+            ) {
               props.onChange('CatFKMode', value)
             }
           }}
@@ -213,18 +289,13 @@ export function CatFKSettingsFields(props: Props) {
               <SelectItem value='direct'>
                 {t('Direct-credit & auto-restock mode')}
               </SelectItem>
+              <SelectItem value='auto'>
+                {t('Auto fallback mode (direct first, fallback to redemption)')}
+              </SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
-        <p className='text-muted-foreground text-sm'>
-          {mode === 'direct'
-            ? t(
-                'Direct-credit mode supports preset and custom amounts without requiring a QQ number, automatically replenishes placeholder stock, and leaves existing in-flight orders on their original mode.'
-              )
-            : t(
-                'Redemption-code mode sells mapped fixed-tier products, requires a QQ number for buyer order lookup on CatFK, and redeems real New API codes.'
-              )}
-        </p>
+        <p className='text-muted-foreground text-sm'>{modeDescription}</p>
       </div>
 
       <div className='space-y-2'>
@@ -247,21 +318,85 @@ export function CatFKSettingsFields(props: Props) {
         </p>
       </div>
 
-      {mode === 'direct' ? (
+      <div className='space-y-2 sm:max-w-xs'>
+        <Label htmlFor='catfk-max-orders-per-minute'>
+          {t('Order rate limit (per minute)')}
+        </Label>
+        <Input
+          id='catfk-max-orders-per-minute'
+          type='number'
+          min={1}
+          max={600}
+          value={
+            numericDrafts.CatFKMaxOrdersPerMinute ?? String(maxOrdersPerMinute)
+          }
+          onChange={(event) => {
+            const raw = event.target.value
+            setNumericDrafts((prev) => ({
+              ...prev,
+              CatFKMaxOrdersPerMinute: raw,
+            }))
+            const parsed = Number.parseInt(raw, 10)
+            if (raw.trim() !== '' && Number.isFinite(parsed) && parsed >= 1) {
+              props.onChange('CatFKMaxOrdersPerMinute', parsed)
+            }
+          }}
+          onBlur={() =>
+            setNumericDrafts((prev) => {
+              const next = { ...prev }
+              delete next.CatFKMaxOrdersPerMinute
+              return next
+            })
+          }
+        />
+        <p className='text-muted-foreground text-sm'>
+          {t('Maximum new Catfk orders allowed per user or IP per minute.')}
+        </p>
+      </div>
+
+      {showDirectSection && (
         <div className='space-y-5'>
           <div className='space-y-2'>
             <Label htmlFor='catfk-merchant-token'>
               {t('CatFK merchant token')}
             </Label>
-            <Input
-              id='catfk-merchant-token'
-              type='password'
-              autoComplete='new-password'
-              value={merchantToken}
-              onChange={(event) =>
-                props.onChange('CatFKMerchantToken', event.target.value)
-              }
-            />
+            <div className='flex flex-wrap gap-2'>
+              <Input
+                id='catfk-merchant-token'
+                type='password'
+                autoComplete='new-password'
+                value={merchantToken}
+                onChange={(event) => {
+                  props.onChange('CatFKMerchantToken', event.target.value)
+                  if (tokenStatus) setTokenStatus(null)
+                }}
+                className='min-w-0 flex-1'
+              />
+              <Button
+                type='button'
+                variant='outline'
+                disabled={checkMerchantToken.isPending}
+                onClick={() => checkMerchantToken.mutate(merchantToken)}
+              >
+                {checkMerchantToken.isPending
+                  ? t('Loading...')
+                  : t('Check merchant token')}
+              </Button>
+            </div>
+            {tokenStatus && tokenStatus.configured && (
+              <p
+                role='status'
+                className={
+                  tokenStatus.valid
+                    ? 'text-sm text-green-600'
+                    : 'text-destructive text-sm'
+                }
+              >
+                {tokenStatus.valid
+                  ? t('Catfk merchant token is valid')
+                  : t('Catfk merchant token is invalid or expired')}
+              </p>
+            )}
             <p className='text-muted-foreground text-sm'>
               {t(
                 'Leave blank to keep the saved merchant token. Used only on the server for dynamic slot pricing and placeholder stock replenishment.'
@@ -348,7 +483,7 @@ export function CatFKSettingsFields(props: Props) {
             ))}
           </div>
 
-          <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-2'>
               <Label htmlFor='catfk-restock-min'>
                 {t('Auto-restock threshold')}
@@ -358,12 +493,30 @@ export function CatFKSettingsFields(props: Props) {
                 type='number'
                 min={1}
                 max={1000}
-                value={autoRestockMin}
-                onChange={(event) =>
-                  props.onChange(
-                    'CatFKAutoRestockMin',
-                    Number.parseInt(event.target.value, 10) || 1
-                  )
+                value={
+                  numericDrafts.CatFKAutoRestockMin ?? String(autoRestockMin)
+                }
+                onChange={(event) => {
+                  const raw = event.target.value
+                  setNumericDrafts((prev) => ({
+                    ...prev,
+                    CatFKAutoRestockMin: raw,
+                  }))
+                  const parsed = Number.parseInt(raw, 10)
+                  if (
+                    raw.trim() !== '' &&
+                    Number.isFinite(parsed) &&
+                    parsed >= 1
+                  ) {
+                    props.onChange('CatFKAutoRestockMin', parsed)
+                  }
+                }}
+                onBlur={() =>
+                  setNumericDrafts((prev) => {
+                    const next = { ...prev }
+                    delete next.CatFKAutoRestockMin
+                    return next
+                  })
                 }
               />
             </div>
@@ -376,12 +529,66 @@ export function CatFKSettingsFields(props: Props) {
                 type='number'
                 min={1}
                 max={500}
-                value={autoRestockBatch}
-                onChange={(event) =>
-                  props.onChange(
-                    'CatFKAutoRestockBatch',
-                    Number.parseInt(event.target.value, 10) || 1
-                  )
+                value={
+                  numericDrafts.CatFKAutoRestockBatch ??
+                  String(autoRestockBatch)
+                }
+                onChange={(event) => {
+                  const raw = event.target.value
+                  setNumericDrafts((prev) => ({
+                    ...prev,
+                    CatFKAutoRestockBatch: raw,
+                  }))
+                  const parsed = Number.parseInt(raw, 10)
+                  if (
+                    raw.trim() !== '' &&
+                    Number.isFinite(parsed) &&
+                    parsed >= 1
+                  ) {
+                    props.onChange('CatFKAutoRestockBatch', parsed)
+                  }
+                }}
+                onBlur={() =>
+                  setNumericDrafts((prev) => {
+                    const next = { ...prev }
+                    delete next.CatFKAutoRestockBatch
+                    return next
+                  })
+                }
+              />
+            </div>
+            <div className='space-y-2'>
+              <Label htmlFor='catfk-max-amount-cny'>
+                {t('Max single payment (CNY)')}
+              </Label>
+              <Input
+                id='catfk-max-amount-cny'
+                type='number'
+                step='0.01'
+                min={1}
+                max={1000000}
+                value={numericDrafts.CatFKMaxAmountCNY ?? String(maxAmountCNY)}
+                onChange={(event) => {
+                  const raw = event.target.value
+                  setNumericDrafts((prev) => ({
+                    ...prev,
+                    CatFKMaxAmountCNY: raw,
+                  }))
+                  const parsed = Number.parseFloat(raw)
+                  if (
+                    raw.trim() !== '' &&
+                    Number.isFinite(parsed) &&
+                    parsed >= 1
+                  ) {
+                    props.onChange('CatFKMaxAmountCNY', parsed)
+                  }
+                }}
+                onBlur={() =>
+                  setNumericDrafts((prev) => {
+                    const next = { ...prev }
+                    delete next.CatFKMaxAmountCNY
+                    return next
+                  })
                 }
               />
             </div>
@@ -400,7 +607,9 @@ export function CatFKSettingsFields(props: Props) {
             </Button>
           </div>
         </div>
-      ) : (
+      )}
+
+      {showRedemptionSection && (
         <div className='space-y-3'>
           <h4 className='font-medium'>{t('CatFK product mappings')}</h4>
           <p className='text-muted-foreground text-sm'>
@@ -550,7 +759,7 @@ export function CatFKSettingsFields(props: Props) {
         }}
         title={t('Delete product')}
         desc={t(
-          'Remove this Catfkmapping? Existing orders keep their original product snapshot.'
+          'Remove this CatFK mapping? Existing orders keep their original product snapshot.'
         )}
         destructive
         confirmText={t('Delete')}

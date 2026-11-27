@@ -21,23 +21,36 @@ import (
 // redemption guarantees are exercised by model tests, not asserted by a fake.
 type catFKTestAdapter struct {
 	CatFKAdapter
-	offer       CatFKOffer
-	directOffer CatFKOffer
-	creates     atomic.Int32
-	queries     atomic.Int32
-	prepares    atomic.Int32
-	lastContact string
-	prepareFn   func(slotGoodsKey, baseAmount, knownConfirmedPrice string) (*CatFKDynamicSlotReady, error)
-	createFn    func(*model.CatFKOrder, CatFKCredentials) (*CatFKCreatedOrder, error)
-	queryFn     func(*model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error)
+	offer          CatFKOffer
+	directOffer    CatFKOffer
+	quoteDirectErr error
+	checkTokenFn   func(merchantToken string) (bool, error)
+	creates        atomic.Int32
+	queries        atomic.Int32
+	prepares       atomic.Int32
+	replenishes    atomic.Int32
+	lastContact    string
+	prepareFn      func(slotGoodsKey, baseAmount, knownConfirmedPrice string) (*CatFKDynamicSlotReady, error)
+	replenishFn    func(slotGoodsKey string, force bool) (int, error)
+	createFn       func(*model.CatFKOrder, CatFKCredentials) (*CatFKCreatedOrder, error)
+	queryFn        func(*model.CatFKOrder, CatFKCredentials) (*CatFKOrderEvidence, error)
 }
 
 func (a *catFKTestAdapter) Ready() bool { return true }
+func (a *catFKTestAdapter) CheckMerchantToken(_ context.Context, merchantToken string) (bool, error) {
+	if a.checkTokenFn != nil {
+		return a.checkTokenFn(merchantToken)
+	}
+	return merchantToken != "", nil
+}
 func (a *catFKTestAdapter) Quote(context.Context, string, string, string) (*CatFKOffer, error) {
 	o := a.offer
 	return &o, nil
 }
 func (a *catFKTestAdapter) QuoteDirect(_ context.Context, storeToken, _, slotGoodsKey, channelID, baseAmount string) (*CatFKOffer, error) {
+	if a.quoteDirectErr != nil {
+		return nil, a.quoteDirectErr
+	}
 	if a.directOffer.ShopID != "" {
 		o := a.directOffer
 		return &o, nil
@@ -66,6 +79,13 @@ func (a *catFKTestAdapter) PrepareDirectSlot(_ context.Context, storeToken, _, s
 		return nil, err
 	}
 	return &CatFKDynamicSlotReady{Offer: *offer, ConfirmedPrice: baseAmount}, nil
+}
+func (a *catFKTestAdapter) ReplenishDirectSlot(_ context.Context, _, _, slotGoodsKey string, _, restockBatch int, force bool) (int, error) {
+	a.replenishes.Add(1)
+	if a.replenishFn != nil {
+		return a.replenishFn(slotGoodsKey, force)
+	}
+	return restockBatch, nil
 }
 func (a *catFKTestAdapter) Create(_ context.Context, o *model.CatFKOrder, c CatFKCredentials, contact string) (*CatFKCreatedOrder, error) {
 	a.creates.Add(1)
@@ -930,5 +950,226 @@ func TestCatFKDirectModeCustomAmountSlotQuarantineAndModeIsolation(t *testing.T)
 		assert.Equal(t, model.CatFKOrderStatusPending, store.order.Status)
 		assert.Equal(t, s.now().Add(15*time.Second).Unix(), store.order.NextQueryAt)
 		assert.Zero(t, store.completed)
+	})
+
+	t.Run("auto mode seamlessly falls back to redemption on token expiry and resumes direct on token update", func(t *testing.T) {
+		s, a, store, cfg := catFKFixture(t)
+		cfg.Mode = operation_setting.CatFKModeAuto
+		cfg.StoreToken = "YMengCC"
+		cfg.MerchantToken = "token-v1"
+		cfg.Products = []operation_setting.CatFKProduct{{ID: "ten", Name: "Ten", GoodsKey: "goods", Amount: 10}}
+		cfg.DirectGoodsKeys = []string{"slot-auto-1"}
+
+		// Healthy token resolves to direct mode and supports custom amounts.
+		effMode, fallback := s.effectiveMode(cfg)
+		assert.Equal(t, operation_setting.CatFKModeDirect, effMode)
+		assert.False(t, fallback)
+		customAmt := int64(15)
+		qCustom, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &customAmt, ChannelID: "pay"})
+		require.NoError(t, err)
+		assert.Equal(t, operation_setting.CatFKModeDirect, qCustom.Mode)
+
+		// Mid-request expiry on a preset amount ($10 matches cfg.Products[0]) falls back seamlessly in the same quote call.
+		a.quoteDirectErr = errCatFKMerchantAuthExpired
+		presetAmt := int64(10)
+		qFallback, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &presetAmt, ChannelID: "pay"})
+		require.NoError(t, err)
+		assert.Equal(t, operation_setting.CatFKModeRedemption, qFallback.Mode)
+		assert.Equal(t, "ten", qFallback.ProductID)
+
+		effMode, fallback = s.effectiveMode(cfg)
+		assert.Equal(t, operation_setting.CatFKModeRedemption, effMode)
+		assert.True(t, fallback)
+
+		// Unmapped custom amount while fallen back returns clean fallback guidance.
+		_, err = s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &customAmt, ChannelID: "pay"})
+		require.ErrorIs(t, err, ErrCatFKCustomAmountFallback)
+
+		// Completing the fallen-back redemption quote works normally with QQ.
+		a.createFn = func(o *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			e := catFKTestEvidence(o)
+			e.UpstreamOrderID = "upstream-auto-redemption"
+			e.Paid, e.Delivered, e.RedemptionKey = false, false, ""
+			return &CatFKCreatedOrder{UpstreamOrderID: "upstream-auto-redemption", PaymentURL: "https://payments.example/pay", Credentials: &c, Evidence: e}, nil
+		}
+		p, err := s.create(context.Background(), 7, CatFKPaymentRequest{
+			ProductID: "ten", ChannelID: "pay", QuoteID: qFallback.QuoteID, QQ: "123456", IdempotencyKey: "auto-fallback-pay-1",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, operation_setting.CatFKModeRedemption, p.Mode)
+		assert.Equal(t, "123456", store.order.ExpectedContact)
+
+		// Updating merchant_token immediately restores direct mode; background probe keeps it updated.
+		a.quoteDirectErr = nil
+		cfg.MerchantToken = "token-v2"
+		effMode, fallback = s.effectiveMode(cfg)
+		assert.Equal(t, operation_setting.CatFKModeDirect, effMode)
+		assert.False(t, fallback)
+
+		// Transient network error in background probe does not falsely trigger fallback.
+		a.checkTokenFn = func(string) (bool, error) { return false, ErrCatFKOrderUnavailable }
+		s.probeAutoMerchantTokenIfDue(context.Background())
+		effMode, fallback = s.effectiveMode(cfg)
+		assert.Equal(t, operation_setting.CatFKModeDirect, effMode)
+		assert.False(t, fallback)
+
+		// Confirmed invalid token in background probe switches effectiveMode to redemption before customer visit.
+		a.checkTokenFn = func(string) (bool, error) { return false, nil }
+		s.probeAutoMerchantTokenIfDue(context.Background())
+		effMode, fallback = s.effectiveMode(cfg)
+		assert.Equal(t, operation_setting.CatFKModeRedemption, effMode)
+		assert.True(t, fallback)
+	})
+
+	t.Run("direct mode retries out-of-stock order creation once after force restock and proactively checks stock after settlement", func(t *testing.T) {
+		s, a, store, cfg := catFKFixture(t)
+		cfg.Mode = operation_setting.CatFKModeDirect
+		cfg.StoreToken = "YMengCC"
+		cfg.MerchantToken = "secret-merchant-token"
+		cfg.DirectGoodsKeys = []string{"slot-restock-1"}
+
+		var forcedCalls, gentleCalls atomic.Int32
+		a.replenishFn = func(slotGoodsKey string, force bool) (int, error) {
+			assert.Equal(t, "slot-restock-1", slotGoodsKey)
+			if force {
+				forcedCalls.Add(1)
+			} else {
+				gentleCalls.Add(1)
+			}
+			return 20, nil
+		}
+		var createAttempts atomic.Int32
+		a.createFn = func(o *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			if createAttempts.Add(1) == 1 {
+				return &CatFKCreatedOrder{Credentials: &c}, errCatFKOutOfStock
+			}
+			e := catFKTestEvidence(o)
+			e.UpstreamOrderID = "upstream-restocked-1"
+			e.Paid, e.Delivered, e.RedemptionKey = false, false, ""
+			return &CatFKCreatedOrder{
+				UpstreamOrderID: "upstream-restocked-1",
+				PaymentURL:      "https://catfk.com/pay/upstream-restocked-1",
+				PaymentQRCode:   "weixin://wxpay/bizpayurl?pr=restockedQR",
+				Credentials:     &c,
+				Evidence:        e,
+			}, nil
+		}
+
+		amount := int64(5)
+		q, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &amount, ChannelID: "pay"})
+		require.NoError(t, err)
+
+		payment, err := s.create(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &amount, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "restock-retry-idem-1",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.CatFKOrderStatusPending, payment.Status)
+		assert.EqualValues(t, 2, createAttempts.Load())
+		assert.EqualValues(t, 1, forcedCalls.Load())
+		assert.Zero(t, gentleCalls.Load())
+		assert.Equal(t, model.CatFKSlotStatusIdle, store.slots["slot-restock-1"].Status)
+
+		a.queryFn = func(o *model.CatFKOrder, _ CatFKCredentials) (*CatFKOrderEvidence, error) {
+			return &CatFKOrderEvidence{
+				UpstreamOrderID: "upstream-restocked-1",
+				TransactionID:   "wx-tx-restocked-1",
+				Contact:         o.TradeNo,
+				ShopID:          o.ShopID,
+				ProductID:       o.ProductID,
+				Quantity:        1,
+				Amount:          o.PriceAmount,
+				Paid:            true,
+				Delivered:       true,
+			}, nil
+		}
+		require.NoError(t, s.poll(context.Background()))
+		assert.Equal(t, model.CatFKOrderStatusCompleted, store.order.Status)
+		assert.EqualValues(t, 1, gentleCalls.Load(), "completed direct order must proactively check slot stock")
+	})
+
+	t.Run("enforces configurable CNY max amount and sliding-window new order rate limit without blocking idempotent recovery", func(t *testing.T) {
+		s, a, store, cfg := catFKFixture(t)
+		cfg.Mode = operation_setting.CatFKModeDirect
+		cfg.StoreToken = "YMengCC"
+		cfg.MerchantToken = "secret-merchant-token"
+		cfg.DirectGoodsKeys = []string{"slot-limit-1"}
+		cfg.MaxAmountCNY = 100
+		cfg.MaxOrdersPerMinute = 2
+
+		nowUnix := int64(1700001000)
+		s.now = func() time.Time { return time.Unix(nowUnix, 0) }
+
+		// $20 * 7.2 = ¥144.00 > ¥100.00 max limit -> rejected with exact limit message.
+		tooHigh := int64(20)
+		_, err := QuoteCatFKRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &tooHigh, ChannelID: "pay"})
+		_, err = s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &tooHigh, ChannelID: "pay"})
+		require.Error(t, err)
+		assert.Equal(t, "Catfk single payment cannot exceed ¥100.00", catFKPublicError(err).Error())
+
+		// $10 * 7.2 = ¥72.00 <= ¥100.00 succeeds; if buyer fee pushes total > ¥100.00, also rejected.
+		okAmt := int64(10)
+		a.directOffer = CatFKOffer{
+			ShopID: "YMengCC", ShopName: "Direct Shop", ShopURL: "https://catfk.com/shop/YMengCC",
+			ProductID: "slot-limit-1", ChannelID: "pay", Amount: "101.50", OriginalAmount: "72.00", Fee: "29.50",
+			Currency: "CNY", Quantity: 1, InStock: true,
+		}
+		_, err = s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &okAmt, ChannelID: "pay"})
+		require.Error(t, err)
+		assert.Equal(t, "Catfk single payment cannot exceed ¥100.00", catFKPublicError(err).Error())
+		a.directOffer = CatFKOffer{}
+
+		q, err := s.quoteRequest(context.Background(), 7, CatFKQuoteRequest{Amount: &okAmt, ChannelID: "pay"})
+		require.NoError(t, err)
+		a.createFn = func(o *model.CatFKOrder, c CatFKCredentials) (*CatFKCreatedOrder, error) {
+			e := catFKTestEvidence(o)
+			e.UpstreamOrderID = "up-" + o.IdempotencyKey
+			e.Paid, e.Delivered, e.RedemptionKey = false, false, ""
+			return &CatFKCreatedOrder{UpstreamOrderID: e.UpstreamOrderID, PaymentURL: "https://catfk.com/pay/1", PaymentQRCode: "weixin://wxpay/bizpayurl?pr=ok", Credentials: &c, Evidence: e}, nil
+		}
+
+		// Order 1 allowed.
+		_, err = s.createWithIP(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "rate-limit-order-0001",
+		}, "203.0.113.9")
+		require.NoError(t, err)
+
+		// Clear test store's single-order slot to simulate second distinct order; Order 2 allowed.
+		firstOrder := store.order
+		store.order = nil
+		_, err = s.createWithIP(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "rate-limit-order-0002",
+		}, "203.0.113.9")
+		require.NoError(t, err)
+
+		// Order 3 within 60s window rejected by user & IP limit.
+		store.order = nil
+		_, err = s.createWithIP(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "rate-limit-order-0003",
+		}, "203.0.113.9")
+		require.ErrorIs(t, err, ErrCatFKRateLimited)
+
+		// Different user from the same IP is also blocked by per-IP limit.
+		qOtherUser, err := s.quoteRequest(context.Background(), 8, CatFKQuoteRequest{Amount: &okAmt, ChannelID: "pay"})
+		require.NoError(t, err)
+		_, err = s.createWithIP(context.Background(), 8, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: qOtherUser.QuoteID, IdempotencyKey: "rate-limit-order-0004",
+		}, "203.0.113.9")
+		require.ErrorIs(t, err, ErrCatFKRateLimited)
+
+		// Idempotent retry of an existing order is NEVER blocked even while rate-limited.
+		store.order = firstOrder
+		recovered, err := s.createWithIP(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "rate-limit-order-0001",
+		}, "203.0.113.9")
+		require.NoError(t, err)
+		assert.Equal(t, firstOrder.TradeNo, recovered.TradeNo)
+
+		// Advancing past 60s sliding window allows new orders again.
+		store.order = nil
+		nowUnix += 61
+		_, err = s.createWithIP(context.Background(), 7, CatFKPaymentRequest{
+			Amount: &okAmt, ChannelID: "pay", QuoteID: q.QuoteID, IdempotencyKey: "rate-limit-order-0005",
+		}, "203.0.113.9")
+		require.NoError(t, err)
 	})
 }

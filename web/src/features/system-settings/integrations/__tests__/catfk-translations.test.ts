@@ -67,17 +67,34 @@ it.each(Object.entries(resources))(
       'CatFK merchant token',
       'Direct-credit & auto-restock mode',
       'Redemption-code verification mode',
+      'Auto fallback mode (direct first, fallback to redemption)',
+      'Check merchant token',
+      'Catfk merchant token is valid',
+      'Catfk merchant token is invalid or expired',
+      'Custom amounts are temporarily unavailable, please select a preset amount',
       'Direct-credit slot goods keys',
       'Reset quarantined slots',
       'Quarantined slots have been reset',
       'CatFK payment channel is busy, please try again shortly',
+      'Too many Catfk payment requests, please try again shortly',
+      'Catfk single payment cannot exceed ¥{{amount}}',
+      'Max single payment (CNY)',
+      'Order rate limit (per minute)',
+      'Maximum new Catfk orders allowed per user or IP per minute.',
+      'CatFK quote is invalid or expired',
+      'CatFK order is unavailable',
       'Copy the part of the store link after /shop/ and paste it into the store token field. You can also paste the full store link.',
       'Open the product page and copy the part of the product link after /item/. Paste only this part into the goods key field.',
       'Match each product’s expected credited balance (USD) to an amount option in General. Use the balance value, not the CNY selling price or converted display amount. Unmatched presets cannot use this payment method.',
     ]) {
       expect(i18n.exists(key, { lng: language })).toBe(true)
-      expect(i18n.t(key)).not.toContain('CatFK')
-      if (language !== 'en') expect(i18n.t(key)).not.toBe(key)
+      const translated = i18n.t(key)
+      expect(translated).not.toContain('CatFK')
+      expect(translated).not.toMatch(/云猫|雲貓|Yunmao|Cloud Cat/i)
+      if (language !== 'en') expect(translated).not.toBe(key)
+    }
+    for (const value of Object.values(resource.translation)) {
+      expect(String(value)).not.toMatch(/云猫|雲貓|Yunmao|Cloud Cat/i)
     }
   }
 )

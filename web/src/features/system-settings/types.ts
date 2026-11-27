@@ -343,6 +343,8 @@ export type BillingSettings = {
   'catfk_setting.direct_goods_keys': string
   'catfk_setting.auto_restock_min': number
   'catfk_setting.auto_restock_batch': number
+  'catfk_setting.max_amount_cny': number
+  'catfk_setting.max_orders_per_minute': number
   'catfk_setting.channels': string
   WaffoEnabled: boolean
   WaffoApiKey: string

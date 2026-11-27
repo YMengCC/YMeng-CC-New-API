@@ -551,4 +551,30 @@ test('switching to direct-credit mode configures slots without losing product ma
   await waitFor(() =>
     expect(notice).toHaveBeenCalledWith('Quarantined slots have been reset')
   )
+
+  // Switching to auto fallback mode shows both direct slots and fallback product mappings.
+  await user.click(screen.getByRole('combobox', { name: 'CatFK settlement mode' }))
+  await user.click(
+    await screen.findByRole('option', {
+      name: 'Auto fallback mode (direct first, fallback to redemption)',
+    })
+  )
+  expect(latestValues.CatFKMode).toBe('auto')
+  expect(screen.getByText('direct-slot-1')).toBeVisible()
+  expect(screen.getByText('Ten (ten)')).toBeVisible()
+
+  const maxAmountInput = screen.getByRole('spinbutton', {
+    name: 'Max single payment (CNY)',
+  })
+  const rateLimitInput = screen.getByRole('spinbutton', {
+    name: 'Order rate limit (per minute)',
+  })
+  expect(maxAmountInput).toHaveValue(5000)
+  expect(rateLimitInput).toHaveValue(15)
+  await user.clear(maxAmountInput)
+  await user.type(maxAmountInput, '2000')
+  await user.clear(rateLimitInput)
+  await user.type(rateLimitInput, '10')
+  expect(latestValues.CatFKMaxAmountCNY).toBe(2000)
+  expect(latestValues.CatFKMaxOrdersPerMinute).toBe(10)
 })

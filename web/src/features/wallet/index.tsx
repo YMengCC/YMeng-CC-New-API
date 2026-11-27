@@ -159,7 +159,12 @@ export function Wallet(props: WalletProps) {
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
-  const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
+  const {
+    topupInfo,
+    presetAmounts,
+    loading: topupLoading,
+    refetch: refetchTopupInfo,
+  } = useTopupInfo()
   const invoiceModuleVisible = useIsSidebarModuleVisible('/invoices')
 
   const paymentSelectionVersion = useRef(0)
@@ -214,7 +219,8 @@ export function Wallet(props: WalletProps) {
   const catfk = useCatfkPayment(
     topupInfo?.catfk,
     user?.id,
-    refreshCreditedBalance
+    refreshCreditedBalance,
+    refetchTopupInfo
   )
 
   useEffect(() => {
@@ -524,7 +530,7 @@ export function Wallet(props: WalletProps) {
           qq: catfk.qq,
           onQQChange: catfk.setQQ,
           available: !!topupInfo?.catfk?.available,
-          requireQQ: topupInfo?.catfk?.mode !== 'direct',
+          requireQQ: (catfk.quote?.mode ?? topupInfo?.catfk?.mode) !== 'direct',
         }}
       />
 

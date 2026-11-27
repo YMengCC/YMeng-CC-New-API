@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import {
+  CatfkPaymentRejectedError,
   getCatfkOrder,
   isValidCatfkQQ,
   isValidCatfkQuote,
@@ -29,7 +30,8 @@ const finalStatuses = new Set(['completed', 'expired', 'needs_attention'])
 export function useCatfkPayment(
   info: CatfkInfo | undefined,
   userId?: number,
-  onCompleted?: () => Promise<void>
+  onCompleted?: () => Promise<void>,
+  onModeFallback?: () => Promise<void> | void
 ) {
   const { t } = useTranslation()
   const [channel, setChannel] = useState<CatfkChannel | null>(null)
@@ -48,7 +50,6 @@ export function useCatfkPayment(
   // One key per confirmation, so retrying a lost response reuses its order.
   const requestKey = useRef<string | null>(null)
   const creditedTrade = useRef<string | null>(null)
-  const isDirect = info?.mode === 'direct'
   const quoteMutation = useMutation({
     mutationFn: quoteCatfk,
     meta: { errorToast: false },
@@ -147,9 +148,19 @@ export function useCatfkPayment(
       if (!isValidCatfkQuote(result)) {
         throw new Error(t('Invalid payment quote'))
       }
+      if (result.mode === 'redemption' && result.product_id) {
+        setProduct({
+          id: result.product_id,
+          name: result.product_id,
+          amount: result.topup_amount,
+        })
+        void onModeFallback?.()
+      }
       setQuote(result)
     } catch (error) {
       if (version === generation.current && identity.current === userId) {
+        setOpen(false)
+        void onModeFallback?.()
         handleServerError(error, t('Payment request failed'))
       }
     } finally {
@@ -170,7 +181,10 @@ export function useCatfkPayment(
     ) {
       return
     }
-    if (isDirect) {
+    const confirmDirect = (quote?.mode ?? info.mode) === 'direct'
+    const fallbackProductId = quote?.product_id || product?.id
+    const expectedRedemptionAmount = product?.amount ?? quote?.topup_amount
+    if (confirmDirect) {
       if (
         directAmount === null ||
         directAmount <= 0 ||
@@ -179,9 +193,9 @@ export function useCatfkPayment(
         return
       }
     } else if (
-      !product ||
+      !fallbackProductId ||
       !isValidCatfkQQ(qq) ||
-      !isValidCatfkQuote(quote, product.amount)
+      !isValidCatfkQuote(quote, expectedRedemptionAmount)
     ) {
       return
     }
@@ -190,7 +204,7 @@ export function useCatfkPayment(
     inFlight.current = true
     try {
       const order = await payMutation.mutateAsync(
-        isDirect
+        confirmDirect
           ? {
               amount: directAmount ?? undefined,
               channel_id: channel.id,
@@ -199,7 +213,7 @@ export function useCatfkPayment(
               idempotency_key: requestKey.current,
             }
           : {
-              product_id: product?.id,
+              product_id: fallbackProductId,
               channel_id: channel.id,
               quote_id: quote.quote_id,
               qq,
@@ -233,6 +247,9 @@ export function useCatfkPayment(
       inFlight.current = false
       reset()
     } catch (error) {
+      if (error instanceof CatfkPaymentRejectedError) {
+        requestKey.current = null
+      }
       if (version === generation.current && identity.current === userId) {
         handleServerError(error, t('Payment request failed'))
       }

@@ -149,6 +149,9 @@ export interface CatfkInfo {
   enabled: boolean
   available: boolean
   mode?: 'redemption' | 'direct'
+  configured_mode?: 'redemption' | 'direct' | 'auto'
+  fallback_active?: boolean
+  max_amount_cny?: number
   unavailable_reason?: string
   products: CatfkProduct[]
   channels: CatfkChannel[]
@@ -159,6 +162,8 @@ export interface CatfkQuote {
   amount: number
   currency: string
   topup_amount: number
+  mode?: 'redemption' | 'direct'
+  product_id?: string
   /** Included in amount; fee_rate is its percentage of the goods price. */
   fee?: number
   fee_rate?: number
