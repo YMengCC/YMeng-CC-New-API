@@ -50,7 +50,10 @@ import {
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { resolveChatUrl, type ChatPreset } from '@/features/chat/lib/chat-links'
 import { sendToFluent } from '@/features/chat/lib/send-to-fluent'
-import { useApiInfo } from '@/features/dashboard/hooks/use-status-data'
+import {
+  useApiInfo,
+  usePrimaryApiUrl,
+} from '@/features/dashboard/hooks/use-status-data'
 import { normalizeApiBaseUrl } from '@/features/dashboard/lib/api-endpoint'
 import { encodeChannelConnectionInfo } from '@/lib/channel-connection-info'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
@@ -66,19 +69,6 @@ import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
 import { BaoCodeImportDialog } from './baocode-import-dialog'
 
-function getServerAddress(): string {
-  try {
-    const raw = localStorage.getItem('status')
-    if (raw) {
-      const status = JSON.parse(raw)
-      if (status.server_address) return status.server_address as string
-    }
-  } catch {
-    /* empty */
-  }
-  return window.location.origin
-}
-
 type DataTableRowActionsProps<TData> = {
   row: Row<TData>
 }
@@ -90,6 +80,7 @@ export function DataTableRowActions<TData>({
   const apiKey = apiKeySchema.parse(row.original)
   const { items } = useApiInfo()
   const endpoint = normalizeApiBaseUrl(items[0]?.url)
+  const primaryApiUrl = usePrimaryApiUrl()
   const {
     setOpen,
     setCurrentRow,
@@ -312,10 +303,7 @@ export function DataTableRowActions<TData>({
           onClick={async () => {
             const realKey = await resolveRealKey(apiKey.id)
             if (!realKey) return
-            const connStr = encodeChannelConnectionInfo(
-              realKey,
-              getServerAddress()
-            )
+            const connStr = encodeChannelConnectionInfo(realKey, primaryApiUrl)
             const ok = await copyToClipboard(connStr)
             if (ok) toast.success(t('Copied'))
           }}

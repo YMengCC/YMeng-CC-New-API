@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/thanhpk/randstr"
@@ -47,15 +48,8 @@ type TestBEpusdtRequest struct {
 	ApiToken string `json:"api_token"`
 }
 
-func getBEpusdtUnitPrice() float64 {
-	if setting.BEpusdtUnitPrice > 0 {
-		return setting.BEpusdtUnitPrice
-	}
-	return operation_setting.Price
-}
-
 func getBEpusdtMinTopup(methodMin int) int64 {
-	minTopup := max(setting.BEpusdtMinTopUp, methodMin, 1)
+	minTopup := max(operation_setting.MinTopUp, methodMin, 1)
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMin := decimal.NewFromInt(int64(minTopup))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -69,27 +63,7 @@ func getBEpusdtMinTopup(methodMin int) int64 {
 }
 
 func getBEpusdtPayMoney(amount int64, group string) float64 {
-	dAmount := decimal.NewFromInt(amount)
-	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
-		dAmount = dAmount.Div(decimal.NewFromFloat(common.QuotaPerUnit))
-	}
-
-	topupGroupRatio := common.GetTopupGroupRatio(group)
-	if topupGroupRatio == 0 {
-		topupGroupRatio = 1
-	}
-
-	discount := 1.0
-	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(amount)]; ok && ds > 0 {
-		discount = ds
-	}
-
-	return dAmount.
-		Mul(decimal.NewFromFloat(getBEpusdtUnitPrice())).
-		Mul(decimal.NewFromFloat(topupGroupRatio)).
-		Mul(decimal.NewFromFloat(discount)).
-		Round(2).
-		InexactFloat64()
+	return decimal.NewFromFloat(getPayMoney(amount, group)).Round(2).InexactFloat64()
 }
 
 func normalizeBEpusdtTopUpAmount(amount int64) int64 {
@@ -125,7 +99,7 @@ func findBEpusdtGeneralEntry(paymentMethod string, channelID string, matchedIdx 
 	return nil, false
 }
 
-func resolveBEpusdtPayMethod(index *int, paymentMethod string, channelID string) (constant.BEpusdtPayMethod, error) {
+func resolveBEpusdtPayMethod(index *int, paymentMethod string, channelID string) (constant.BEpusdtPayMethod, int, error) {
 	methods := setting.GetBEpusdtPayMethods()
 	trimmedMethod := strings.TrimSpace(paymentMethod)
 	trimmedChannelID := strings.TrimSpace(channelID)
@@ -138,11 +112,11 @@ func resolveBEpusdtPayMethod(index *int, paymentMethod string, channelID string)
 			matchedIdx = *index
 			matched = methods[matchedIdx]
 			if trimmedMethod != "" && !strings.EqualFold(constant.FormatBEpusdtPaymentMethodType(matched.TradeType), trimmedMethod) {
-				return constant.BEpusdtPayMethod{}, common.NewMessage("Unsupported payment method")
+				return constant.BEpusdtPayMethod{}, 0, common.NewMessage("Unsupported payment method")
 			}
 			trimmedMethod = constant.FormatBEpusdtPaymentMethodType(matched.TradeType)
 		} else if len(methods) > 0 || trimmedMethod == "" {
-			return constant.BEpusdtPayMethod{}, common.NewMessage("Unsupported payment method")
+			return constant.BEpusdtPayMethod{}, 0, common.NewMessage("Unsupported payment method")
 		}
 	} else if trimmedChannelID != "" {
 		if idx, err := strconv.Atoi(trimmedChannelID); err == nil && idx >= 0 && idx < len(methods) {
@@ -158,7 +132,7 @@ func resolveBEpusdtPayMethod(index *int, paymentMethod string, channelID string)
 
 	if matchedIdx == -1 && trimmedMethod != "" {
 		if !constant.IsBEpusdtPaymentMethod(trimmedMethod) {
-			return constant.BEpusdtPayMethod{}, common.NewMessage("Unsupported payment method")
+			return constant.BEpusdtPayMethod{}, 0, common.NewMessage("Unsupported payment method")
 		}
 		fallbackIdx := -1
 		for i, m := range methods {
@@ -183,39 +157,36 @@ func resolveBEpusdtPayMethod(index *int, paymentMethod string, channelID string)
 	// Just like JingSoft, a BEpusdt method must be explicitly enabled in General PayMethods.
 	generalEntry, ok := findBEpusdtGeneralEntry(trimmedMethod, trimmedChannelID, matchedIdx)
 	if !ok {
-		return constant.BEpusdtPayMethod{}, common.NewMessage("Unsupported payment method")
+		return constant.BEpusdtPayMethod{}, 0, common.NewMessage("Unsupported payment method")
 	}
 
 	generalMinTopUp, _ := strconv.Atoi(strings.TrimSpace(generalEntry["min_topup"]))
+	generalMinTopUp = max(generalMinTopUp, 0)
 	if matchedIdx >= 0 {
-		matched.MinTopUp = max(matched.MinTopUp, generalMinTopUp, 0)
-		return matched, nil
+		return matched, generalMinTopUp, nil
 	}
 
 	tradeType, validTradeType := constant.ParseBEpusdtPaymentMethodTradeType(trimmedMethod)
 	if !validTradeType {
-		return constant.BEpusdtPayMethod{}, common.NewMessage("Unsupported payment method")
+		return constant.BEpusdtPayMethod{}, 0, common.NewMessage("Unsupported payment method")
 	}
 	return constant.BEpusdtPayMethod{
-		Name:      strings.TrimSpace(generalEntry["name"]),
-		Icon:      strings.TrimSpace(generalEntry["icon"]),
 		TradeType: tradeType,
-		MinTopUp:  max(generalMinTopUp, 0),
-	}, nil
+	}, generalMinTopUp, nil
 }
 
 func resolveBEpusdtCallbackURLs(defaultReturnSuffix string) (notifyURL string, redirectURL string, err error) {
-	notifyURL = strings.TrimSpace(setting.BEpusdtNotifyUrl)
-	if notifyURL == "" {
-		callbackAddr := strings.TrimRight(strings.TrimSpace(service.GetCallbackAddress()), "/")
-		if callbackAddr != "" {
-			notifyURL = callbackAddr + "/api/bepusdt/webhook"
-		}
+	callbackOrigin, originErr := setting.NormalizeBEpusdtCallbackOrigin(setting.BEpusdtCallbackAddress)
+	if originErr != nil {
+		return "", "", common.NewMessage("Callback URL configuration error")
 	}
-	redirectURL = strings.TrimSpace(setting.BEpusdtReturnUrl)
-	if redirectURL == "" {
-		redirectURL = paymentReturnPath(defaultReturnSuffix)
+	if callbackOrigin == "" {
+		callbackOrigin = strings.TrimRight(strings.TrimSpace(system_setting.ServerAddress), "/")
 	}
+	if callbackOrigin != "" {
+		notifyURL = callbackOrigin + "/api/bepusdt/webhook"
+	}
+	redirectURL = paymentReturnPath(defaultReturnSuffix)
 	for _, raw := range []string{notifyURL, redirectURL} {
 		parsed, parseErr := url.ParseRequestURI(raw)
 		if parseErr != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
@@ -235,10 +206,6 @@ func createBEpusdtGatewayOrder(
 	notifyURL string,
 	redirectURL string,
 ) (*service.BEpusdtOrderResponseData, error) {
-	timeout := int64(0)
-	if setting.BEpusdtTimeout >= 180 {
-		timeout = int64(setting.BEpusdtTimeout)
-	}
 	if constant.IsBEpusdtCashierMode(method.TradeType) {
 		return service.CreateBEpusdtOrder(ctx, setting.BEpusdtApiUrl, setting.BEpusdtApiToken, &service.BEpusdtCreateOrderParams{
 			OrderID:     tradeNo,
@@ -248,19 +215,7 @@ func createBEpusdtGatewayOrder(
 			Name:        orderName,
 			NotifyURL:   notifyURL,
 			RedirectURL: redirectURL,
-			Timeout:     timeout,
 		})
-	}
-	effectiveRate := strings.TrimSpace(method.Rate)
-	if effectiveRate == "" {
-		effectiveRate = strings.TrimSpace(setting.BEpusdtRate)
-	}
-	if effectiveRate != "" &&
-		!strings.EqualFold(fiat, setting.GetBEpusdtFiat()) &&
-		!strings.HasPrefix(effectiveRate, "~") {
-		// Fixed numeric rates are denominated in BEpusdtFiat (e.g. CNY/USDT),
-		// so they must not be applied when the order uses a different fiat (e.g. USD subscription).
-		effectiveRate = ""
 	}
 	return service.CreateBEpusdtTransaction(ctx, setting.BEpusdtApiUrl, setting.BEpusdtApiToken, &service.BEpusdtCreateTransactionParams{
 		OrderID:     tradeNo,
@@ -270,9 +225,7 @@ func createBEpusdtGatewayOrder(
 		Name:        orderName,
 		NotifyURL:   notifyURL,
 		RedirectURL: redirectURL,
-		Timeout:     timeout,
 		Address:     method.Address,
-		Rate:        effectiveRate,
 	})
 }
 
@@ -285,12 +238,12 @@ func RequestBEpusdtAmount(c *gin.Context) {
 
 	methodMin := 0
 	if req.PayMethodIndex != nil || strings.TrimSpace(req.PaymentMethod) != "" {
-		method, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
+		_, generalMin, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
 		if err != nil {
 			paymentError(c, err)
 			return
 		}
-		methodMin = method.MinTopUp
+		methodMin = generalMin
 	}
 
 	minTopup := getBEpusdtMinTopup(methodMin)
@@ -331,13 +284,13 @@ func RequestBEpusdtPay(c *gin.Context) {
 		return
 	}
 
-	method, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
+	method, generalMin, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
 	if err != nil {
 		paymentError(c, err)
 		return
 	}
 
-	minTopup := getBEpusdtMinTopup(method.MinTopUp)
+	minTopup := getBEpusdtMinTopup(generalMin)
 	if req.Amount < minTopup {
 		paymentError(c, common.NewMessage("Top-up amount cannot be less than {{min}}", map[string]any{"min": minTopup}))
 		return
@@ -388,7 +341,7 @@ func RequestBEpusdtPay(c *gin.Context) {
 		method,
 		tradeNo,
 		payMoney,
-		setting.GetBEpusdtFiat(),
+		constant.BEpusdtDefaultFiat,
 		fmt.Sprintf("TUC%d", req.Amount),
 		notifyURL,
 		redirectURL,
@@ -427,7 +380,7 @@ func SubscriptionRequestBEpusdtPay(c *gin.Context) {
 		return
 	}
 
-	method, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
+	method, _, err := resolveBEpusdtPayMethod(req.PayMethodIndex, req.PaymentMethod, req.ChannelID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -470,7 +423,7 @@ func SubscriptionRequestBEpusdtPay(c *gin.Context) {
 
 	fiat := strings.ToUpper(strings.TrimSpace(plan.Currency))
 	if !constant.IsSupportedBEpusdtFiat(fiat) {
-		fiat = setting.GetBEpusdtFiat()
+		fiat = constant.BEpusdtDefaultFiat
 	}
 
 	tradeNo := fmt.Sprintf("%s%d-%d-%s", bepusdtSubTradeNoPrefix, userId, time.Now().UnixMilli(), randstr.String(6))

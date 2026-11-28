@@ -118,20 +118,12 @@ func GetTopUpInfo(c *gin.Context) {
 			}
 			return nil
 		}(),
-		"bepusdt_pay_methods": func() any {
-			if enableBEpusdt {
-				return setting.GetPublicBEpusdtPayMethods()
-			}
-			return nil
-		}(),
 		"creem_products":          setting.CreemProducts,
 		"pay_methods":             payMethods,
 		"min_topup":               operation_setting.MinTopUp,
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
-		"bepusdt_min_topup":       getBEpusdtMinTopup(0),
-		"bepusdt_fiat":            setting.GetBEpusdtFiat(),
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,

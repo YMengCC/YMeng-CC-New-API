@@ -39,7 +39,12 @@ import { getPaymentIcon } from '@/features/wallet/lib/ui'
 
 import { safeJsonParseWithValidation } from '../utils/json-parser'
 import { isArray } from '../utils/json-validators'
-import type { BEpusdtPayMethodConfig } from './bepusdt-settings-section'
+import {
+  formatBEpusdtChannelOptionLabel,
+  getBEpusdtDefaultDisplayName,
+  getBEpusdtDefaultIconName,
+  type BEpusdtPayMethodConfig,
+} from './bepusdt-schema'
 import {
   PaymentMethodDialog,
   type PaymentMethodData,
@@ -83,30 +88,28 @@ export function PaymentMethodsVisualEditor({
   bepusdtPayMethods = [],
 }: PaymentMethodsVisualEditorProps) {
   const { t } = useTranslation()
+  const cashierLabel = t('BEpusdt Unified Cashier')
   const bepusdtTemplates =
     bepusdtPayMethods.length > 0
       ? bepusdtPayMethods.map((method, index) => {
           const paymentType = formatBEpusdtPaymentType(method.trade_type)
           const template: PaymentMethodData = {
-            icon: method.icon || getDefaultIconName(paymentType),
-            name: method.name,
+            icon: getBEpusdtDefaultIconName(method.trade_type),
+            name: getBEpusdtDefaultDisplayName(method.trade_type, cashierLabel),
             type: paymentType,
             channel_id: String(index),
           }
-          if (method.min_topup) {
-            template.min_topup = String(method.min_topup)
-          }
           return {
-            name: `BEpusdt · ${method.name} (${paymentType})`,
+            name: formatBEpusdtChannelOptionLabel(method, cashierLabel),
             template,
           }
         })
       : [
           {
-            name: `${t('BEpusdt Unified Cashier')} (${formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE)})`,
+            name: `${cashierLabel} (${formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE)})`,
             template: {
               icon: 'LuCoins',
-              name: t('BEpusdt Unified Cashier'),
+              name: cashierLabel,
               type: formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE),
             },
           },

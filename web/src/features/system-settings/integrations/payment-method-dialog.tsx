@@ -53,7 +53,12 @@ import { isBEpusdtPayment } from '@/features/wallet/lib/payment'
 import { getPaymentIcon } from '@/features/wallet/lib/ui'
 import { isHttpsUrl } from '@/lib/content-format'
 
-import type { BEpusdtPayMethodConfig } from './bepusdt-settings-section'
+import {
+  formatBEpusdtChannelOptionLabel,
+  getBEpusdtDefaultDisplayName,
+  getBEpusdtDefaultIconName,
+  type BEpusdtPayMethodConfig,
+} from './bepusdt-schema'
 import type { JingSoftChannel } from './jingsoft-schema'
 
 const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
@@ -198,6 +203,7 @@ export function PaymentMethodDialog({
     [jingSoftChannels, t]
   )
   const bepusdtOptions = useMemo<PaymentTypeOption[]>(() => {
+    const cashierLabel = t('BEpusdt Unified Cashier')
     const options: PaymentTypeOption[] = []
     if (bepusdtPayMethods.length > 0) {
       const counts = new Map<string, number>()
@@ -208,25 +214,21 @@ export function PaymentMethodDialog({
       bepusdtPayMethods.forEach((method, index) => {
         const paymentType = formatBEpusdtPaymentType(method.trade_type)
         const isDuplicate = (counts.get(paymentType) ?? 0) > 1
-        const isCashier =
-          !method.trade_type.trim() ||
-          method.trade_type.trim() === BEPUSDT_CASHIER_TRADE_TYPE
         options.push({
-          iconName: method.icon || (isCashier ? 'LuCoins' : 'SiTether'),
-          label: `${method.name} (BEpusdt: ${paymentType})`,
-          name: method.name,
+          iconName: getBEpusdtDefaultIconName(method.trade_type),
+          label: formatBEpusdtChannelOptionLabel(method, cashierLabel),
+          name: getBEpusdtDefaultDisplayName(method.trade_type, cashierLabel),
           value: paymentType,
           selectValue: isDuplicate ? `${paymentType}#${index}` : paymentType,
           channelID: String(index),
-          minTopUp: method.min_topup ? String(method.min_topup) : undefined,
         })
       })
     } else {
       const cashierType = formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE)
       options.push({
         iconName: 'LuCoins',
-        label: `${t('BEpusdt Unified Cashier')} (BEpusdt: ${cashierType})`,
-        name: t('BEpusdt Unified Cashier'),
+        label: `${cashierLabel} (BEpusdt: ${cashierType})`,
+        name: cashierLabel,
         value: cashierType,
         selectValue: cashierType,
       })

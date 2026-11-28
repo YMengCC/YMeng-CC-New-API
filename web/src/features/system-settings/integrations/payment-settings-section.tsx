@@ -70,6 +70,7 @@ import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
+import { normalizeBEpusdtCallbackOrigin } from './bepusdt-schema'
 import {
   BEpusdtSettingsSection,
   type BEpusdtFieldValues,
@@ -253,19 +254,12 @@ const paymentSchema = z.object({
     return /^https?:\/\//.test(trimmed)
   }, 'Provide a valid callback URL starting with http:// or https://'),
   BEpusdtApiToken: z.string(),
-  BEpusdtFiat: z.string(),
-  BEpusdtUnitPrice: z.coerce.number().min(0),
-  BEpusdtMinTopUp: z.coerce.number().int().min(1),
-  BEpusdtTimeout: z.coerce
-    .number()
-    .int()
+  BEpusdtCallbackAddress: z
+    .string()
     .refine(
-      (value) => value === 0 || value >= 180,
-      'BEpusdt order timeout must be 0 or at least 180 seconds'
+      (value) => normalizeBEpusdtCallbackOrigin(value) !== null,
+      'BEpusdt callback address must be a valid site origin without a path'
     ),
-  BEpusdtRate: z.string(),
-  BEpusdtNotifyUrl: z.string(),
-  BEpusdtReturnUrl: z.string(),
 })
 
 type PaymentFormValues = z.infer<typeof paymentSchema>
@@ -281,13 +275,7 @@ const defaultBEpusdtValues: BEpusdtSettingsValues = {
   BEpusdtEnabled: false,
   BEpusdtApiUrl: '',
   BEpusdtApiToken: '',
-  BEpusdtFiat: 'CNY',
-  BEpusdtUnitPrice: 0,
-  BEpusdtMinTopUp: 1,
-  BEpusdtTimeout: 1200,
-  BEpusdtRate: '',
-  BEpusdtNotifyUrl: '',
-  BEpusdtReturnUrl: '',
+  BEpusdtCallbackAddress: '',
   BEpusdtPayMethods: '[]',
 }
 
@@ -301,24 +289,19 @@ function parseBEpusdtPayMethods(value: string): BEpusdtPayMethodConfig[] {
           !!item && typeof item === 'object'
       )
       .map((item) => {
-        const minTopUp = Number(item.min_topup)
         const rawTradeType =
           typeof item.trade_type === 'string' ? item.trade_type.trim() : ''
-        return {
-          name: typeof item.name === 'string' ? item.name : '',
-          icon: typeof item.icon === 'string' ? item.icon : undefined,
+        const method: BEpusdtPayMethodConfig = {
           trade_type: rawTradeType || BEPUSDT_CASHIER_TRADE_TYPE,
-          address: typeof item.address === 'string' ? item.address : undefined,
-          currencies:
-            typeof item.currencies === 'string' ? item.currencies : undefined,
-          rate: typeof item.rate === 'string' ? item.rate : undefined,
-          min_topup:
-            Number.isFinite(minTopUp) && minTopUp > 0
-              ? Math.floor(minTopUp)
-              : undefined,
         }
+        if (typeof item.address === 'string' && item.address.trim()) {
+          method.address = item.address.trim()
+        }
+        if (typeof item.currencies === 'string' && item.currencies.trim()) {
+          method.currencies = item.currencies.trim()
+        }
+        return method
       })
-      .filter((item) => item.name.trim() !== '')
   } catch {
     return []
   }
@@ -368,6 +351,7 @@ type PaymentSettingsSectionProps = {
   waffoPancakeProvisionedProductID?: string
   bepusdtDefaultValues?: BEpusdtSettingsValues
   bepusdtTokenConfigured?: boolean
+  serverAddress?: string
   complianceDefaults: PaymentComplianceDefaults
 }
 
@@ -389,6 +373,7 @@ export function PaymentSettingsSection({
   waffoPancakeProvisionedProductID,
   bepusdtDefaultValues,
   bepusdtTokenConfigured = false,
+  serverAddress = '',
   complianceDefaults,
 }: PaymentSettingsSectionProps) {
   const { t } = useTranslation()
@@ -412,13 +397,8 @@ export function PaymentSettingsSection({
       BEpusdtEnabled: resolvedBEpusdtDefaults.BEpusdtEnabled,
       BEpusdtApiUrl: resolvedBEpusdtDefaults.BEpusdtApiUrl,
       BEpusdtApiToken: resolvedBEpusdtDefaults.BEpusdtApiToken,
-      BEpusdtFiat: resolvedBEpusdtDefaults.BEpusdtFiat || 'CNY',
-      BEpusdtUnitPrice: resolvedBEpusdtDefaults.BEpusdtUnitPrice,
-      BEpusdtMinTopUp: resolvedBEpusdtDefaults.BEpusdtMinTopUp,
-      BEpusdtTimeout: resolvedBEpusdtDefaults.BEpusdtTimeout,
-      BEpusdtRate: resolvedBEpusdtDefaults.BEpusdtRate,
-      BEpusdtNotifyUrl: resolvedBEpusdtDefaults.BEpusdtNotifyUrl,
-      BEpusdtReturnUrl: resolvedBEpusdtDefaults.BEpusdtReturnUrl,
+      BEpusdtCallbackAddress:
+        resolvedBEpusdtDefaults.BEpusdtCallbackAddress ?? '',
     }),
     [
       defaultValues,
@@ -731,13 +711,9 @@ export function PaymentSettingsSection({
       BEpusdtEnabled: values.BEpusdtEnabled,
       BEpusdtApiUrl: removeTrailingSlash(values.BEpusdtApiUrl.trim()),
       BEpusdtApiToken: values.BEpusdtApiToken.trim(),
-      BEpusdtFiat: values.BEpusdtFiat.trim() || 'CNY',
-      BEpusdtUnitPrice: values.BEpusdtUnitPrice,
-      BEpusdtMinTopUp: values.BEpusdtMinTopUp,
-      BEpusdtTimeout: values.BEpusdtTimeout,
-      BEpusdtRate: values.BEpusdtRate.trim(),
-      BEpusdtNotifyUrl: values.BEpusdtNotifyUrl.trim(),
-      BEpusdtReturnUrl: values.BEpusdtReturnUrl.trim(),
+      BEpusdtCallbackAddress:
+        normalizeBEpusdtCallbackOrigin(values.BEpusdtCallbackAddress) ??
+        removeTrailingSlash(values.BEpusdtCallbackAddress.trim()),
       BEpusdtPayMethods: JSON.stringify(bepusdtPayMethods),
     }
 
@@ -805,13 +781,11 @@ export function PaymentSettingsSection({
         initialRef.current.BEpusdtApiUrl.trim()
       ),
       BEpusdtApiToken: initialRef.current.BEpusdtApiToken.trim(),
-      BEpusdtFiat: initialRef.current.BEpusdtFiat.trim() || 'CNY',
-      BEpusdtUnitPrice: initialRef.current.BEpusdtUnitPrice,
-      BEpusdtMinTopUp: initialRef.current.BEpusdtMinTopUp,
-      BEpusdtTimeout: initialRef.current.BEpusdtTimeout,
-      BEpusdtRate: initialRef.current.BEpusdtRate.trim(),
-      BEpusdtNotifyUrl: initialRef.current.BEpusdtNotifyUrl.trim(),
-      BEpusdtReturnUrl: initialRef.current.BEpusdtReturnUrl.trim(),
+      BEpusdtCallbackAddress:
+        normalizeBEpusdtCallbackOrigin(
+          initialRef.current.BEpusdtCallbackAddress
+        ) ??
+        removeTrailingSlash(initialRef.current.BEpusdtCallbackAddress.trim()),
       BEpusdtPayMethods: JSON.stringify(
         parseBEpusdtPayMethods(resolvedBEpusdtDefaults.BEpusdtPayMethods)
       ),
@@ -1021,37 +995,10 @@ export function PaymentSettingsSection({
         value: sanitized.BEpusdtApiToken,
       })
     }
-    if (sanitized.BEpusdtFiat !== initial.BEpusdtFiat) {
-      updates.push({ key: 'BEpusdtFiat', value: sanitized.BEpusdtFiat })
-    }
-    if (sanitized.BEpusdtUnitPrice !== initial.BEpusdtUnitPrice) {
+    if (sanitized.BEpusdtCallbackAddress !== initial.BEpusdtCallbackAddress) {
       updates.push({
-        key: 'BEpusdtUnitPrice',
-        value: sanitized.BEpusdtUnitPrice,
-      })
-    }
-    if (sanitized.BEpusdtMinTopUp !== initial.BEpusdtMinTopUp) {
-      updates.push({
-        key: 'BEpusdtMinTopUp',
-        value: sanitized.BEpusdtMinTopUp,
-      })
-    }
-    if (sanitized.BEpusdtTimeout !== initial.BEpusdtTimeout) {
-      updates.push({ key: 'BEpusdtTimeout', value: sanitized.BEpusdtTimeout })
-    }
-    if (sanitized.BEpusdtRate !== initial.BEpusdtRate) {
-      updates.push({ key: 'BEpusdtRate', value: sanitized.BEpusdtRate })
-    }
-    if (sanitized.BEpusdtNotifyUrl !== initial.BEpusdtNotifyUrl) {
-      updates.push({
-        key: 'BEpusdtNotifyUrl',
-        value: sanitized.BEpusdtNotifyUrl,
-      })
-    }
-    if (sanitized.BEpusdtReturnUrl !== initial.BEpusdtReturnUrl) {
-      updates.push({
-        key: 'BEpusdtReturnUrl',
-        value: sanitized.BEpusdtReturnUrl,
+        key: 'BEpusdtCallbackAddress',
+        value: sanitized.BEpusdtCallbackAddress,
       })
     }
     if (
@@ -1329,13 +1276,7 @@ export function PaymentSettingsSection({
     BEpusdtEnabled: currentFormValues.BEpusdtEnabled,
     BEpusdtApiUrl: currentFormValues.BEpusdtApiUrl,
     BEpusdtApiToken: currentFormValues.BEpusdtApiToken,
-    BEpusdtFiat: currentFormValues.BEpusdtFiat,
-    BEpusdtUnitPrice: currentFormValues.BEpusdtUnitPrice,
-    BEpusdtMinTopUp: currentFormValues.BEpusdtMinTopUp,
-    BEpusdtTimeout: currentFormValues.BEpusdtTimeout,
-    BEpusdtRate: currentFormValues.BEpusdtRate,
-    BEpusdtNotifyUrl: currentFormValues.BEpusdtNotifyUrl,
-    BEpusdtReturnUrl: currentFormValues.BEpusdtReturnUrl,
+    BEpusdtCallbackAddress: currentFormValues.BEpusdtCallbackAddress,
     BEpusdtPayMethods: JSON.stringify(bepusdtPayMethods),
   }
 
@@ -1942,7 +1883,7 @@ export function PaymentSettingsSection({
                 complianceConfirmed={
                   complianceConfirmed && activeTab === 'bepusdt'
                 }
-                callbackOrigin={currentFormValues.CustomCallbackAddress}
+                serverAddress={serverAddress}
                 onValueChange={setBEpusdtValue}
                 payMethods={bepusdtPayMethods}
                 onPayMethodsChange={setBEpusdtPayMethods}

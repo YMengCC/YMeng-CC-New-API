@@ -134,7 +134,6 @@ export function SubscriptionPlansCard({
   const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
   const enableBEpusdt = !!topupInfo?.enable_bepusdt_topup
   const bepusdtMethods = useMemo<BEpusdtPayMethod[]>(() => {
-    const configuredList = topupInfo?.bepusdt_pay_methods ?? []
     return (topupInfo?.pay_methods ?? [])
       .filter((m) => {
         const lower = m.type.trim().toLowerCase()
@@ -147,35 +146,15 @@ export function SubscriptionPlansCard({
         const tradeType =
           m.type.trim().slice(BEPUSDT_PAYMENT_METHOD_PREFIX.length) ||
           BEPUSDT_CASHIER_TRADE_TYPE
-        let matchedIndex = -1
-        if (m.channel_id !== undefined && m.channel_id !== '') {
-          const parsedIdx = Number.parseInt(m.channel_id, 10)
-          if (
-            Number.isInteger(parsedIdx) &&
-            parsedIdx >= 0 &&
-            parsedIdx < configuredList.length
-          ) {
-            matchedIndex = parsedIdx
-          }
-        }
-        if (matchedIndex === -1) {
-          matchedIndex = configuredList.findIndex(
-            (item) =>
-              (item.trade_type.trim() || BEPUSDT_CASHIER_TRADE_TYPE).toLowerCase() ===
-              tradeType.toLowerCase()
-          )
-        }
-        const matched =
-          matchedIndex >= 0 ? configuredList[matchedIndex] : undefined
         return {
-          name: m.name || matched?.name || tradeType,
-          icon: m.icon || matched?.icon,
+          name: m.name || tradeType,
+          icon: m.icon,
           trade_type: tradeType,
-          min_topup: Math.max(m.min_topup || 0, matched?.min_topup || 0) || undefined,
-          channel_id: matchedIndex >= 0 ? String(matchedIndex) : m.channel_id,
+          min_topup: m.min_topup || undefined,
+          channel_id: m.channel_id,
         }
       })
-  }, [topupInfo?.bepusdt_pay_methods, topupInfo?.pay_methods])
+  }, [topupInfo?.pay_methods])
   const enableOnlineTopUp = !!topupInfo?.enable_online_topup
   const epayMethods = useMemo(
     () => getEpayMethods(topupInfo?.pay_methods),

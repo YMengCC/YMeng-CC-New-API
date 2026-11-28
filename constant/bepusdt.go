@@ -10,6 +10,10 @@ const (
 	// to /api/v1/order/create-order so the payer chooses coin & network on BEpusdt's checkout page.
 	BEpusdtTradeTypeCashier = "cashier"
 
+	// BEpusdtDefaultFiat is the fixed settlement fiat currency for wallet top-ups,
+	// matching the system's General recharge price (operation_setting.Price).
+	BEpusdtDefaultFiat = "CNY"
+
 	// BEpusdtPaymentMethodPrefix prefixes BEpusdt identifiers inside General PayMethods
 	// (for example "bepusdt_usdt.trc20" or "bepusdt_cashier") to distinguish them from Epay methods.
 	BEpusdtPaymentMethodPrefix = "bepusdt_"
@@ -52,26 +56,13 @@ var BEpusdtSupportedFiats = []string{
 	"JPY",
 }
 
-// BEpusdtPayMethod describes a single operator-configured BEpusdt payment entry.
-// When TradeType is empty or BEpusdtTradeTypeCashier, order creation uses
-// /api/v1/order/create-order; otherwise it uses /api/v1/order/create-transaction.
+// BEpusdtPayMethod describes a single operator-configured BEpusdt channel.
+// Display name, icon, and optional per-method minimum top-up are configured
+// in General -> Payment methods (PayMethods).
 type BEpusdtPayMethod struct {
-	Name       string `json:"name"`
-	Icon       string `json:"icon,omitempty"`
 	TradeType  string `json:"trade_type"`
 	Address    string `json:"address,omitempty"`
 	Currencies string `json:"currencies,omitempty"`
-	Rate       string `json:"rate,omitempty"`
-	MinTopUp   int    `json:"min_topup,omitempty"`
-}
-
-// PublicBEpusdtPayMethod is the sanitized projection returned to wallet users.
-// Merchant-internal fields (Address, Rate, Currencies) are intentionally omitted.
-type PublicBEpusdtPayMethod struct {
-	Name      string `json:"name"`
-	Icon      string `json:"icon,omitempty"`
-	TradeType string `json:"trade_type"`
-	MinTopUp  int    `json:"min_topup,omitempty"`
 }
 
 func IsSupportedBEpusdtFiat(fiat string) bool {

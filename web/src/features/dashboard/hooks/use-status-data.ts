@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useStatus } from '@/hooks/use-status'
 
+import { resolvePrimaryApiUrl } from '../lib/api-endpoint'
 import type { AnnouncementItem, ApiInfoItem, FAQItem } from '../types'
 
 /**
@@ -39,6 +40,28 @@ export function useStatusData<T = unknown>(
  */
 export function useApiInfo() {
   return useStatusData<ApiInfoItem>('api_info_enabled', 'api_info')
+}
+
+/**
+ * Resolve the primary API URL without appending `/v1`:
+ * first configured API address (when enabled) -> server_address -> current origin.
+ */
+export function usePrimaryApiUrl(): string {
+  const { status } = useStatus()
+  const { items } = useApiInfo()
+  const nestedData = status?.data as Record<string, unknown> | undefined
+  const serverAddressCandidates = [
+    status?.server_address,
+    status?.serverAddress,
+    nestedData?.server_address,
+    nestedData?.serverAddress,
+  ]
+  const serverAddress = serverAddressCandidates.find(
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && candidate.trim() !== ''
+  )
+
+  return resolvePrimaryApiUrl(items[0]?.url, serverAddress)
 }
 
 /**

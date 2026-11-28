@@ -71,7 +71,7 @@ function renderPaymentSettings(tokenConfigured = false) {
         EpayKey: '',
         Price: 7.3,
         MinTopUp: 1,
-        CustomCallbackAddress: 'https://api.example.com',
+        CustomCallbackAddress: 'https://epay-only.example.com',
         PayMethods: '[]',
         AmountOptions: '[]',
         AmountDiscount: '{}',
@@ -124,16 +124,11 @@ function renderPaymentSettings(tokenConfigured = false) {
         BEpusdtEnabled: false,
         BEpusdtApiUrl: 'https://bepusdt.ymeng.cc',
         BEpusdtApiToken: '',
-        BEpusdtFiat: 'CNY',
-        BEpusdtUnitPrice: 0,
-        BEpusdtMinTopUp: 1,
-        BEpusdtTimeout: 1200,
-        BEpusdtRate: '',
-        BEpusdtNotifyUrl: '',
-        BEpusdtReturnUrl: '',
+        BEpusdtCallbackAddress: '',
         BEpusdtPayMethods: '[]',
       }}
       bepusdtTokenConfigured={tokenConfigured}
+      serverAddress='https://site.example.com'
       complianceDefaults={{
         confirmed: true,
         termsVersion: 'v1',
@@ -160,7 +155,6 @@ describe('BEpusdt payment settings', () => {
     const bepusdtTab = screen.getByRole('tab', { name: 'BEpusdt' })
     await user.click(bepusdtTab)
 
-    // First visit automatically opens the setup guide dialog.
     const guideDialog = await screen.findByRole('dialog', {
       name: 'BEpusdt setup guide',
     })
@@ -189,13 +183,11 @@ describe('BEpusdt payment settings', () => {
     )
     expect(localStorage.getItem(BEPUSDT_GUIDE_STORAGE_KEY)).toBe('1')
 
-    // Project URL is also visible directly on the BEpusdt settings header.
     const inlineProjectLink = screen.getByRole('link', {
       name: BEPUSDT_PROJECT_URL,
     })
     expect(inlineProjectLink).toHaveAttribute('href', BEPUSDT_PROJECT_URL)
 
-    // Switching away and back does NOT auto-pop the guide again.
     await user.click(screen.getByRole('tab', { name: 'General' }))
     await user.click(bepusdtTab)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -222,7 +214,7 @@ describe('BEpusdt payment settings', () => {
     ).toHaveAttribute('href', 'https://bepusdt.ymeng.cc')
   })
 
-  test('renders BEpusdt tab, shows callback URL, and calls test connection API', async () => {
+  test('renders BEpusdt tab, ignores Epay callback address, falls back to ServerAddress, and supports custom origin', async () => {
     localStorage.setItem(BEPUSDT_GUIDE_STORAGE_KEY, '1')
     const user = userEvent.setup()
     const postSpy = vi
@@ -233,10 +225,32 @@ describe('BEpusdt payment settings', () => {
 
     await user.click(screen.getByRole('tab', { name: 'BEpusdt' }))
 
+    // Blank BEpusdtCallbackAddress falls back to ServerAddress (not Epay's CustomCallbackAddress)
     expect(
-      screen.getByText('https://api.example.com/api/bepusdt/webhook')
+      screen.getByText('https://site.example.com/api/bepusdt/webhook')
     ).toBeInTheDocument()
+    expect(
+      screen.queryByText('https://epay-only.example.com/api/bepusdt/webhook')
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Token configured')).toBeInTheDocument()
+
+    // Entering a site origin overrides the preview; entering a path displays inline validation error
+    const callbackInput = screen.getByLabelText('Callback address')
+    await user.type(callbackInput, 'https://bep-cb.example.com/')
+    expect(
+      screen.getByText('https://bep-cb.example.com/api/bepusdt/webhook')
+    ).toBeInTheDocument()
+
+    await user.clear(callbackInput)
+    await user.type(
+      callbackInput,
+      'https://bep-cb.example.com/api/bepusdt/webhook'
+    )
+    expect(
+      screen.getByText(
+        'BEpusdt callback address must be a valid site origin without a path'
+      )
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -248,7 +262,7 @@ describe('BEpusdt payment settings', () => {
     })
   })
 
-  test('adds a BEpusdt payment method with fixed address and renders masked preview', async () => {
+  test('adds a BEpusdt channel without requiring a display name and renders masked address preview', async () => {
     localStorage.setItem(BEPUSDT_GUIDE_STORAGE_KEY, '1')
     const user = userEvent.setup()
     renderPaymentSettings(true)
@@ -256,22 +270,19 @@ describe('BEpusdt payment settings', () => {
     await user.click(screen.getByRole('tab', { name: 'BEpusdt' }))
     await user.click(screen.getByRole('button', { name: 'Add payment method' }))
 
-    await user.type(screen.getByLabelText(/Display name/i), 'USDT (TRC20)')
+    expect(screen.queryByLabelText(/Display name/i)).not.toBeInTheDocument()
     await user.type(
       screen.getByLabelText('Receiving wallet address (optional)'),
       'TWalletAddress1234567890ABCDEFGH'
     )
     await user.click(screen.getByRole('button', { name: 'Add' }))
 
-    expect(
-      screen.getByText('USDT (TRC20)', { selector: 'span' })
-    ).toBeInTheDocument()
     expect(screen.getByText('usdt.trc20')).toBeInTheDocument()
     expect(screen.getByText('bepusdt_usdt.trc20')).toBeInTheDocument()
     expect(screen.getByText('TWalletA...CDEFGH')).toBeInTheDocument()
   })
 
-  test('General payment method dialog offers bepusdt_* prefixed identifiers and blocks bepusdt prefix in custom Epay', async () => {
+  test('General payment method dialog auto-populates display name from BEpusdt channel and blocks bepusdt prefix in custom Epay', async () => {
     const user = userEvent.setup()
     const save = vi.fn()
 
@@ -282,15 +293,12 @@ describe('BEpusdt payment settings', () => {
         onSave={save}
         bepusdtPayMethods={[
           {
-            name: 'USDT (TRC20)',
             trade_type: 'usdt.trc20',
-            icon: 'SiTether',
-            min_topup: 10,
+            address: 'TWalletAddress1234567890ABCDEFGH',
           },
           {
-            name: 'Crypto Cashier',
             trade_type: 'cashier',
-            icon: 'LuCoins',
+            currencies: 'USDT,USDC',
           },
         ]}
       />
@@ -298,13 +306,14 @@ describe('BEpusdt payment settings', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Payment type key' }))
     expect(
-      await screen.findByRole('option', { name: /BEpusdt: bepusdt_usdt\.trc20/ })
+      await screen.findByRole('option', {
+        name: /USDT \(TRC20\) · TWalletA\.\.\.CDEFGH \(BEpusdt: bepusdt_usdt\.trc20\)/,
+      })
     ).toBeVisible()
     expect(
       screen.getByRole('option', { name: /BEpusdt: bepusdt_cashier/ })
     ).toBeVisible()
 
-    // Selecting Custom Epay and entering a bepusdt_* prefix must be rejected
     await user.click(
       screen.getByRole('option', { name: 'Custom Epay payment identifier' })
     )
@@ -321,10 +330,12 @@ describe('BEpusdt payment settings', () => {
     ).toBeInTheDocument()
     expect(save).not.toHaveBeenCalled()
 
-    // Selecting the BEpusdt option hides Display fee (%) and saves prefixed type + channel_id without fee_percent
+    await user.clear(screen.getByRole('textbox', { name: 'Name' }))
     await user.click(screen.getByRole('combobox', { name: 'Payment type key' }))
     await user.click(
-      await screen.findByRole('option', { name: /BEpusdt: bepusdt_usdt\.trc20/ })
+      await screen.findByRole('option', {
+        name: /BEpusdt: bepusdt_usdt\.trc20/,
+      })
     )
     expect(
       screen.queryByRole('spinbutton', { name: 'Display fee (%)' })
@@ -334,6 +345,7 @@ describe('BEpusdt payment settings', () => {
     await waitFor(() => {
       expect(save).toHaveBeenCalledWith(
         expect.objectContaining({
+          name: 'USDT (TRC20)',
           type: 'bepusdt_usdt.trc20',
           channel_id: '0',
           icon: 'SiTether',

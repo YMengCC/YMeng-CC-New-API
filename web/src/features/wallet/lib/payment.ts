@@ -242,7 +242,7 @@ export function getMinTopupAmount(topupInfo: TopupInfo | null): number {
   }
 
   if (topupInfo.enable_bepusdt_topup) {
-    return topupInfo.bepusdt_min_topup || DEFAULT_MIN_TOPUP
+    return topupInfo.min_topup || DEFAULT_MIN_TOPUP
   }
 
   return DEFAULT_MIN_TOPUP

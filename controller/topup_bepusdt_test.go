@@ -44,18 +44,13 @@ func setupBEpusdtTestEnv(t *testing.T) *gorm.DB {
 	prevLogDB := model.LOG_DB
 	prevQuotaPerUnit := common.QuotaPerUnit
 	prevPrice := operation_setting.Price
+	prevMinTopUp := operation_setting.MinTopUp
 	prevServerAddr := system_setting.ServerAddress
 	prevCallbackAddr := operation_setting.CustomCallbackAddress
 	prevEnabled := setting.BEpusdtEnabled
 	prevURL := setting.BEpusdtApiUrl
 	prevToken := setting.BEpusdtApiToken
-	prevFiat := setting.BEpusdtFiat
-	prevUnitPrice := setting.BEpusdtUnitPrice
-	prevMinTopUp := setting.BEpusdtMinTopUp
-	prevTimeout := setting.BEpusdtTimeout
-	prevRate := setting.BEpusdtRate
-	prevNotifyURL := setting.BEpusdtNotifyUrl
-	prevReturnURL := setting.BEpusdtReturnUrl
+	prevBEpusdtCallback := setting.BEpusdtCallbackAddress
 	prevRedisEnabled := common.RedisEnabled
 
 	common.OptionMapRWMutex.Lock()
@@ -70,16 +65,11 @@ func setupBEpusdtTestEnv(t *testing.T) *gorm.DB {
 	common.RedisEnabled = false
 	common.QuotaPerUnit = 500000
 	operation_setting.Price = 7.3
+	operation_setting.MinTopUp = 1
 	system_setting.ServerAddress = "https://api.example.com"
 	operation_setting.CustomCallbackAddress = ""
 	setting.BEpusdtEnabled = true
-	setting.BEpusdtFiat = "CNY"
-	setting.BEpusdtUnitPrice = 0
-	setting.BEpusdtMinTopUp = 1
-	setting.BEpusdtTimeout = 1200
-	setting.BEpusdtRate = ""
-	setting.BEpusdtNotifyUrl = ""
-	setting.BEpusdtReturnUrl = ""
+	setting.BEpusdtCallbackAddress = ""
 
 	t.Cleanup(func() {
 		model.DB = prevDB
@@ -87,18 +77,13 @@ func setupBEpusdtTestEnv(t *testing.T) *gorm.DB {
 		common.RedisEnabled = prevRedisEnabled
 		common.QuotaPerUnit = prevQuotaPerUnit
 		operation_setting.Price = prevPrice
+		operation_setting.MinTopUp = prevMinTopUp
 		system_setting.ServerAddress = prevServerAddr
 		operation_setting.CustomCallbackAddress = prevCallbackAddr
 		setting.BEpusdtEnabled = prevEnabled
 		setting.BEpusdtApiUrl = prevURL
 		setting.BEpusdtApiToken = prevToken
-		setting.BEpusdtFiat = prevFiat
-		setting.BEpusdtUnitPrice = prevUnitPrice
-		setting.BEpusdtMinTopUp = prevMinTopUp
-		setting.BEpusdtTimeout = prevTimeout
-		setting.BEpusdtRate = prevRate
-		setting.BEpusdtNotifyUrl = prevNotifyURL
-		setting.BEpusdtReturnUrl = prevReturnURL
+		setting.BEpusdtCallbackAddress = prevBEpusdtCallback
 		common.OptionMapRWMutex.Lock()
 		common.OptionMap = prevOptionMap
 		common.OptionMapRWMutex.Unlock()
@@ -162,15 +147,10 @@ func TestBEpusdtOptionValidationAndTokenRedaction(t *testing.T) {
 		{"BEpusdtApiUrl", "https://user:pass@bepusdt.example.com"},
 		{"BEpusdtApiUrl", "https://bepusdt.example.com?x=1"},
 		{"BEpusdtApiToken", "bad\ntoken"},
-		{"BEpusdtFiat", "BTC"},
-		{"BEpusdtUnitPrice", "-1"},
-		{"BEpusdtMinTopUp", "0"},
-		{"BEpusdtTimeout", "60"},
-		{"BEpusdtNotifyUrl", "javascript:alert(1)"},
-		{"BEpusdtReturnUrl", "not-a-url"},
+		{"BEpusdtCallbackAddress", "ftp://cb.example.com"},
+		{"BEpusdtCallbackAddress", "https://cb.example.com/api/bepusdt/webhook"},
+		{"BEpusdtCallbackAddress", "https://cb.example.com?a=1"},
 		{"BEpusdtPayMethods", "not-json"},
-		{"BEpusdtPayMethods", `[{"name":"","trade_type":"usdt.trc20"}]`},
-		{"BEpusdtPayMethods", `[{"name":"USDT","trade_type":"usdt.trc20","min_topup":-5}]`},
 	}
 	for _, tc := range invalidCases {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
@@ -183,13 +163,17 @@ func TestBEpusdtOptionValidationAndTokenRedaction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "https://bepusdt.ymeng.cc", normalizedURL)
 
-	normalizedFiat, err := setting.ValidateBEpusdtOption("BEpusdtFiat", "usd")
+	normalizedOrigin, err := setting.ValidateBEpusdtOption("BEpusdtCallbackAddress", " https://cb.example.com/ ")
 	require.NoError(t, err)
-	assert.Equal(t, "USD", normalizedFiat)
+	assert.Equal(t, "https://cb.example.com", normalizedOrigin)
 
-	normalizedMethods, err := setting.ValidateBEpusdtOption("BEpusdtPayMethods", `[{"name":" Cashier ","trade_type":"","currencies":"USDT,USDC"}]`)
+	normalizedLocalOrigin, err := setting.ValidateBEpusdtOption("BEpusdtCallbackAddress", "http://127.0.0.1:3000/")
 	require.NoError(t, err)
-	assert.Contains(t, normalizedMethods, `"trade_type":"cashier"`)
+	assert.Equal(t, "http://127.0.0.1:3000", normalizedLocalOrigin)
+
+	normalizedMethods, err := setting.ValidateBEpusdtOption("BEpusdtPayMethods", `[{"trade_type":"","currencies":"USDT,USDC"},{"trade_type":" usdt.trc20 ","address":" TAddr "}]`)
+	require.NoError(t, err)
+	assert.Equal(t, `[{"trade_type":"cashier","currencies":"USDT,USDC"},{"trade_type":"usdt.trc20","address":"TAddr"}]`, normalizedMethods)
 
 	// Verify BEpusdtApiToken is stripped from GET /api/option/ while BEpusdtApiTokenConfigured is exposed.
 	common.OptionMapRWMutex.Lock()
@@ -257,16 +241,10 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 	setting.BEpusdtApiToken = token
 	methodsJSON, err := common.Marshal([]constant.BEpusdtPayMethod{
 		{
-			Name:      "USDT (TRC20)",
-			Icon:      "SiTether",
 			TradeType: "usdt.trc20",
 			Address:   "TFixedWalletAddressForTesting12345",
-			Rate:      "~1.01",
-			MinTopUp:  5,
 		},
 		{
-			Name:       "Crypto Cashier",
-			Icon:       "LuCoins",
 			TradeType:  constant.BEpusdtTradeTypeCashier,
 			Currencies: "USDT,USDC",
 		},
@@ -279,7 +257,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 	prevPayMethods := operation_setting.PayMethods
 	t.Cleanup(func() { operation_setting.PayMethods = prevPayMethods })
 	operation_setting.PayMethods = []map[string]string{
-		{"name": "USDT (TRC20)", "type": "bepusdt_usdt.trc20", "channel_id": "0"},
+		{"name": "USDT (TRC20)", "type": "bepusdt_usdt.trc20", "channel_id": "0", "min_topup": "5"},
 		{"name": "Crypto Cashier", "type": "bepusdt_cashier", "channel_id": "1"},
 	}
 
@@ -304,7 +282,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 	}
 	require.NoError(t, db.Create(plan).Error)
 
-	t.Run("public topup info hides wallet address and rate", func(t *testing.T) {
+	t.Run("public topup info exposes general pay_methods without leaking wallet address", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(rec)
 		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/info", nil)
@@ -314,7 +292,6 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		assert.Contains(t, body, `"enable_bepusdt_topup":true`)
 		assert.Contains(t, body, `"USDT (TRC20)"`)
 		assert.NotContains(t, body, "TFixedWalletAddressForTesting12345")
-		assert.NotContains(t, body, "~1.01")
 	})
 
 	t.Run("connection test validates saved and overridden tokens", func(t *testing.T) {
@@ -335,7 +312,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		assert.Contains(t, recBad.Body.String(), `"success":false`)
 	})
 
-	t.Run("amount calculation enforces per-method min and falls back to general price", func(t *testing.T) {
+	t.Run("amount calculation enforces general per-method min and uses general Price", func(t *testing.T) {
 		recLow := httptest.NewRecorder()
 		ctxLow, _ := gin.CreateTestContext(recLow)
 		ctxLow.Set("id", user.Id)
@@ -354,7 +331,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 	})
 
 	var txTradeNo string
-	t.Run("create-transaction mode forwards trade_type, address, and rate", func(t *testing.T) {
+	t.Run("create-transaction mode forwards trade_type, fixed CNY fiat, address, and auto callback URLs", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(rec)
 		ctx.Set("id", user.Id)
@@ -376,10 +353,12 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		assert.Equal(t, "/api/v1/order/create-transaction", lastPath)
 		assert.Equal(t, "usdt.trc20", lastPayload["trade_type"])
 		assert.Equal(t, "TFixedWalletAddressForTesting12345", lastPayload["address"])
-		assert.Equal(t, "~1.01", lastPayload["rate"])
+		assert.Nil(t, lastPayload["rate"])
+		assert.Nil(t, lastPayload["timeout"])
 		assert.Equal(t, "CNY", lastPayload["fiat"])
 		assert.Equal(t, float64(73), lastPayload["amount"])
 		assert.Equal(t, "https://api.example.com/api/bepusdt/webhook", lastPayload["notify_url"])
+		assert.Equal(t, "https://api.example.com/wallet?show_history=true", lastPayload["redirect_url"])
 		assert.Equal(t, "https://bepusdt.ymeng.cc/pay/checkout/bep_trade_001", resp.Data.PaymentURL)
 		txTradeNo = resp.Data.OrderID
 	})
@@ -523,6 +502,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		assert.True(t, strings.HasPrefix(resp.Data.OrderID, bepusdtSubTradeNoPrefix))
 		assert.Equal(t, "USD", lastPayload["fiat"])
 		assert.Equal(t, float64(19.99), lastPayload["amount"])
+		assert.Equal(t, "https://api.example.com/wallet", lastPayload["redirect_url"])
 
 		subRec := sendSignedWebhook(map[string]any{
 			"trade_id":             "bep_sub_001",
@@ -566,15 +546,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		assert.Equal(t, common.TopUpStatusPending, model.GetTopUpByTradeNo(stripeOrder.TradeNo).Status)
 	})
 
-	t.Run("prefixed bepusdt_* identifiers are rejected by Epay and resolved by BEpusdt", func(t *testing.T) {
-		assert.Equal(t, "bepusdt_usdt.trc20", constant.FormatBEpusdtPaymentMethodType("usdt.trc20"))
-		assert.Equal(t, "bepusdt_cashier", constant.FormatBEpusdtPaymentMethodType("cashier"))
-		assert.Equal(t, "bepusdt_cashier", constant.FormatBEpusdtPaymentMethodType(""))
-		assert.True(t, constant.IsBEpusdtPaymentMethod("bepusdt_usdt.trc20"))
-		assert.True(t, constant.IsBEpusdtPaymentMethod("bepusdt_cashier"))
-		assert.True(t, constant.IsBEpusdtPaymentMethod("bepusdt"))
-		assert.False(t, constant.IsBEpusdtPaymentMethod("usdt.trc20"))
-
+	t.Run("prefixed bepusdt_* identifiers, oversized webhook, and multi-channel fallback", func(t *testing.T) {
 		prevPayMethods := operation_setting.PayMethods
 		t.Cleanup(func() { operation_setting.PayMethods = prevPayMethods })
 		operation_setting.PayMethods = []map[string]string{
@@ -582,7 +554,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 			{"name": "BEpusdt Unified Cashier", "type": "bepusdt_cashier"},
 		}
 
-		// Epay top-up must reject bepusdt_* even when present in General PayMethods
+		// Epay top-up & subscription must reject bepusdt_* even when present in General PayMethods
 		epayRec := httptest.NewRecorder()
 		epayCtx, _ := gin.CreateTestContext(epayRec)
 		epayCtx.Set("id", user.Id)
@@ -591,7 +563,6 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		RequestEpay(epayCtx)
 		assert.Contains(t, epayRec.Body.String(), "Payment method does not exist")
 
-		// Epay subscription must reject bepusdt_* even when present in General PayMethods
 		subEpayRec := httptest.NewRecorder()
 		subEpayCtx, _ := gin.CreateTestContext(subEpayRec)
 		subEpayCtx.Set("id", user.Id)
@@ -600,56 +571,7 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		SubscriptionRequestEpay(subEpayCtx)
 		assert.Contains(t, subEpayRec.Body.String(), "Payment method does not exist")
 
-		// BEpusdt pay resolves prefixed payment_method="bepusdt_usdt.trc20" to configured fixed address
-		prefixedRec := httptest.NewRecorder()
-		prefixedCtx, _ := gin.CreateTestContext(prefixedRec)
-		prefixedCtx.Set("id", user.Id)
-		prefixedCtx.Request = httptest.NewRequest(http.MethodPost, "/api/user/bepusdt/pay", strings.NewReader(`{"amount":10,"payment_method":"bepusdt_usdt.trc20","channel_id":"0"}`))
-		prefixedCtx.Request.Header.Set("Content-Type", "application/json")
-		RequestBEpusdtPay(prefixedCtx)
-		require.Equal(t, http.StatusOK, prefixedRec.Code)
-		assert.Contains(t, prefixedRec.Body.String(), `"message":"success"`)
-		assert.Equal(t, "/api/v1/order/create-transaction", lastPath)
-		assert.Equal(t, "usdt.trc20", lastPayload["trade_type"])
-		assert.Equal(t, "TFixedWalletAddressForTesting12345", lastPayload["address"])
-
-		// General-only bepusdt_cashier works even when BEpusdtPayMethods is empty
-		common.OptionMapRWMutex.Lock()
-		prevBEpusdtMethods := common.OptionMap["BEpusdtPayMethods"]
-		common.OptionMap["BEpusdtPayMethods"] = "[]"
-		common.OptionMapRWMutex.Unlock()
-		t.Cleanup(func() {
-			common.OptionMapRWMutex.Lock()
-			common.OptionMap["BEpusdtPayMethods"] = prevBEpusdtMethods
-			common.OptionMapRWMutex.Unlock()
-		})
-		require.True(t, isBEpusdtTopUpEnabled())
-
-		genRec := httptest.NewRecorder()
-		genCtx, _ := gin.CreateTestContext(genRec)
-		genCtx.Set("id", user.Id)
-		genCtx.Request = httptest.NewRequest(http.MethodPost, "/api/user/bepusdt/pay", strings.NewReader(`{"amount":2,"payment_method":"bepusdt_cashier"}`))
-		genCtx.Request.Header.Set("Content-Type", "application/json")
-		RequestBEpusdtPay(genCtx)
-		require.Equal(t, http.StatusOK, genRec.Code)
-		assert.Contains(t, genRec.Body.String(), `"message":"success"`)
-		assert.Equal(t, "/api/v1/order/create-order", lastPath)
-
-		// Channel removed from General PayMethods must be rejected (aligned with JingSoft)
-		operation_setting.PayMethods = []map[string]string{
-			{"name": "USDT (TRC20)", "type": "bepusdt_usdt.trc20", "channel_id": "0"},
-		}
-		removedRec := httptest.NewRecorder()
-		removedCtx, _ := gin.CreateTestContext(removedRec)
-		removedCtx.Set("id", user.Id)
-		removedCtx.Request = httptest.NewRequest(http.MethodPost, "/api/user/bepusdt/pay", strings.NewReader(`{"amount":2,"payment_method":"bepusdt_cashier"}`))
-		removedCtx.Request.Header.Set("Content-Type", "application/json")
-		RequestBEpusdtPay(removedCtx)
-		assert.Contains(t, removedRec.Body.String(), "Unsupported payment method")
-	})
-
-	t.Run("audit regressions: oversized webhook, multi-channel fallback, and cross-fiat subscription rate", func(t *testing.T) {
-		// 1. Oversized webhook body (> 64 KiB) -> 413
+		// Oversized webhook body (> 64 KiB) -> 413
 		oversizedRec := httptest.NewRecorder()
 		oversizedCtx, _ := gin.CreateTestContext(oversizedRec)
 		oversizedCtx.Request = httptest.NewRequest(
@@ -660,24 +582,26 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		BEpusdtWebhook(oversizedCtx)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, oversizedRec.Code)
 
-		// 2. Duplicate trade_type channels where only index 1 is bound in General PayMethods
+		// Epay's CustomCallbackAddress must NOT affect BEpusdt; blank BEpusdtCallbackAddress falls back to ServerAddress
+		operation_setting.CustomCallbackAddress = "https://epay-only.example.com"
+		t.Cleanup(func() { operation_setting.CustomCallbackAddress = "" })
+
+		// Duplicate trade_type channels where only index 1 is bound in General PayMethods
 		common.OptionMapRWMutex.Lock()
 		prevMethodsJSON := common.OptionMap["BEpusdtPayMethods"]
 		common.OptionMap["BEpusdtPayMethods"] = `[
-			{"name":"TRC20 Unbound","trade_type":"usdt.trc20","address":"TUnboundAddr"},
-			{"name":"TRC20 Bound","trade_type":"usdt.trc20","address":"TBoundAddr123","min_topup":3}
+			{"trade_type":"usdt.trc20","address":"TUnboundAddr"},
+			{"trade_type":"usdt.trc20","address":"TBoundAddr123"}
 		]`
 		common.OptionMapRWMutex.Unlock()
-		prevGeneral := operation_setting.PayMethods
-		operation_setting.PayMethods = []map[string]string{
-			{"name": "TRC20 Bound", "type": "bepusdt_usdt.trc20", "channel_id": "1"},
-		}
 		t.Cleanup(func() {
 			common.OptionMapRWMutex.Lock()
 			common.OptionMap["BEpusdtPayMethods"] = prevMethodsJSON
 			common.OptionMapRWMutex.Unlock()
-			operation_setting.PayMethods = prevGeneral
 		})
+		operation_setting.PayMethods = []map[string]string{
+			{"name": "TRC20 Bound", "type": "bepusdt_usdt.trc20", "channel_id": "1"},
+		}
 
 		fallbackPayRec := httptest.NewRecorder()
 		fallbackPayCtx, _ := gin.CreateTestContext(fallbackPayRec)
@@ -688,31 +612,21 @@ func TestBEpusdtEndToEndTopUpSubscriptionAndWebhook(t *testing.T) {
 		require.Equal(t, http.StatusOK, fallbackPayRec.Code)
 		assert.Contains(t, fallbackPayRec.Body.String(), `"message":"success"`)
 		assert.Equal(t, "TBoundAddr123", lastPayload["address"])
+		assert.Equal(t, "https://api.example.com/api/bepusdt/webhook", lastPayload["notify_url"])
+		assert.Equal(t, "https://api.example.com/wallet?show_history=true", lastPayload["redirect_url"])
 
-		// 3. USD subscription when BEpusdtFiat="CNY": fixed CNY rate (7.4) must NOT be sent, relative (~1.02) IS sent
-		prevRate := setting.BEpusdtRate
-		t.Cleanup(func() { setting.BEpusdtRate = prevRate })
-		setting.BEpusdtRate = "7.4"
+		// BEpusdt's own BEpusdtCallbackAddress overrides notify_url while redirect_url stays on ServerAddress
+		setting.BEpusdtCallbackAddress = "https://bepusdt-cb.example.com"
+		t.Cleanup(func() { setting.BEpusdtCallbackAddress = "" })
 
-		subFixedRec := httptest.NewRecorder()
-		subFixedCtx, _ := gin.CreateTestContext(subFixedRec)
-		subFixedCtx.Set("id", user.Id)
-		subFixedCtx.Request = httptest.NewRequest(http.MethodPost, "/api/subscription/bepusdt/pay", strings.NewReader(`{"plan_id":801,"payment_method":"bepusdt_usdt.trc20","channel_id":"1"}`))
-		subFixedCtx.Request.Header.Set("Content-Type", "application/json")
-		SubscriptionRequestBEpusdtPay(subFixedCtx)
-		require.Equal(t, http.StatusOK, subFixedRec.Code)
-		assert.Equal(t, "USD", lastPayload["fiat"])
-		assert.Nil(t, lastPayload["rate"])
-
-		setting.BEpusdtRate = "~1.02"
-		subRelRec := httptest.NewRecorder()
-		subRelCtx, _ := gin.CreateTestContext(subRelRec)
-		subRelCtx.Set("id", user.Id)
-		subRelCtx.Request = httptest.NewRequest(http.MethodPost, "/api/subscription/bepusdt/pay", strings.NewReader(`{"plan_id":801,"payment_method":"bepusdt_usdt.trc20","channel_id":"1"}`))
-		subRelCtx.Request.Header.Set("Content-Type", "application/json")
-		SubscriptionRequestBEpusdtPay(subRelCtx)
-		require.Equal(t, http.StatusOK, subRelRec.Code)
-		assert.Equal(t, "USD", lastPayload["fiat"])
-		assert.Equal(t, "~1.02", lastPayload["rate"])
+		customCbRec := httptest.NewRecorder()
+		customCbCtx, _ := gin.CreateTestContext(customCbRec)
+		customCbCtx.Set("id", user.Id)
+		customCbCtx.Request = httptest.NewRequest(http.MethodPost, "/api/user/bepusdt/pay", strings.NewReader(`{"amount":5,"payment_method":"bepusdt_usdt.trc20"}`))
+		customCbCtx.Request.Header.Set("Content-Type", "application/json")
+		RequestBEpusdtPay(customCbCtx)
+		require.Equal(t, http.StatusOK, customCbRec.Code)
+		assert.Equal(t, "https://bepusdt-cb.example.com/api/bepusdt/webhook", lastPayload["notify_url"])
+		assert.Equal(t, "https://api.example.com/wallet?show_history=true", lastPayload["redirect_url"])
 	})
 }

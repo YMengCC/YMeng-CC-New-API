@@ -45,7 +45,6 @@ import {
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { formatBEpusdtPaymentType } from '../constants'
 import {
   formatCurrency,
   getDiscountLabel,
@@ -60,7 +59,6 @@ import type {
   TopupInfo,
   CreemProduct,
   WaffoPayMethod,
-  BEpusdtPayMethod,
   JingSoftChannel,
   JingSoftProduct,
 } from '../types'
@@ -103,8 +101,6 @@ interface RechargeFormCardProps {
   jingSoftBusy?: boolean
   enableWaffoPancakeTopup?: boolean
   enableBEpusdtTopup?: boolean
-  bepusdtPayMethods?: BEpusdtPayMethod[]
-  bepusdtMinTopup?: number
 }
 
 export function RechargeFormCard({
@@ -137,8 +133,6 @@ export function RechargeFormCard({
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
   enableBEpusdtTopup,
-  bepusdtPayMethods,
-  bepusdtMinTopup,
   jingSoftChannel,
   onJingSoftPaymentSelect,
   jingSoftBusy,
@@ -205,38 +199,10 @@ export function RechargeFormCard({
     }
     if (isBEpusdtPayment(method.type)) {
       if (!enableBEpusdtTopup) continue
-      const configuredList = bepusdtPayMethods ?? []
-      let matchedIndex = -1
-      if (method.channel_id !== undefined && method.channel_id !== '') {
-        const parsedIdx = Number.parseInt(method.channel_id, 10)
-        const candidate = configuredList[parsedIdx]
-        if (
-          Number.isInteger(parsedIdx) &&
-          candidate &&
-          formatBEpusdtPaymentType(candidate.trade_type).toLowerCase() ===
-            method.type.toLowerCase()
-        ) {
-          matchedIndex = parsedIdx
-        }
-      }
-      if (matchedIndex === -1) {
-        matchedIndex = configuredList.findIndex(
-          (item) =>
-            formatBEpusdtPaymentType(item.trade_type).toLowerCase() ===
-            method.type.toLowerCase()
-        )
-      }
-      const matchedBEpusdt =
-        matchedIndex >= 0 ? configuredList[matchedIndex] : undefined
       hasBEpusdtInGeneral = true
       paymentMethods.push({
         ...method,
         fee_percent: undefined,
-        min_topup: Math.max(
-          method.min_topup || 0,
-          matchedBEpusdt?.min_topup || 0,
-          bepusdtMinTopup || 0
-        ),
       })
       continue
     }
@@ -469,12 +435,10 @@ export function RechargeFormCard({
                   <div className='grid grid-cols-2 gap-1.5 sm:gap-3 lg:grid-cols-3'>
                     {paymentMethods.map((method, methodIndex) => {
                       const methodKey = `${method.type}-${method.channel_id ?? methodIndex}`
-                      const minTopup = isBEpusdtPayment(method.type)
-                        ? Math.max(method.min_topup || 0, bepusdtMinTopup || 0)
-                        : Math.max(
-                            method.min_topup || 0,
-                            getMinTopupAmount(topupInfo)
-                          )
+                      const minTopup = Math.max(
+                        method.min_topup || 0,
+                        getMinTopupAmount(topupInfo)
+                      )
                       const isJingSoftDirect =
                         topupInfo?.jingsoft?.mode === 'direct'
                       let disabledReason: string | undefined

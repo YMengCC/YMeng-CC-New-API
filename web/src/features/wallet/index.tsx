@@ -42,11 +42,7 @@ import { WithdrawalDialog } from './components/dialogs/withdrawal-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
-import {
-  DEFAULT_DISCOUNT_RATE,
-  PAYMENT_TYPES,
-  formatBEpusdtPaymentType,
-} from './constants'
+import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
 import {
   useTopupInfo,
   usePayment,
@@ -395,27 +391,10 @@ export function Wallet(props: WalletProps) {
 
     let resolvedBEpusdtIndex: number | null = null
     if (isBEpusdtPayment(method.type)) {
-      const configuredList = topupInfo?.bepusdt_pay_methods ?? []
       if (method.channel_id !== undefined && method.channel_id !== '') {
         const parsedIdx = Number.parseInt(method.channel_id, 10)
-        const candidate = configuredList[parsedIdx]
-        if (
-          Number.isInteger(parsedIdx) &&
-          candidate &&
-          formatBEpusdtPaymentType(candidate.trade_type).toLowerCase() ===
-            method.type.toLowerCase()
-        ) {
+        if (Number.isInteger(parsedIdx) && parsedIdx >= 0) {
           resolvedBEpusdtIndex = parsedIdx
-        }
-      }
-      if (resolvedBEpusdtIndex === null) {
-        const idx = configuredList.findIndex(
-          (item) =>
-            formatBEpusdtPaymentType(item.trade_type).toLowerCase() ===
-            method.type.toLowerCase()
-        )
-        if (idx >= 0) {
-          resolvedBEpusdtIndex = idx
         }
       }
     }
@@ -424,19 +403,10 @@ export function Wallet(props: WalletProps) {
     setPaymentLoading(method.type)
 
     try {
-      let minTopup = getMinTopupAmount(topupInfo)
-      if (isBEpusdtPayment(method.type)) {
-        const matchedMin =
-          resolvedBEpusdtIndex !== null
-            ? topupInfo?.bepusdt_pay_methods?.[resolvedBEpusdtIndex]
-                ?.min_topup || 0
-            : 0
-        minTopup = Math.max(
-          method.min_topup || 0,
-          matchedMin,
-          topupInfo?.bepusdt_min_topup || 0
-        )
-      }
+      const minTopup = Math.max(
+        method.min_topup || 0,
+        getMinTopupAmount(topupInfo)
+      )
       if (topupAmount < minTopup) {
         return
       }
@@ -626,8 +596,6 @@ export function Wallet(props: WalletProps) {
                     topupInfo?.enable_waffo_pancake_topup
                   }
                   enableBEpusdtTopup={topupInfo?.enable_bepusdt_topup}
-                  bepusdtPayMethods={topupInfo?.bepusdt_pay_methods}
-                  bepusdtMinTopup={topupInfo?.bepusdt_min_topup}
                 />
               </div>
 

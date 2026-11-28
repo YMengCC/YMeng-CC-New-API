@@ -18,7 +18,46 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, it } from 'vitest'
 
-import { normalizeApiBaseUrl, normalizeEndpoint } from '../api-endpoint'
+import {
+  normalizeApiBaseUrl,
+  normalizeEndpoint,
+  resolvePrimaryApiUrl,
+} from '../api-endpoint'
+
+describe('resolvePrimaryApiUrl', () => {
+  it('prefers the first configured API URL without appending v1', () => {
+    expect(
+      resolvePrimaryApiUrl(
+        'https://api.example.com/',
+        'https://console.example.com'
+      )
+    ).toBe('https://api.example.com')
+  })
+
+  it('preserves a configured path prefix without appending v1', () => {
+    expect(
+      resolvePrimaryApiUrl(
+        'https://api.example.com/proxy///',
+        'https://console.example.com'
+      )
+    ).toBe('https://api.example.com/proxy')
+  })
+
+  it('falls back to server_address when API URL is missing or blank', () => {
+    expect(resolvePrimaryApiUrl('', 'https://console.example.com/')).toBe(
+      'https://console.example.com'
+    )
+    expect(resolvePrimaryApiUrl('   ', 'https://console.example.com')).toBe(
+      'https://console.example.com'
+    )
+  })
+
+  it('falls back to the current origin when neither API URL nor server_address is configured', () => {
+    expect(resolvePrimaryApiUrl(undefined, '')).toBe(
+      window.location.origin.replace(/\/+$/, '')
+    )
+  })
+})
 
 describe('normalizeApiBaseUrl', () => {
   it('falls back to the current origin with the v1 path', () => {

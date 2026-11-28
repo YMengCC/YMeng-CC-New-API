@@ -22,6 +22,19 @@ function getCurrentOrigin(): string {
   return window.location.origin
 }
 
+export function resolvePrimaryApiUrl(
+  apiInfoUrl?: string | null,
+  serverAddress?: string | null
+): string {
+  for (const candidate of [apiInfoUrl, serverAddress, getCurrentOrigin()]) {
+    const trimmed = candidate?.trim()
+    if (trimmed) {
+      return trimmed.replace(/\/+$/, '')
+    }
+  }
+  return ''
+}
+
 export function normalizeApiBaseUrl(sourceUrl?: string): string {
   const fallback = `${getCurrentOrigin()}/v1`
   const trimmed = sourceUrl?.trim()

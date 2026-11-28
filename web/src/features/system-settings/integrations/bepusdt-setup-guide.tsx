@@ -99,30 +99,30 @@ export function BEpusdtSetupGuide(props: BEpusdtSetupGuideProps) {
       ),
     },
     {
-      title: t('Fiat, pricing & timeout'),
-      items: `${t('Fiat currency')} · ${t('Unit price (0 = follow General)')} · ${t('Minimum top-up (USD)')} · ${t('Order timeout (seconds)')} · ${t('Default exchange rate (optional)')}`,
+      title: t('Pricing & exchange rate'),
+      items: `${t('General → Recharge price')} (CNY) · ${t('BEpusdt exchange rate')}`,
       purpose: t(
-        'Sets the settlement fiat currency (CNY/USD/EUR/GBP/JPY), calculates payable fiat amounts, and controls order expiration (0 or >= 180 seconds).'
+        'Wallet top-ups follow General recharge price in CNY, while crypto conversion rates and order expiration follow your BEpusdt instance settings.'
       ),
       advice: t(
-        'Keep Unit price at 0 to follow General pricing, timeout at 1200 seconds (20 minutes), and leave global rate blank to use BEpusdt automatic rates.'
+        'Manage CNY recharge unit price and minimum top-up in General, and maintain crypto exchange rates or rate markups directly in BEpusdt admin.'
       ),
     },
     {
-      title: t('Callback & return URLs'),
-      items: `${t('Callback notification URL')} · ${t('Payment return URL')}`,
+      title: t('Automatic callback & return URLs'),
+      items: `${t('Callback address')} · ${t('BEpusdt Callback URL')} (/api/bepusdt/webhook)`,
       purpose: t(
-        'Overrides where BEpusdt sends payment status webhooks (/api/bepusdt/webhook) and where buyers return after checkout.'
+        'Automatically appends /api/bepusdt/webhook to BEpusdt Callback address (or falls back to System Information → Server Address when blank), and builds payment return URLs from Server Address.'
       ),
       advice: t(
-        'Leave both blank unless using a dedicated callback or frontend domain; default URLs are derived automatically from General settings.'
+        'Leave Callback address blank in most deployments, or enter only a site origin (for example https://api.example.com) without any path; ensure /api/bepusdt/webhook has no WAF/CAPTCHA challenge.'
       ),
     },
     {
       title: t('Channels & General binding'),
       items: `${t('BEpusdt Payment Methods')} · ${t('General → Payment methods (bepusdt_*)')}`,
       purpose: t(
-        'Defines chain-specific (create-transaction) or unified cashier (create-order) channels and exposes selected bepusdt_* methods in the wallet without fee markup.'
+        'Defines chain-specific (create-transaction) or unified cashier (create-order) channels here, while display names, icons, and minimum top-up live in General without fee markup.'
       ),
       advice: t(
         'Use create-transaction when assigning fixed addresses per chain in new-api, or create-order (bepusdt_cashier) when managing multi-chain wallets in BEpusdt admin; always add matching bepusdt_* entries in General → Payment methods.'

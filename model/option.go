@@ -132,13 +132,7 @@ func InitOptionMap() {
 	common.OptionMap["BEpusdtEnabled"] = strconv.FormatBool(setting.BEpusdtEnabled)
 	common.OptionMap["BEpusdtApiUrl"] = setting.BEpusdtApiUrl
 	common.OptionMap["BEpusdtApiToken"] = setting.BEpusdtApiToken
-	common.OptionMap["BEpusdtFiat"] = setting.BEpusdtFiat
-	common.OptionMap["BEpusdtUnitPrice"] = strconv.FormatFloat(setting.BEpusdtUnitPrice, 'f', -1, 64)
-	common.OptionMap["BEpusdtMinTopUp"] = strconv.Itoa(setting.BEpusdtMinTopUp)
-	common.OptionMap["BEpusdtTimeout"] = strconv.Itoa(setting.BEpusdtTimeout)
-	common.OptionMap["BEpusdtRate"] = setting.BEpusdtRate
-	common.OptionMap["BEpusdtNotifyUrl"] = setting.BEpusdtNotifyUrl
-	common.OptionMap["BEpusdtReturnUrl"] = setting.BEpusdtReturnUrl
+	common.OptionMap["BEpusdtCallbackAddress"] = setting.BEpusdtCallbackAddress
 	common.OptionMap["BEpusdtPayMethods"] = "[]"
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
@@ -635,20 +629,8 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.BEpusdtApiUrl = value
 	case "BEpusdtApiToken":
 		setting.BEpusdtApiToken = value
-	case "BEpusdtFiat":
-		setting.BEpusdtFiat = value
-	case "BEpusdtUnitPrice":
-		setting.BEpusdtUnitPrice, _ = strconv.ParseFloat(value, 64)
-	case "BEpusdtMinTopUp":
-		setting.BEpusdtMinTopUp, _ = strconv.Atoi(value)
-	case "BEpusdtTimeout":
-		setting.BEpusdtTimeout, _ = strconv.Atoi(value)
-	case "BEpusdtRate":
-		setting.BEpusdtRate = value
-	case "BEpusdtNotifyUrl":
-		setting.BEpusdtNotifyUrl = value
-	case "BEpusdtReturnUrl":
-		setting.BEpusdtReturnUrl = value
+	case "BEpusdtCallbackAddress":
+		setting.BEpusdtCallbackAddress = value
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

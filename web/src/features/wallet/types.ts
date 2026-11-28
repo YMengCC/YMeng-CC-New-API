@@ -263,12 +263,6 @@ export interface TopupInfo {
   waffo_pancake_min_topup?: number
   /** Whether BEpusdt topup is enabled */
   enable_bepusdt_topup?: boolean
-  /** Available BEpusdt payment methods */
-  bepusdt_pay_methods?: BEpusdtPayMethod[]
-  /** Minimum topup amount for BEpusdt */
-  bepusdt_min_topup?: number
-  /** Configured fiat currency for BEpusdt */
-  bepusdt_fiat?: string
   /** Whether redemption code usage is enabled */
   enable_redemption?: boolean
   /** Whether compliance confirmation has been completed */

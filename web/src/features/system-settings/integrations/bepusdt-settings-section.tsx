@@ -48,7 +48,6 @@ import {
   BEPUSDT_CASHIER_TRADE_TYPE,
   formatBEpusdtPaymentType,
 } from '@/features/wallet/constants'
-import { getPaymentIcon } from '@/features/wallet/lib/ui'
 import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
@@ -58,70 +57,22 @@ import {
   SettingsControlGroup,
   SettingsSwitchField,
 } from '../components/settings-form-layout'
+import {
+  BEPUSDT_TRADE_TYPE_OPTIONS,
+  isBEpusdtCashierTradeType,
+  maskBEpusdtWalletAddress,
+  normalizeBEpusdtCallbackOrigin,
+  type BEpusdtFieldValues,
+  type BEpusdtPayMethodConfig,
+  type BEpusdtSettingsValues,
+} from './bepusdt-schema'
 import { BEPUSDT_PROJECT_URL, BEpusdtSetupGuide } from './bepusdt-setup-guide'
 
-export interface BEpusdtSettingsValues {
-  BEpusdtEnabled: boolean
-  BEpusdtApiUrl: string
-  BEpusdtApiToken: string
-  BEpusdtFiat: string
-  BEpusdtUnitPrice: number
-  BEpusdtMinTopUp: number
-  BEpusdtTimeout: number
-  BEpusdtRate: string
-  BEpusdtNotifyUrl: string
-  BEpusdtReturnUrl: string
-  BEpusdtPayMethods: string
-}
-
-export interface BEpusdtPayMethodConfig {
-  name: string
-  icon?: string
-  trade_type: string
-  address?: string
-  currencies?: string
-  rate?: string
-  min_topup?: number
-}
-
-export type BEpusdtFieldValues = Omit<
+export type {
+  BEpusdtFieldValues,
+  BEpusdtPayMethodConfig,
   BEpusdtSettingsValues,
-  'BEpusdtPayMethods'
->
-
-const BEPUSDT_FIAT_OPTIONS = [
-  { value: 'CNY', labelKey: 'CNY (Chinese Yuan)' },
-  { value: 'USD', labelKey: 'USD (US Dollar)' },
-  { value: 'EUR', labelKey: 'EUR (Euro)' },
-  { value: 'GBP', labelKey: 'GBP (British Pound)' },
-  { value: 'JPY', labelKey: 'JPY (Japanese Yen)' },
-] as const
-
-const BEPUSDT_TRADE_TYPE_OPTIONS = [
-  { value: 'usdt.trc20', label: 'USDT (TRC20) — usdt.trc20' },
-  { value: 'usdt.erc20', label: 'USDT (ERC20) — usdt.erc20' },
-  { value: 'usdt.bep20', label: 'USDT (BEP20 / BSC) — usdt.bep20' },
-  { value: 'usdt.polygon', label: 'USDT (Polygon) — usdt.polygon' },
-  { value: 'usdt.arbitrum', label: 'USDT (Arbitrum One) — usdt.arbitrum' },
-  { value: 'usdt.xlayer', label: 'USDT (X-Layer) — usdt.xlayer' },
-  { value: 'usdt.solana', label: 'USDT (Solana) — usdt.solana' },
-  { value: 'usdt.aptos', label: 'USDT (Aptos) — usdt.aptos' },
-  { value: 'usdt.plasma', label: 'USDT (Plasma) — usdt.plasma' },
-  { value: 'usdt.ton', label: 'USDT (TON) — usdt.ton' },
-  { value: 'usdc.trc20', label: 'USDC (TRC20) — usdc.trc20' },
-  { value: 'usdc.erc20', label: 'USDC (ERC20) — usdc.erc20' },
-  { value: 'usdc.bep20', label: 'USDC (BEP20 / BSC) — usdc.bep20' },
-  { value: 'usdc.polygon', label: 'USDC (Polygon) — usdc.polygon' },
-  { value: 'usdc.arbitrum', label: 'USDC (Arbitrum One) — usdc.arbitrum' },
-  { value: 'usdc.base', label: 'USDC (Base) — usdc.base' },
-  { value: 'usdc.xlayer', label: 'USDC (X-Layer) — usdc.xlayer' },
-  { value: 'usdc.solana', label: 'USDC (Solana) — usdc.solana' },
-  { value: 'usdc.aptos', label: 'USDC (Aptos) — usdc.aptos' },
-  { value: 'tron.trx', label: 'TRX (Tron) — tron.trx' },
-  { value: 'ethereum.eth', label: 'ETH (Ethereum) — ethereum.eth' },
-  { value: 'bsc.bnb', label: 'BNB (BSC) — bsc.bnb' },
-  { value: 'ton.gram', label: 'TON (TON Network) — ton.gram' },
-] as const
+}
 
 const KNOWN_BEPUSDT_TRADE_TYPES = new Set<string>(
   BEPUSDT_TRADE_TYPE_OPTIONS.map((item) => item.value)
@@ -130,45 +81,26 @@ const KNOWN_BEPUSDT_TRADE_TYPES = new Set<string>(
 const CUSTOM_TRADE_TYPE_VALUE = '__custom_trade_type__'
 
 interface BEpusdtMethodFormState {
-  name: string
   mode: 'transaction' | 'cashier'
   tradeTypeSelect: string
   customTradeType: string
   address: string
   currencies: string
-  rate: string
-  icon: string
-  minTopUp: string
 }
 
 const emptyMethodForm: BEpusdtMethodFormState = {
-  name: '',
   mode: 'transaction',
   tradeTypeSelect: 'usdt.trc20',
   customTradeType: '',
   address: '',
   currencies: '',
-  rate: '',
-  icon: 'SiTether',
-  minTopUp: '',
-}
-
-function isCashierTradeType(tradeType: string): boolean {
-  const trimmed = tradeType.trim()
-  return trimmed === '' || trimmed === BEPUSDT_CASHIER_TRADE_TYPE
-}
-
-function maskWalletAddress(address: string): string {
-  const trimmed = address.trim()
-  if (trimmed.length <= 16) return trimmed
-  return `${trimmed.slice(0, 8)}...${trimmed.slice(-6)}`
 }
 
 interface BEpusdtSettingsSectionProps {
   values: BEpusdtSettingsValues
   tokenConfigured: boolean
   complianceConfirmed?: boolean
-  callbackOrigin?: string
+  serverAddress?: string
   onValueChange: <K extends keyof BEpusdtFieldValues>(
     key: K,
     value: BEpusdtFieldValues[K]
@@ -186,24 +118,30 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
   const [methodForm, setMethodForm] =
     useState<BEpusdtMethodFormState>(emptyMethodForm)
 
-  const defaultWebhookUrl = useMemo(() => {
-    const customOrigin = props.callbackOrigin?.trim().replace(/\/+$/, '')
-    if (customOrigin) {
-      return `${customOrigin}/api/bepusdt/webhook`
+  const normalizedCallbackOrigin = normalizeBEpusdtCallbackOrigin(
+    props.values.BEpusdtCallbackAddress
+  )
+  const invalidCallbackAddress =
+    props.values.BEpusdtCallbackAddress.trim().length > 0 &&
+    normalizedCallbackOrigin === null
+
+  const effectiveWebhookUrl = useMemo(() => {
+    if (normalizedCallbackOrigin) {
+      return `${normalizedCallbackOrigin}/api/bepusdt/webhook`
+    }
+    const serverOrigin = props.serverAddress?.trim().replace(/\/+$/, '')
+    if (serverOrigin) {
+      return `${serverOrigin}/api/bepusdt/webhook`
     }
     if (typeof window !== 'undefined' && window.location?.origin) {
       return `${window.location.origin}/api/bepusdt/webhook`
     }
     return '<ServerAddress>/api/bepusdt/webhook'
-  }, [props.callbackOrigin])
+  }, [normalizedCallbackOrigin, props.serverAddress])
 
-  const effectiveWebhookUrl =
-    props.values.BEpusdtNotifyUrl.trim() || defaultWebhookUrl
   const trimmedApiUrl = props.values.BEpusdtApiUrl.trim()
   const invalidApiUrl =
     trimmedApiUrl.length > 0 && !/^https?:\/\//.test(trimmedApiUrl)
-  const invalidTimeout =
-    props.values.BEpusdtTimeout !== 0 && props.values.BEpusdtTimeout < 180
 
   const methodTemplates = useMemo<
     Array<{ label: string; config: BEpusdtPayMethodConfig }>
@@ -212,83 +150,45 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
       {
         label: t('Unified Crypto Cashier (create-order)'),
         config: {
-          name: t('Crypto Payment'),
-          icon: 'LuCoins',
           trade_type: BEPUSDT_CASHIER_TRADE_TYPE,
           currencies: 'USDT,USDC',
         },
       },
       {
         label: 'USDT (TRC20)',
-        config: {
-          name: 'USDT (TRC20)',
-          icon: 'SiTether',
-          trade_type: 'usdt.trc20',
-        },
+        config: { trade_type: 'usdt.trc20' },
       },
       {
         label: 'USDT (ERC20)',
-        config: {
-          name: 'USDT (ERC20)',
-          icon: 'SiTether',
-          trade_type: 'usdt.erc20',
-        },
+        config: { trade_type: 'usdt.erc20' },
       },
       {
         label: 'USDT (BEP20)',
-        config: {
-          name: 'USDT (BEP20)',
-          icon: 'SiTether',
-          trade_type: 'usdt.bep20',
-        },
+        config: { trade_type: 'usdt.bep20' },
       },
       {
         label: 'USDT (X-Layer)',
-        config: {
-          name: 'USDT (X-Layer)',
-          icon: 'SiTether',
-          trade_type: 'usdt.xlayer',
-        },
+        config: { trade_type: 'usdt.xlayer' },
       },
       {
         label: 'USDC (ERC20)',
-        config: {
-          name: 'USDC (ERC20)',
-          icon: 'LuCoins',
-          trade_type: 'usdc.erc20',
-        },
+        config: { trade_type: 'usdc.erc20' },
       },
       {
         label: 'USDT (Polygon)',
-        config: {
-          name: 'USDT (Polygon)',
-          icon: 'SiTether',
-          trade_type: 'usdt.polygon',
-        },
+        config: { trade_type: 'usdt.polygon' },
       },
       {
         label: 'USDT (Arbitrum)',
-        config: {
-          name: 'USDT (Arbitrum)',
-          icon: 'SiTether',
-          trade_type: 'usdt.arbitrum',
-        },
+        config: { trade_type: 'usdt.arbitrum' },
       },
       {
         label: 'USDT (Solana)',
-        config: {
-          name: 'USDT (Solana)',
-          icon: 'SiTether',
-          trade_type: 'usdt.solana',
-        },
+        config: { trade_type: 'usdt.solana' },
       },
       {
         label: 'USDT (TON)',
-        config: {
-          name: 'USDT (TON)',
-          icon: 'SiTether',
-          trade_type: 'usdt.ton',
-        },
+        config: { trade_type: 'usdt.ton' },
       },
     ],
     [t]
@@ -329,8 +229,9 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
   const openEditMethod = (idx: number) => {
     const target = props.payMethods[idx]
     if (!target) return
-    const cashier = isCashierTradeType(target.trade_type)
-    const knownType = !cashier && KNOWN_BEPUSDT_TRADE_TYPES.has(target.trade_type)
+    const cashier = isBEpusdtCashierTradeType(target.trade_type)
+    const knownType =
+      !cashier && KNOWN_BEPUSDT_TRADE_TYPES.has(target.trade_type)
     let tradeTypeSelect = CUSTOM_TRADE_TYPE_VALUE
     if (cashier) {
       tradeTypeSelect = 'usdt.trc20'
@@ -339,15 +240,11 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
     }
     setEditingIdx(idx)
     setMethodForm({
-      name: target.name,
       mode: cashier ? 'cashier' : 'transaction',
       tradeTypeSelect,
       customTradeType: cashier || knownType ? '' : target.trade_type,
       address: target.address ?? '',
       currencies: target.currencies ?? '',
-      rate: target.rate ?? '',
-      icon: target.icon ?? '',
-      minTopUp: target.min_topup ? String(target.min_topup) : '',
     })
     setMethodDialogOpen(true)
   }
@@ -356,7 +253,9 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
     props.onPayMethodsChange((prev) => {
       const exists = prev.some(
         (item) =>
-          item.name === config.name && item.trade_type === config.trade_type
+          item.trade_type === config.trade_type &&
+          (item.address ?? '') === (config.address ?? '') &&
+          (item.currencies ?? '') === (config.currencies ?? '')
       )
       if (exists) {
         toast.info(t('This payment method template already exists'))
@@ -367,11 +266,6 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
   }
 
   const saveMethod = () => {
-    const name = methodForm.name.trim()
-    if (!name) {
-      toast.error(t('Payment method name is required'))
-      return
-    }
     let tradeType = BEPUSDT_CASHIER_TRADE_TYPE
     if (methodForm.mode === 'transaction') {
       tradeType =
@@ -384,37 +278,15 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
       }
     }
 
-    const parsedMinTopUp = methodForm.minTopUp.trim()
-      ? Number(methodForm.minTopUp.trim())
-      : 0
-    if (
-      !Number.isFinite(parsedMinTopUp) ||
-      parsedMinTopUp < 0 ||
-      !Number.isInteger(parsedMinTopUp)
-    ) {
-      toast.error(t('Minimum top-up must be a non-negative integer'))
-      return
-    }
-
     const nextMethod: BEpusdtPayMethodConfig = {
-      name,
       trade_type: tradeType,
-    }
-    if (methodForm.icon.trim()) {
-      nextMethod.icon = methodForm.icon.trim()
     }
     if (methodForm.mode === 'transaction') {
       if (methodForm.address.trim()) {
         nextMethod.address = methodForm.address.trim()
       }
-      if (methodForm.rate.trim()) {
-        nextMethod.rate = methodForm.rate.trim()
-      }
     } else if (methodForm.currencies.trim()) {
       nextMethod.currencies = methodForm.currencies.trim()
-    }
-    if (parsedMinTopUp > 0) {
-      nextMethod.min_topup = parsedMinTopUp
     }
 
     if (editingIdx === -1) {
@@ -473,7 +345,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
       <SettingsCard
         title={t('BEpusdt Gateway')}
         description={t(
-          'Configure API credentials, settlement fiat, callback URLs, and payment channels.'
+          'Configure API credentials and receiving channels. Display names, pricing, and callback URLs follow General settings and BEpusdt automatically.'
         )}
         action={
           <Button
@@ -580,155 +452,32 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
           </div>
         </div>
 
-        <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-fiat'>{t('Fiat currency')}</Label>
-            <Select
-              value={props.values.BEpusdtFiat || 'CNY'}
-              onValueChange={(value) => {
-                if (value) props.onValueChange('BEpusdtFiat', value)
-              }}
-            >
-              <SelectTrigger id='bepusdt-fiat'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                {BEPUSDT_FIAT_OPTIONS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {t(item.labelKey)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-unit-price'>
-              {t('Unit price (0 = follow General)')}
-            </Label>
-            <Input
-              id='bepusdt-unit-price'
-              type='number'
-              step='0.01'
-              min={0}
-              value={props.values.BEpusdtUnitPrice}
-              onChange={(event) => {
-                const parsed = event.target.valueAsNumber
-                props.onValueChange(
-                  'BEpusdtUnitPrice',
-                  event.target.value === '' || !Number.isFinite(parsed)
-                    ? 0
-                    : parsed
-                )
-              }}
-            />
-            <p className='text-muted-foreground text-xs'>
-              {t('Fiat price per 1 USD quota; set 0 to use the General Price.')}
-            </p>
-          </div>
-
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-min-topup'>
-              {t('Minimum top-up (USD)')}
-            </Label>
-            <Input
-              id='bepusdt-min-topup'
-              type='number'
-              min={1}
-              step={1}
-              value={props.values.BEpusdtMinTopUp}
-              onChange={(event) => {
-                const parsed = event.target.valueAsNumber
-                props.onValueChange(
-                  'BEpusdtMinTopUp',
-                  event.target.value === '' || !Number.isFinite(parsed)
-                    ? 1
-                    : parsed
-                )
-              }}
-            />
-          </div>
-
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-timeout'>
-              {t('Order timeout (seconds)')}
-            </Label>
-            <Input
-              id='bepusdt-timeout'
-              type='number'
-              min={0}
-              step={60}
-              value={props.values.BEpusdtTimeout}
-              aria-invalid={invalidTimeout}
-              onChange={(event) => {
-                const parsed = event.target.valueAsNumber
-                props.onValueChange(
-                  'BEpusdtTimeout',
-                  event.target.value === '' || !Number.isFinite(parsed)
-                    ? 0
-                    : parsed
-                )
-              }}
-            />
-            {invalidTimeout ? (
-              <p className='text-destructive text-xs'>
-                {t('BEpusdt order timeout must be 0 or at least 180 seconds')}
-              </p>
-            ) : (
-              <p className='text-muted-foreground text-xs'>
-                {t('0 uses BEpusdt default; otherwise at least 180 seconds.')}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className='grid gap-4 md:grid-cols-3'>
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-rate'>
-              {t('Default exchange rate (optional)')}
-            </Label>
-            <Input
-              id='bepusdt-rate'
-              placeholder={t('e.g., 7.4 or ~1.02')}
-              value={props.values.BEpusdtRate}
-              onChange={(event) =>
-                props.onValueChange('BEpusdtRate', event.target.value)
-              }
-            />
-            <p className='text-muted-foreground text-xs'>
+        <div className='grid min-w-0 gap-1.5'>
+          <Label htmlFor='bepusdt-callback-address'>
+            {t('Callback address')}
+          </Label>
+          <Input
+            id='bepusdt-callback-address'
+            placeholder='https://api.example.com'
+            value={props.values.BEpusdtCallbackAddress}
+            aria-invalid={invalidCallbackAddress}
+            onChange={(event) =>
+              props.onValueChange('BEpusdtCallbackAddress', event.target.value)
+            }
+          />
+          {invalidCallbackAddress ? (
+            <p className='text-destructive text-xs'>
               {t(
-                'Applies to create-transaction orders; leave blank for BEpusdt automatic rate.'
+                'BEpusdt callback address must be a valid site origin without a path'
               )}
             </p>
-          </div>
-
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-notify-url'>
-              {t('Callback notification URL')}
-            </Label>
-            <Input
-              id='bepusdt-notify-url'
-              placeholder={defaultWebhookUrl}
-              value={props.values.BEpusdtNotifyUrl}
-              onChange={(event) =>
-                props.onValueChange('BEpusdtNotifyUrl', event.target.value)
-              }
-            />
-          </div>
-
-          <div className='grid min-w-0 gap-1.5'>
-            <Label htmlFor='bepusdt-return-url'>
-              {t('Payment return URL')}
-            </Label>
-            <Input
-              id='bepusdt-return-url'
-              placeholder='https://example.com/wallet?show_history=true'
-              value={props.values.BEpusdtReturnUrl}
-              onChange={(event) =>
-                props.onValueChange('BEpusdtReturnUrl', event.target.value)
-              }
-            />
-          </div>
+          ) : (
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Only enter the site origin, for example https://api.example.com. Do not include any path such as /api/bepusdt/webhook. Leave blank to use Server Address.'
+              )}
+            </p>
+          )}
         </div>
 
         <Separator />
@@ -740,7 +489,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
             </h4>
             <p className='text-muted-foreground text-xs'>
               {t(
-                'Configure chain-specific (create-transaction) or unified cashier (create-order) channels here, then add their bepusdt_* identifiers in General → Payment methods to display them in the wallet.'
+                'Configure chain-specific (create-transaction) or unified cashier (create-order) channels here, then add their bepusdt_* identifiers and display names in General → Payment methods.'
               )}
             </p>
           </div>
@@ -801,28 +550,13 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
         <StaticDataTable
           data={props.payMethods}
           getRowKey={(method, idx) =>
-            `${method.trade_type}-${method.name}-${idx}`
+            `${method.trade_type}-${method.address ?? ''}-${idx}`
           }
           emptyClassName='text-muted-foreground py-8'
           emptyContent={t(
             'No BEpusdt payment methods configured. Add a method or pick from templates.'
           )}
           columns={[
-            {
-              id: 'name',
-              header: t('Display name'),
-              cell: (method) => (
-                <div className='flex items-center gap-2'>
-                  {getPaymentIcon(
-                    'bepusdt',
-                    'h-4 w-4 shrink-0',
-                    method.icon,
-                    method.name
-                  )}
-                  <span className='font-medium'>{method.name}</span>
-                </div>
-              ),
-            },
             {
               id: 'trade_type',
               header: t('Mode / Trade type'),
@@ -832,7 +566,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
                 )
                 return (
                   <div className='flex flex-col items-start gap-1'>
-                    {isCashierTradeType(method.trade_type) ? (
+                    {isBEpusdtCashierTradeType(method.trade_type) ? (
                       <Badge variant='secondary'>{t('Unified cashier')}</Badge>
                     ) : (
                       <code className='bg-muted rounded px-1.5 py-0.5 text-xs'>
@@ -850,7 +584,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
               id: 'target',
               header: t('Address / Currencies'),
               cell: (method) => {
-                if (isCashierTradeType(method.trade_type)) {
+                if (isBEpusdtCashierTradeType(method.trade_type)) {
                   return method.currencies ? (
                     <span className='font-mono text-xs'>
                       {method.currencies}
@@ -866,7 +600,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
                     className='bg-muted rounded px-1.5 py-0.5 text-xs'
                     title={method.address}
                   >
-                    {maskWalletAddress(method.address)}
+                    {maskBEpusdtWalletAddress(method.address)}
                   </code>
                 ) : (
                   <span className='text-muted-foreground text-xs'>
@@ -874,16 +608,6 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
                   </span>
                 )
               },
-            },
-            {
-              id: 'min_topup',
-              header: t('Min Top-up'),
-              cell: (method) =>
-                method.min_topup ? (
-                  <span className='font-mono text-xs'>{method.min_topup}</span>
-                ) : (
-                  <span className='text-muted-foreground text-xs'>—</span>
-                ),
             },
             {
               id: 'actions',
@@ -919,7 +643,7 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
         description={t(
           'Configure either a specific trade type (create-transaction) or unified checkout (create-order).'
         )}
-        contentClassName='sm:max-w-[520px]'
+        contentClassName='sm:max-w-[480px]'
         contentHeight='auto'
         bodyClassName='space-y-4'
         footer={
@@ -939,41 +663,15 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
       >
         <div className='space-y-4'>
           <div className='grid gap-1.5'>
-            <Label htmlFor='bepusdt-method-name' required>
-              {t('Display name')}
-            </Label>
-            <Input
-              id='bepusdt-method-name'
-              placeholder={t('e.g., USDT (TRC20) or Crypto Payment')}
-              value={methodForm.name}
-              onChange={(event) =>
-                setMethodForm((prev) => ({ ...prev, name: event.target.value }))
-              }
-            />
-          </div>
-
-          <div className='grid gap-1.5'>
             <Label htmlFor='bepusdt-method-mode'>{t('Order mode')}</Label>
             <Select
               value={methodForm.mode}
               onValueChange={(value) => {
                 if (value !== 'transaction' && value !== 'cashier') return
-                setMethodForm((prev) => {
-                  let nextIcon = prev.icon
-                  if (prev.icon === 'SiTether' && value === 'cashier') {
-                    nextIcon = 'LuCoins'
-                  } else if (
-                    prev.icon === 'LuCoins' &&
-                    value === 'transaction'
-                  ) {
-                    nextIcon = 'SiTether'
-                  }
-                  return {
-                    ...prev,
-                    mode: value,
-                    icon: nextIcon,
-                  }
-                })
+                setMethodForm((prev) => ({
+                  ...prev,
+                  mode: value,
+                }))
               }}
             >
               <SelectTrigger id='bepusdt-method-mode'>
@@ -1062,23 +760,6 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
                   )}
                 </p>
               </div>
-
-              <div className='grid gap-1.5'>
-                <Label htmlFor='bepusdt-method-rate'>
-                  {t('Exchange rate override (optional)')}
-                </Label>
-                <Input
-                  id='bepusdt-method-rate'
-                  placeholder={t('e.g., 7.4 or ~1.02')}
-                  value={methodForm.rate}
-                  onChange={(event) =>
-                    setMethodForm((prev) => ({
-                      ...prev,
-                      rate: event.target.value,
-                    }))
-                  }
-                />
-              </div>
             </>
           ) : (
             <div className='grid gap-1.5'>
@@ -1103,51 +784,6 @@ export function BEpusdtSettingsSection(props: BEpusdtSettingsSectionProps) {
               </p>
             </div>
           )}
-
-          <div className='grid gap-1.5'>
-            <Label htmlFor='bepusdt-method-icon'>{t('Icon')}</Label>
-            <div className='flex items-center gap-2'>
-              <Input
-                id='bepusdt-method-icon'
-                placeholder={t('Icon name or HTTPS image URL')}
-                value={methodForm.icon}
-                onChange={(event) =>
-                  setMethodForm((prev) => ({
-                    ...prev,
-                    icon: event.target.value,
-                  }))
-                }
-                className='flex-1'
-              />
-              {methodForm.icon.trim() &&
-                getPaymentIcon(
-                  'bepusdt',
-                  'text-muted-foreground size-5 shrink-0',
-                  methodForm.icon,
-                  methodForm.name
-                )}
-            </div>
-          </div>
-
-          <div className='grid gap-1.5'>
-            <Label htmlFor='bepusdt-method-min-topup'>
-              {t('Minimum top-up (optional)')}
-            </Label>
-            <Input
-              id='bepusdt-method-min-topup'
-              type='number'
-              min={0}
-              step={1}
-              placeholder={t('e.g., 50')}
-              value={methodForm.minTopUp}
-              onChange={(event) =>
-                setMethodForm((prev) => ({
-                  ...prev,
-                  minTopUp: event.target.value,
-                }))
-              }
-            />
-          </div>
         </div>
       </Dialog>
     </div>

@@ -21,11 +21,14 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { STATUS_QUERY_KEY, type StatusData } from '@/lib/status-query'
+
 import { CCSwitchDialog } from '../cc-switch-dialog'
 
 let queryClient: QueryClient
 
 beforeEach(() => {
+  localStorage.clear()
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   })
@@ -33,9 +36,15 @@ beforeEach(() => {
 
 afterEach(() => {
   queryClient.clear()
+  localStorage.clear()
+  vi.restoreAllMocks()
 })
 
-function renderDialog(models = ['gpt-5.4', 'claude-sonnet-4-6']) {
+function renderDialog(
+  models = ['gpt-5.4', 'claude-sonnet-4-6'],
+  status: StatusData = {}
+) {
+  queryClient.setQueryData(STATUS_QUERY_KEY, status)
   queryClient.setQueryData(['user-models-ccswitch'], {
     success: true,
     data: models,
@@ -123,5 +132,113 @@ describe('CC Switch model selection', () => {
 
     expect(input).toHaveValue('Development')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+})
+
+describe('CC Switch import URL resolution', () => {
+  it('uses the first API address without appending v1 for Claude and homepage', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog(['claude-sonnet-4-6'], {
+      server_address: 'https://console.example.com',
+      api_info_enabled: true,
+      api_info: [
+        {
+          url: 'https://api-primary.example.com/',
+          route: 'Primary',
+          description: 'Primary endpoint',
+          color: 'blue',
+        },
+        {
+          url: 'https://api-secondary.example.com',
+          route: 'Secondary',
+          description: 'Secondary endpoint',
+          color: 'green',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Primary Model' }))
+    await user.click(screen.getByRole('option', { name: 'claude-sonnet-4-6' }))
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    expect(openSpy).toHaveBeenCalledTimes(1)
+    const openedUrl = new URL(openSpy.mock.calls[0][0] as string)
+    expect(openedUrl.searchParams.get('app')).toBe('claude')
+    expect(openedUrl.searchParams.get('endpoint')).toBe(
+      'https://api-primary.example.com'
+    )
+    expect(openedUrl.searchParams.get('homepage')).toBe(
+      'https://api-primary.example.com'
+    )
+  })
+
+  it('uses the first API address for Codex and avoids duplicating an existing v1 suffix', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog(['gpt-5.4'], {
+      server_address: 'https://console.example.com',
+      api_info_enabled: true,
+      api_info: [
+        {
+          url: 'https://api-primary.example.com/v1/',
+          route: 'Primary',
+          description: 'Primary endpoint',
+          color: 'blue',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'Codex' }))
+    await user.click(screen.getByRole('combobox', { name: 'Primary Model' }))
+    await user.click(screen.getByRole('option', { name: 'gpt-5.4' }))
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    expect(openSpy).toHaveBeenCalledTimes(1)
+    const openedUrl = new URL(openSpy.mock.calls[0][0] as string)
+    expect(openedUrl.searchParams.get('app')).toBe('codex')
+    expect(openedUrl.searchParams.get('endpoint')).toBe(
+      'https://api-primary.example.com/v1'
+    )
+    expect(openedUrl.searchParams.get('homepage')).toBe(
+      'https://api-primary.example.com/v1'
+    )
+  })
+
+  it.each([
+    {
+      name: 'server_address when API addresses are disabled',
+      status: {
+        server_address: 'https://console.example.com/',
+        api_info_enabled: false,
+        api_info: [
+          {
+            url: 'https://hidden.example.com',
+            route: 'Hidden',
+            description: 'Disabled',
+            color: 'blue',
+          },
+        ],
+      },
+      expected: 'https://console.example.com',
+    },
+    {
+      name: 'current origin when both API addresses and server_address are empty',
+      status: {
+        server_address: '',
+        api_info_enabled: true,
+        api_info: [],
+      },
+      expected: window.location.origin.replace(/\/+$/, ''),
+    },
+  ])('falls back to $name', async ({ status, expected }) => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog(['claude-sonnet-4-6'], status)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('combobox', { name: 'Primary Model' }))
+    await user.click(screen.getByRole('option', { name: 'claude-sonnet-4-6' }))
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    const openedUrl = new URL(openSpy.mock.calls[0][0] as string)
+    expect(openedUrl.searchParams.get('endpoint')).toBe(expected)
+    expect(openedUrl.searchParams.get('homepage')).toBe(expected)
   })
 })
