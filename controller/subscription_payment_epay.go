@@ -9,6 +9,7 @@ import (
 
 	"github.com/Calcium-Ion/go-epay/epay"
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -46,6 +47,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		return
 	}
 	if operation_setting.IsJingSoftPaymentMethod(req.PaymentMethod) ||
+		constant.IsBEpusdtPaymentMethod(req.PaymentMethod) ||
 		!operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		common.ApiErrorT(c, "Payment method does not exist")
 		return

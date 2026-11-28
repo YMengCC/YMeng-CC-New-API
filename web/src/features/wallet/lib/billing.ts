@@ -73,6 +73,7 @@ export const PAYMENT_METHOD_NAMES: Record<string, string> = {
   creem: 'Creem',
   waffo: 'Waffo',
   waffo_pancake: 'Waffo Pancake',
+  bepusdt: 'BEpusdt',
 }
 
 /**
@@ -82,6 +83,11 @@ export function getPaymentMethodName(
   method: string,
   t?: (key: string) => string
 ): string {
+  if (method.toLowerCase().startsWith('bepusdt_')) {
+    const suffix = method.slice('bepusdt_'.length)
+    const label = t ? t('BEpusdt') : 'BEpusdt'
+    return suffix ? `${label} (${suffix})` : label
+  }
   const name = PAYMENT_METHOD_NAMES[method] || method
   return t ? t(name) : name
 }

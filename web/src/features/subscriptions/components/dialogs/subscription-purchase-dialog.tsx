@@ -37,6 +37,7 @@ import {
   paySubscriptionCreem,
   paySubscriptionEpay,
   paySubscriptionWaffoPancake,
+  paySubscriptionBEpusdt,
   paySubscriptionBalance,
 } from '../../api'
 import { formatDuration, formatResetPeriod } from '../../lib'
@@ -47,6 +48,12 @@ interface PaymentMethod {
   name?: string
 }
 
+interface BEpusdtMethodOption {
+  name: string
+  trade_type: string
+  channel_id?: string
+}
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -54,6 +61,8 @@ interface Props {
   enableStripe?: boolean
   enableCreem?: boolean
   enableWaffoPancake?: boolean
+  enableBEpusdt?: boolean
+  bepusdtMethods?: BEpusdtMethodOption[]
   enableOnlineTopUp?: boolean
   epayMethods?: PaymentMethod[]
   purchaseLimit?: number
@@ -67,6 +76,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [selectedBEpusdtIndex, setSelectedBEpusdtIndex] = useState('0')
 
   useEffect(() => {
     if (props.open && props.epayMethods && props.epayMethods.length > 0) {
@@ -76,6 +86,14 @@ export function SubscriptionPurchaseDialog(props: Props) {
     }
   }, [props.open, props.epayMethods])
 
+  useEffect(() => {
+    if (props.open && props.bepusdtMethods && props.bepusdtMethods.length > 0) {
+      setSelectedBEpusdtIndex('0')
+    } else if (!props.open) {
+      setSelectedBEpusdtIndex('0')
+    }
+  }, [props.open, props.bepusdtMethods])
+
   const plan = props.plan?.plan
   if (!plan) return null
 
@@ -83,9 +101,12 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const hasCreem = props.enableCreem && !!plan.creem_product_id
   const hasWaffoPancake =
     props.enableWaffoPancake && !!plan.waffo_pancake_product_id
+  const hasBEpusdt =
+    props.enableBEpusdt && (props.bepusdtMethods || []).length > 0
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
-  const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
+  const hasAnyPayment =
+    hasStripe || hasCreem || hasWaffoPancake || hasBEpusdt || hasEpay
   const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
   const quotaPerUnit =
@@ -148,6 +169,58 @@ export function SubscriptionPurchaseDialog(props: Props) {
       if (res.message === 'success' && res.data?.checkout_url) {
         toast.success(t('Redirecting to payment page...'))
         window.location.href = res.data.checkout_url
+      } else {
+        handleServerError(res, t('Payment request failed'))
+      }
+    } catch (error) {
+      handleServerError(error, t('Payment request failed'))
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  const handlePayBEpusdt = async () => {
+    const index = Number.parseInt(selectedBEpusdtIndex, 10)
+    if (!Number.isInteger(index) || index < 0) {
+      toast.error(t('Please select a payment method'))
+      return
+    }
+    const selectedMethod = props.bepusdtMethods?.[index]
+    const parsedChannelIndex =
+      selectedMethod?.channel_id !== undefined &&
+      selectedMethod.channel_id !== ''
+        ? Number.parseInt(selectedMethod.channel_id, 10)
+        : Number.NaN
+    setPaying(true)
+    try {
+      const res = await paySubscriptionBEpusdt({
+        plan_id: plan.id,
+        pay_method_index: Number.isInteger(parsedChannelIndex)
+          ? parsedChannelIndex
+          : undefined,
+        payment_method: selectedMethod
+          ? `bepusdt_${selectedMethod.trade_type.trim() || 'cashier'}`
+          : undefined,
+        channel_id: selectedMethod?.channel_id || undefined,
+      })
+      const paymentUrl = res.data?.payment_url
+      if (res.message === 'success' && paymentUrl) {
+        try {
+          const parsed = new URL(paymentUrl)
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            toast.error(t('Invalid payment redirect URL'))
+            return
+          }
+        } catch {
+          toast.error(t('Invalid payment redirect URL'))
+          return
+        }
+        const popup = window.open(paymentUrl, '_blank', 'noopener,noreferrer')
+        if (!popup) {
+          window.location.href = paymentUrl
+        }
+        toast.success(t('Payment page opened'))
+        props.onOpenChange(false)
       } else {
         handleServerError(res, t('Payment request failed'))
       }
@@ -373,6 +446,28 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     Waffo Pancake
                   </Button>
                 )}
+              </div>
+            )}
+            {hasBEpusdt && (
+              <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                <Combobox
+                  options={(props.bepusdtMethods || []).map((m, idx) => ({
+                    value: String(idx),
+                    label: m.name,
+                  }))}
+                  value={selectedBEpusdtIndex}
+                  onValueChange={(v) =>
+                    v !== null && setSelectedBEpusdtIndex(v)
+                  }
+                  disabled={limitReached}
+                  className='flex-1'
+                />
+                <Button
+                  onClick={handlePayBEpusdt}
+                  disabled={paying || limitReached}
+                >
+                  {t('Pay with BEpusdt')}
+                </Button>
               </div>
             )}
             {hasEpay && (

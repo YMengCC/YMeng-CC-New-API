@@ -21,17 +21,23 @@ import { describe, expect, test } from 'vitest'
 import { PAYMENT_TYPES } from '../constants'
 import {
   dispatchSelectedPayment,
+  isBEpusdtPayment,
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
 } from './payment'
 
 describe('payment type classification', () => {
-  test('keeps Waffo and Waffo Pancake on their dedicated flows', () => {
+  test('keeps Waffo, Waffo Pancake, and BEpusdt on their dedicated flows', () => {
     expect(isWaffoPayment(PAYMENT_TYPES.WAFFO)).toBe(true)
     expect(isWaffoPayment(PAYMENT_TYPES.WAFFO_PANCAKE)).toBe(false)
     expect(isWaffoPancakePayment(PAYMENT_TYPES.WAFFO_PANCAKE)).toBe(true)
     expect(isWaffoPancakePayment(PAYMENT_TYPES.WAFFO)).toBe(false)
+    expect(isBEpusdtPayment(PAYMENT_TYPES.BEPUSDT)).toBe(true)
+    expect(isBEpusdtPayment('bepusdt_usdt.trc20')).toBe(true)
+    expect(isBEpusdtPayment('bepusdt_cashier')).toBe(true)
+    expect(isBEpusdtPayment(PAYMENT_TYPES.WAFFO)).toBe(false)
+    expect(isBEpusdtPayment('usdt.trc20')).toBe(false)
     expect(isStripePayment(PAYMENT_TYPES.STRIPE)).toBe(true)
   })
 })
@@ -81,5 +87,80 @@ describe('payment dispatch', () => {
 
     expect(success).toBe(false)
     expect(called).toBe(false)
+  })
+
+  test('dispatches BEpusdt payment with the selected method index', async () => {
+    const calls: string[] = []
+    const success = await dispatchSelectedPayment(
+      { name: 'USDT (TRC20)', type: PAYMENT_TYPES.BEPUSDT },
+      50,
+      null,
+      {
+        regular: async () => false,
+        waffo: async () => false,
+        waffoPancake: async () => false,
+        bepusdt: async (amount, index) => {
+          calls.push(`bepusdt:${amount}:${index}`)
+          return true
+        },
+      },
+      1
+    )
+
+    expect(success).toBe(true)
+    expect(calls).toEqual(['bepusdt:50:1'])
+  })
+
+  test('does not create a BEpusdt order without a selected method index', async () => {
+    let called = false
+    const success = await dispatchSelectedPayment(
+      { name: 'USDT (TRC20)', type: PAYMENT_TYPES.BEPUSDT },
+      50,
+      null,
+      {
+        regular: async () => false,
+        waffo: async () => false,
+        waffoPancake: async () => false,
+        bepusdt: async () => {
+          called = true
+          return true
+        },
+      },
+      null
+    )
+
+    expect(success).toBe(false)
+    expect(called).toBe(false)
+  })
+
+  test('dispatches prefixed bepusdt_* General payment method to BEpusdt instead of Epay', async () => {
+    const calls: string[] = []
+    const success = await dispatchSelectedPayment(
+      {
+        name: 'USDT (TRC20)',
+        type: 'bepusdt_usdt.trc20',
+        channel_id: '0',
+      },
+      25,
+      null,
+      {
+        regular: async () => {
+          calls.push('epay')
+          return false
+        },
+        waffo: async () => false,
+        waffoPancake: async () => false,
+        bepusdt: async (amount, index, paymentMethod, channelId) => {
+          calls.push(
+            `bepusdt:${amount}:${index}:${paymentMethod}:${channelId ?? ''}`
+          )
+          return true
+        },
+      },
+      null
+    )
+
+    expect(success).toBe(true)
+    expect(calls).toEqual(['bepusdt:25:null:bepusdt_usdt.trc20:0'])
   })
 })

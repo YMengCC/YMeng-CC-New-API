@@ -42,7 +42,11 @@ import { WithdrawalDialog } from './components/dialogs/withdrawal-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
-import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
+import {
+  DEFAULT_DISCOUNT_RATE,
+  PAYMENT_TYPES,
+  formatBEpusdtPaymentType,
+} from './constants'
 import {
   useTopupInfo,
   usePayment,
@@ -51,12 +55,14 @@ import {
   useCreemPayment,
   useWaffoPayment,
   useWaffoPancakePayment,
+  useBEpusdtPayment,
 } from './hooks'
 import { useJingSoftPayment } from './hooks/use-jingsoft-payment'
 import {
   getDefaultPaymentType,
   getMinTopupAmount,
   dispatchSelectedPayment,
+  isBEpusdtPayment,
 } from './lib'
 import type {
   UserWalletData,
@@ -142,6 +148,9 @@ export function Wallet(props: WalletProps) {
   const [selectedWaffoMethodIndex, setSelectedWaffoMethodIndex] = useState<
     number | null
   >(null)
+  const [selectedBEpusdtMethodIndex, setSelectedBEpusdtMethodIndex] = useState<
+    number | null
+  >(null)
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
@@ -188,6 +197,8 @@ export function Wallet(props: WalletProps) {
   const { processing: waffoProcessing, processWaffoPayment } = useWaffoPayment()
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
+  const { processing: bepusdtProcessing, processBEpusdtPayment } =
+    useBEpusdtPayment()
 
   // Fetch and refresh user data
   const fetchUser = useCallback(async (propagateError = false) => {
@@ -330,23 +341,48 @@ export function Wallet(props: WalletProps) {
     [navigate, search.show_history]
   )
 
-  // Get current payment type (selected or default)
-  const getCurrentPaymentType = useCallback(() => {
-    return selectedPaymentMethod?.type || getDefaultPaymentType(topupInfo)
+  // Get current payment method target (selected or default)
+  const getCurrentPaymentTarget = useCallback(() => {
+    if (selectedPaymentMethod) {
+      return {
+        type: selectedPaymentMethod.type,
+        channelId: selectedPaymentMethod.channel_id,
+      }
+    }
+    const defaultType = getDefaultPaymentType(topupInfo)
+    const defaultMethod = topupInfo?.pay_methods?.find(
+      (item) => item.type === defaultType
+    )
+    return {
+      type: defaultType,
+      channelId: defaultMethod?.channel_id,
+    }
   }, [selectedPaymentMethod, topupInfo])
 
   // Handle preset selection
   const handleSelectPreset = (preset: PresetAmount) => {
+    const target = getCurrentPaymentTarget()
     setTopupAmount(preset.value)
     setSelectedPreset(preset.value)
-    calculatePaymentAmount(preset.value, getCurrentPaymentType())
+    calculatePaymentAmount(
+      preset.value,
+      target.type,
+      selectedBEpusdtMethodIndex,
+      target.channelId
+    )
   }
 
   // Handle topup amount change
   const handleTopupAmountChange = (amount: number) => {
+    const target = getCurrentPaymentTarget()
     setTopupAmount(amount)
     setSelectedPreset(null)
-    calculatePaymentAmount(amount, getCurrentPaymentType())
+    calculatePaymentAmount(
+      amount,
+      target.type,
+      selectedBEpusdtMethodIndex,
+      target.channelId
+    )
   }
 
   // Handle payment method selection
@@ -356,17 +392,62 @@ export function Wallet(props: WalletProps) {
     jingSoft.selectChannel(null)
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
+
+    let resolvedBEpusdtIndex: number | null = null
+    if (isBEpusdtPayment(method.type)) {
+      const configuredList = topupInfo?.bepusdt_pay_methods ?? []
+      if (method.channel_id !== undefined && method.channel_id !== '') {
+        const parsedIdx = Number.parseInt(method.channel_id, 10)
+        const candidate = configuredList[parsedIdx]
+        if (
+          Number.isInteger(parsedIdx) &&
+          candidate &&
+          formatBEpusdtPaymentType(candidate.trade_type).toLowerCase() ===
+            method.type.toLowerCase()
+        ) {
+          resolvedBEpusdtIndex = parsedIdx
+        }
+      }
+      if (resolvedBEpusdtIndex === null) {
+        const idx = configuredList.findIndex(
+          (item) =>
+            formatBEpusdtPaymentType(item.trade_type).toLowerCase() ===
+            method.type.toLowerCase()
+        )
+        if (idx >= 0) {
+          resolvedBEpusdtIndex = idx
+        }
+      }
+    }
+
+    setSelectedBEpusdtMethodIndex(resolvedBEpusdtIndex)
     setPaymentLoading(method.type)
 
     try {
-      // Validate minimum topup
-      const minTopup = getMinTopupAmount(topupInfo)
+      let minTopup = getMinTopupAmount(topupInfo)
+      if (isBEpusdtPayment(method.type)) {
+        const matchedMin =
+          resolvedBEpusdtIndex !== null
+            ? topupInfo?.bepusdt_pay_methods?.[resolvedBEpusdtIndex]
+                ?.min_topup || 0
+            : 0
+        minTopup = Math.max(
+          method.min_topup || 0,
+          matchedMin,
+          topupInfo?.bepusdt_min_topup || 0
+        )
+      }
       if (topupAmount < minTopup) {
         return
       }
 
       // Calculate payment amount and show confirmation dialog
-      await calculatePaymentAmount(topupAmount, method.type)
+      await calculatePaymentAmount(
+        topupAmount,
+        method.type,
+        resolvedBEpusdtIndex,
+        method.channel_id
+      )
       if (version === paymentSelectionVersion.current) {
         setConfirmDialogOpen(true)
       }
@@ -387,7 +468,9 @@ export function Wallet(props: WalletProps) {
         regular: processPayment,
         waffo: processWaffoPayment,
         waffoPancake: processWaffoPancakePayment,
-      }
+        bepusdt: processBEpusdtPayment,
+      },
+      selectedBEpusdtMethodIndex
     )
 
     if (success) {
@@ -451,6 +534,7 @@ export function Wallet(props: WalletProps) {
       icon: method.icon,
     })
     setSelectedWaffoMethodIndex(index)
+    setSelectedBEpusdtMethodIndex(null)
     setPaymentLoading(loadingKey)
 
     try {
@@ -541,6 +625,9 @@ export function Wallet(props: WalletProps) {
                   enableWaffoPancakeTopup={
                     topupInfo?.enable_waffo_pancake_topup
                   }
+                  enableBEpusdtTopup={topupInfo?.enable_bepusdt_topup}
+                  bepusdtPayMethods={topupInfo?.bepusdt_pay_methods}
+                  bepusdtMinTopup={topupInfo?.bepusdt_min_topup}
                 />
               </div>
 
@@ -579,8 +666,17 @@ export function Wallet(props: WalletProps) {
         paymentAmount={paymentAmount}
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
-        processing={processing || waffoProcessing || pancakeProcessing}
-        paymentFeePercent={selectedPaymentMethod?.fee_percent ?? 0}
+        processing={
+          processing ||
+          waffoProcessing ||
+          pancakeProcessing ||
+          bepusdtProcessing
+        }
+        paymentFeePercent={
+          selectedPaymentMethod && isBEpusdtPayment(selectedPaymentMethod.type)
+            ? 0
+            : (selectedPaymentMethod?.fee_percent ?? 0)
+        }
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
         topupLink={topupInfo?.topup_link}

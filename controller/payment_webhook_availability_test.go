@@ -180,6 +180,54 @@ func TestEpayWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
 	require.False(t, isEpayWebhookEnabled())
 }
 
+func TestBEpusdtWebhookEnabledRequiresTopUpAndWebhookConfig(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
+	originalEnabled := setting.BEpusdtEnabled
+	originalURL := setting.BEpusdtApiUrl
+	originalToken := setting.BEpusdtApiToken
+	originalPayMethods := operation_setting.PayMethods
+	common.OptionMapRWMutex.Lock()
+	originalOptionMap := common.OptionMap
+	common.OptionMap = make(map[string]string, len(originalOptionMap)+1)
+	for k, v := range originalOptionMap {
+		common.OptionMap[k] = v
+	}
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		setting.BEpusdtEnabled = originalEnabled
+		setting.BEpusdtApiUrl = originalURL
+		setting.BEpusdtApiToken = originalToken
+		operation_setting.PayMethods = originalPayMethods
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = originalOptionMap
+		common.OptionMapRWMutex.Unlock()
+	})
+
+	setting.BEpusdtEnabled = true
+	setting.BEpusdtApiUrl = "https://bepusdt.example.com"
+	setting.BEpusdtApiToken = ""
+	operation_setting.PayMethods = []map[string]string{
+		{"name": "USDT (TRC20)", "type": "bepusdt_usdt.trc20", "channel_id": "0"},
+	}
+	common.OptionMapRWMutex.Lock()
+	common.OptionMap["BEpusdtPayMethods"] = `[{"name":"USDT (TRC20)","trade_type":"usdt.trc20"}]`
+	common.OptionMapRWMutex.Unlock()
+	require.False(t, isBEpusdtTopUpEnabled())
+	require.False(t, isBEpusdtWebhookEnabled())
+
+	setting.BEpusdtApiToken = "secret-token"
+	require.True(t, isBEpusdtTopUpEnabled())
+	require.True(t, isBEpusdtWebhookEnabled())
+
+	// Removing BEpusdt entries from General PayMethods disables new top-ups while keeping webhook active for in-flight orders.
+	operation_setting.PayMethods = nil
+	require.False(t, isBEpusdtTopUpEnabled())
+	require.True(t, isBEpusdtWebhookEnabled())
+
+	setting.BEpusdtEnabled = false
+	require.False(t, isBEpusdtWebhookEnabled())
+}
+
 func TestEpayCallbacksVerifyBeforeSettlement(t *testing.T) {
 	confirmPaymentComplianceForTest(t)
 	originalPayAddress := operation_setting.PayAddress

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
@@ -44,9 +44,16 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  BEPUSDT_CASHIER_TRADE_TYPE,
+  BEPUSDT_PAYMENT_METHOD_PREFIX,
+  formatBEpusdtPaymentType,
+} from '@/features/wallet/constants'
+import { isBEpusdtPayment } from '@/features/wallet/lib/payment'
 import { getPaymentIcon } from '@/features/wallet/lib/ui'
 import { isHttpsUrl } from '@/lib/content-format'
 
+import type { BEpusdtPayMethodConfig } from './bepusdt-settings-section'
 import type { JingSoftChannel } from './jingsoft-schema'
 
 const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
@@ -59,6 +66,10 @@ const createPaymentMethodDialogSchema = (t: (key: string) => string) =>
         .refine(
           (value) => !value.trim().toLowerCase().startsWith('jingsoft'),
           t('JingSoft payment identifiers must use the verified channel list')
+        )
+        .refine(
+          (value) => !value.trim().toLowerCase().startsWith('bepusdt'),
+          t('BEpusdt payment identifiers must be selected from BEpusdt channels')
         ),
       channel_id: z.string(),
       icon: z.string().optional(),
@@ -115,7 +126,9 @@ type PaymentTypeOption = {
   label: string
   name: string
   value: string
+  selectValue?: string
   channelID?: string
+  minTopUp?: string
 }
 
 type PaymentMethodDialogProps = {
@@ -124,10 +137,13 @@ type PaymentMethodDialogProps = {
   onSave: (data: PaymentMethodData) => void
   editData?: PaymentMethodData | null
   jingSoftChannels?: JingSoftChannel[]
+  bepusdtPayMethods?: BEpusdtPayMethodConfig[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
   alipay: 'SiAlipay',
+  bepusdt: 'LuCoins',
+  bepusdt_cashier: 'LuCoins',
   jingsoft: 'SiAlipay',
   jingsoft_alipay: 'SiAlipay',
   jingsoft_wxpay: 'SiWechat',
@@ -136,14 +152,24 @@ const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
   wxpay: 'SiWechat',
 }
 
-const getDefaultIconName = (type: string) => PAYMENT_TYPE_ICON_NAMES[type] ?? ''
+const getDefaultIconName = (type: string) => {
+  if (PAYMENT_TYPE_ICON_NAMES[type]) return PAYMENT_TYPE_ICON_NAMES[type]
+  if (type.toLowerCase().startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)) {
+    return 'SiTether'
+  }
+  return ''
+}
+
+const EMPTY_JINGSOFT_CHANNELS: JingSoftChannel[] = []
+const EMPTY_BEPUSDT_PAY_METHODS: BEpusdtPayMethodConfig[] = []
 
 export function PaymentMethodDialog({
   open,
   onOpenChange,
   onSave,
   editData,
-  jingSoftChannels = [],
+  jingSoftChannels = EMPTY_JINGSOFT_CHANNELS,
+  bepusdtPayMethods = EMPTY_BEPUSDT_PAY_METHODS,
 }: PaymentMethodDialogProps) {
   const { t } = useTranslation()
   const isEditMode = !!editData
@@ -171,6 +197,64 @@ export function PaymentMethodDialog({
       }),
     [jingSoftChannels, t]
   )
+  const bepusdtOptions = useMemo<PaymentTypeOption[]>(() => {
+    const options: PaymentTypeOption[] = []
+    if (bepusdtPayMethods.length > 0) {
+      const counts = new Map<string, number>()
+      for (const method of bepusdtPayMethods) {
+        const paymentType = formatBEpusdtPaymentType(method.trade_type)
+        counts.set(paymentType, (counts.get(paymentType) ?? 0) + 1)
+      }
+      bepusdtPayMethods.forEach((method, index) => {
+        const paymentType = formatBEpusdtPaymentType(method.trade_type)
+        const isDuplicate = (counts.get(paymentType) ?? 0) > 1
+        const isCashier =
+          !method.trade_type.trim() ||
+          method.trade_type.trim() === BEPUSDT_CASHIER_TRADE_TYPE
+        options.push({
+          iconName: method.icon || (isCashier ? 'LuCoins' : 'SiTether'),
+          label: `${method.name} (BEpusdt: ${paymentType})`,
+          name: method.name,
+          value: paymentType,
+          selectValue: isDuplicate ? `${paymentType}#${index}` : paymentType,
+          channelID: String(index),
+          minTopUp: method.min_topup ? String(method.min_topup) : undefined,
+        })
+      })
+    } else {
+      const cashierType = formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE)
+      options.push({
+        iconName: 'LuCoins',
+        label: `${t('BEpusdt Unified Cashier')} (BEpusdt: ${cashierType})`,
+        name: t('BEpusdt Unified Cashier'),
+        value: cashierType,
+        selectValue: cashierType,
+      })
+    }
+
+    if (
+      editData?.type &&
+      editData.type.toLowerCase().startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)
+    ) {
+      const hasMatch = options.some(
+        (option) =>
+          option.value === editData.type &&
+          (!editData.channel_id || option.channelID === editData.channel_id)
+      )
+      if (!hasMatch) {
+        options.push({
+          iconName: editData.icon || getDefaultIconName(editData.type),
+          label: `${editData.name || editData.type} (BEpusdt: ${editData.type})`,
+          name: editData.name || editData.type,
+          value: editData.type,
+          selectValue: editData.type,
+          channelID: editData.channel_id,
+        })
+      }
+    }
+
+    return options
+  }, [bepusdtPayMethods, editData, t])
   const paymentTypeOptions = useMemo<PaymentTypeOption[]>(
     () => [
       {
@@ -198,6 +282,7 @@ export function PaymentMethodDialog({
         value: 'waffo_pancake',
       },
       ...jingSoftOptions,
+      ...bepusdtOptions,
       {
         iconName: 'LuCreditCard',
         label: t('Custom Epay payment identifier'),
@@ -205,10 +290,12 @@ export function PaymentMethodDialog({
         value: '__custom_epay__',
       },
     ],
-    [jingSoftOptions, t]
+    [bepusdtOptions, jingSoftOptions, t]
   )
-  const getPaymentTypeOption = (value: string) =>
-    paymentTypeOptions.find((option) => option.value === value)
+  const getPaymentTypeOption = (selectKey: string) =>
+    paymentTypeOptions.find(
+      (option) => (option.selectValue ?? option.value) === selectKey
+    )
   const form = useForm<PaymentMethodDialogFormValues>({
     resolver: zodResolver(paymentMethodDialogSchema),
     defaultValues: {
@@ -227,11 +314,12 @@ export function PaymentMethodDialog({
   })
 
   const selectedPaymentType = form.watch('type')
+  const selectedPaymentOption = getPaymentTypeOption(selectedPaymentType)
   const customType = form.watch('custom_type')
   const resolvedPaymentType =
     selectedPaymentType === '__custom_epay__'
       ? customType.trim()
-      : selectedPaymentType
+      : (selectedPaymentOption?.value ?? selectedPaymentType)
   const iconValue = form.watch('icon')
   const showTopupNotice = form.watch('show_topup_notice')
   const showTopupLink = form.watch('show_topup_link')
@@ -240,20 +328,43 @@ export function PaymentMethodDialog({
     ? topupLinkImage.trim()
     : ''
 
+  const bepusdtOptionsRef = useRef(bepusdtOptions)
+  bepusdtOptionsRef.current = bepusdtOptions
+
   useEffect(() => {
     if (editData) {
+      const lowerType = editData.type.toLowerCase()
+      const isBEpusdtType = lowerType.startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)
       const knownType =
         ['alipay', 'wxpay', 'stripe', 'waffo_pancake'].includes(
           editData.type
-        ) || editData.type.startsWith('jingsoft_')
+        ) ||
+        editData.type.startsWith('jingsoft_') ||
+        isBEpusdtType
       const legacyJingSoftMethod = editData.type === 'jingsoft'
+      const legacyBEpusdtMethod = lowerType === 'bepusdt'
       let initialType = '__custom_epay__'
-      if (knownType) initialType = editData.type
-      if (legacyJingSoftMethod) initialType = ''
+      if (knownType) {
+        if (isBEpusdtType) {
+          const matchedOption = bepusdtOptionsRef.current.find(
+            (option) =>
+              option.value === editData.type &&
+              (!editData.channel_id || option.channelID === editData.channel_id)
+          )
+          initialType =
+            matchedOption?.selectValue ?? matchedOption?.value ?? editData.type
+        } else {
+          initialType = editData.type
+        }
+      }
+      if (legacyJingSoftMethod || legacyBEpusdtMethod) initialType = ''
       form.reset({
         name: editData.name,
         type: initialType,
-        custom_type: knownType || legacyJingSoftMethod ? '' : editData.type,
+        custom_type:
+          knownType || legacyJingSoftMethod || legacyBEpusdtMethod
+            ? ''
+            : editData.type,
         channel_id: editData.channel_id ?? '',
         icon: editData.icon ?? getDefaultIconName(editData.type),
         min_topup: editData.min_topup ?? '',
@@ -281,17 +392,22 @@ export function PaymentMethodDialog({
   }, [editData, form, open])
 
   const handleSubmit = (values: PaymentMethodDialogFormValues) => {
+    const selectedOption = getPaymentTypeOption(values.type)
     const type =
       values.type === '__custom_epay__'
         ? values.custom_type.trim()
-        : values.type
+        : (selectedOption?.value ?? values.type)
     const data: PaymentMethodData = {
       name: values.name,
       type,
       show_topup_notice: String(values.show_topup_notice),
       show_topup_link: String(values.show_topup_link),
     }
-    if (type.startsWith('jingsoft_') && values.channel_id) {
+    if (
+      (type.startsWith('jingsoft_') ||
+        type.toLowerCase().startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)) &&
+      values.channel_id
+    ) {
       data.channel_id = values.channel_id
     }
     if (editData?.color) {
@@ -303,7 +419,7 @@ export function PaymentMethodDialog({
     if (values.min_topup && values.min_topup.trim() !== '') {
       data.min_topup = values.min_topup
     }
-    if (!type.startsWith('jingsoft')) {
+    if (!type.startsWith('jingsoft') && !isBEpusdtPayment(type)) {
       data.fee_percent = values.fee_percent.trim() || '0'
     }
     if (values.topup_notice_text?.trim()) {
@@ -411,6 +527,16 @@ export function PaymentMethodDialog({
                         shouldDirty: true,
                       })
                     }
+                    const currentMinTopUp = form.getValues('min_topup')?.trim()
+                    if (
+                      nextOption?.minTopUp &&
+                      (!currentMinTopUp ||
+                        currentMinTopUp === previousOption?.minTopUp)
+                    ) {
+                      form.setValue('min_topup', nextOption.minTopUp, {
+                        shouldDirty: true,
+                      })
+                    }
                   }}
                 >
                   <FormControl>
@@ -422,15 +548,18 @@ export function PaymentMethodDialog({
                     alignItemWithTrigger={false}
                     className='w-[min(28rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]'
                   >
-                    {paymentTypeOptions.map((option) => (
-                      <SelectItem
-                        key={option.value}
-                        value={option.value}
-                        className='[&_[data-slot=select-item-text]]:break-words [&_[data-slot=select-item-text]]:whitespace-normal'
-                      >
-                        {option.label}
-                      </SelectItem>
-                    ))}
+                    {paymentTypeOptions.map((option) => {
+                      const itemValue = option.selectValue ?? option.value
+                      return (
+                        <SelectItem
+                          key={itemValue}
+                          value={itemValue}
+                          className='[&_[data-slot=select-item-text]]:break-words [&_[data-slot=select-item-text]]:whitespace-normal'
+                        >
+                          {option.label}
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
                 <FormDescription className='leading-relaxed'>
@@ -513,10 +642,12 @@ export function PaymentMethodDialog({
             )}
           />
 
-          {resolvedPaymentType && !resolvedPaymentType.startsWith('jingsoft') && (
-            <FormField
-              control={form.control}
-              name='fee_percent'
+          {resolvedPaymentType &&
+            !resolvedPaymentType.startsWith('jingsoft') &&
+            !isBEpusdtPayment(resolvedPaymentType) && (
+              <FormField
+                control={form.control}
+                name='fee_percent'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Display fee (%)')}</FormLabel>

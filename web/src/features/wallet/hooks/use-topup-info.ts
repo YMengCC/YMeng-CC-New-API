@@ -29,6 +29,7 @@ import {
   parseTopupLinkImage,
   mergePresetAmounts,
   getMinTopupAmount,
+  isBEpusdtPayment,
 } from '../lib'
 import type {
   TopupInfo,
@@ -36,6 +37,7 @@ import type {
   CreemProduct,
   PaymentMethod,
   WaffoPayMethod,
+  BEpusdtPayMethod,
 } from '../types'
 
 // ============================================================================
@@ -81,6 +83,7 @@ function parsePaymentMethods(
           typeof item.channel_id === 'string' ? item.channel_id : undefined,
         fee_percent:
           !type.startsWith('jingsoft') &&
+          !isBEpusdtPayment(type) &&
           Number.isFinite(feePercent) &&
           feePercent >= 0 &&
           feePercent <= 100
@@ -117,6 +120,25 @@ function parseWaffoPayMethods(data: unknown): WaffoPayMethod[] {
       payMethodName:
         typeof item.payMethodName === 'string' ? item.payMethodName : undefined,
     }))
+    .filter((item) => item.name)
+}
+
+function parseBEpusdtPayMethods(data: unknown): BEpusdtPayMethod[] {
+  return parseJsonArray(data)
+    .filter(
+      (item): item is Record<string, unknown> =>
+        !!item && typeof item === 'object'
+    )
+    .map((item) => {
+      const minTopUp = Number(item.min_topup)
+      return {
+        name: typeof item.name === 'string' ? item.name : '',
+        icon: typeof item.icon === 'string' ? item.icon : undefined,
+        trade_type: typeof item.trade_type === 'string' ? item.trade_type : '',
+        min_topup:
+          Number.isFinite(minTopUp) && minTopUp > 0 ? minTopUp : undefined,
+      }
+    })
     .filter((item) => item.name)
 }
 
@@ -212,6 +234,10 @@ function preloadTopupImages(info: TopupInfo): void {
   for (const method of info.waffo_pay_methods ?? []) {
     preloadTopupImage(method.icon)
   }
+
+  for (const method of info.bepusdt_pay_methods ?? []) {
+    preloadTopupImage(method.icon)
+  }
 }
 
 export function useTopupInfo() {
@@ -241,6 +267,9 @@ export function useTopupInfo() {
         creem_products: parseCreemProducts(response.data.creem_products),
         waffo_pay_methods: parseWaffoPayMethods(
           response.data.waffo_pay_methods
+        ),
+        bepusdt_pay_methods: parseBEpusdtPayMethods(
+          response.data.bepusdt_pay_methods
         ),
       }
 

@@ -92,6 +92,8 @@ export interface PlanPayload {
 export interface SubscriptionPayRequest {
   plan_id: number
   payment_method?: string
+  pay_method_index?: number
+  channel_id?: string
 }
 
 export interface SubscriptionPayResponse {
@@ -102,6 +104,9 @@ export interface SubscriptionPayResponse {
     pay_link?: string
     // Waffo Pancake / Creem hosted checkout URL.
     checkout_url?: string
+    // BEpusdt hosted checkout URL.
+    payment_url?: string
+    trade_id?: string
     // Pancake-only: order metadata + self-service buyer session token,
     // surfaced for future flows (refund / cancel from new-api's own UI).
     session_id?: string

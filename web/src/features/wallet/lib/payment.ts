@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { getServerMessage } from '@/lib/server-error-message'
 
 import {
+  BEPUSDT_PAYMENT_METHOD_PREFIX,
   PAYMENT_TYPES,
   DEFAULT_PRESET_MULTIPLIERS,
   DEFAULT_PAYMENT_TYPE,
@@ -111,17 +112,35 @@ export function isWaffoPancakePayment(paymentType: string): boolean {
   return paymentType === PAYMENT_TYPES.WAFFO_PANCAKE
 }
 
+/**
+ * Check if payment method is BEpusdt (either legacy "bepusdt" or prefixed "bepusdt_*")
+ */
+export function isBEpusdtPayment(paymentType: string): boolean {
+  const normalized = paymentType.trim().toLowerCase()
+  return (
+    normalized === PAYMENT_TYPES.BEPUSDT ||
+    normalized.startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)
+  )
+}
+
 export interface PaymentProcessors {
   regular: (topupAmount: number, paymentType: string) => Promise<boolean>
   waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>
   waffoPancake: (topupAmount: number) => Promise<boolean>
+  bepusdt?: (
+    topupAmount: number,
+    payMethodIndex: number | null,
+    paymentMethod?: string,
+    channelId?: string
+  ) => Promise<boolean>
 }
 
 export async function dispatchSelectedPayment(
   paymentMethod: PaymentMethod,
   topupAmount: number,
   waffoMethodIndex: number | null,
-  processors: PaymentProcessors
+  processors: PaymentProcessors,
+  bepusdtMethodIndex: number | null = null
 ): Promise<boolean> {
   if (isWaffoPayment(paymentMethod.type)) {
     if (waffoMethodIndex === null) {
@@ -132,6 +151,25 @@ export async function dispatchSelectedPayment(
 
   if (isWaffoPancakePayment(paymentMethod.type)) {
     return processors.waffoPancake(topupAmount)
+  }
+
+  if (isBEpusdtPayment(paymentMethod.type)) {
+    const hasPrefixedType = paymentMethod.type
+      .trim()
+      .toLowerCase()
+      .startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)
+    if (
+      !processors.bepusdt ||
+      (bepusdtMethodIndex === null && !hasPrefixedType)
+    ) {
+      return false
+    }
+    return processors.bepusdt(
+      topupAmount,
+      bepusdtMethodIndex,
+      paymentMethod.type,
+      paymentMethod.channel_id
+    )
   }
 
   return processors.regular(topupAmount, paymentMethod.type)
@@ -148,7 +186,10 @@ export function getDefaultPaymentType(topupInfo: TopupInfo | null): string {
   // Return first available payment method or default
   if (topupInfo.pay_methods?.length > 0) {
     const method = topupInfo.pay_methods.find(
-      (item) => !item.type.startsWith('jingsoft')
+      (item) =>
+        !item.type.startsWith('jingsoft') &&
+        item.type.trim().toLowerCase() !== PAYMENT_TYPES.BEPUSDT &&
+        (!isBEpusdtPayment(item.type) || !!topupInfo.enable_bepusdt_topup)
     )
     if (method) return method.type
   }
@@ -198,6 +239,10 @@ export function getMinTopupAmount(topupInfo: TopupInfo | null): number {
 
   if (topupInfo.enable_waffo_pancake_topup) {
     return topupInfo.waffo_pancake_min_topup || DEFAULT_MIN_TOPUP
+  }
+
+  if (topupInfo.enable_bepusdt_topup) {
+    return topupInfo.bepusdt_min_topup || DEFAULT_MIN_TOPUP
   }
 
   return DEFAULT_MIN_TOPUP

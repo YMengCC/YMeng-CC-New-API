@@ -17,14 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
-import { CreditCard, Landmark } from 'lucide-react'
+import { Coins, CreditCard, Landmark } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { IconAlipay, IconWeChat, IconStripe } from '@/assets/brand-icons'
 import { ConfiguredImage } from '@/components/configured-image'
 import { ReactIconByName } from '@/components/react-icon-by-name'
 
-import { PAYMENT_TYPES, PAYMENT_ICON_COLORS } from '../constants'
+import {
+  BEPUSDT_PAYMENT_METHOD_PREFIX,
+  PAYMENT_TYPES,
+  PAYMENT_ICON_COLORS,
+} from '../constants'
 
 // ============================================================================
 // UI Helper Functions
@@ -96,6 +100,18 @@ export function getPaymentIcon(
 
   if (!paymentType) {
     return <CreditCard className={className} />
+  }
+
+  if (
+    paymentType === PAYMENT_TYPES.BEPUSDT ||
+    paymentType.toLowerCase().startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)
+  ) {
+    return (
+      <Coins
+        className={className}
+        style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.BEPUSDT] }}
+      />
+    )
   }
 
   switch (paymentType) {

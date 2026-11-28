@@ -3,6 +3,7 @@ package controller
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
@@ -107,4 +108,40 @@ func isEpayWebhookConfigured() bool {
 
 func isEpayWebhookEnabled() bool {
 	return isEpayTopUpEnabled()
+}
+
+func isBEpusdtConfigured() bool {
+	return strings.TrimSpace(setting.BEpusdtApiUrl) != "" &&
+		strings.TrimSpace(setting.BEpusdtApiToken) != ""
+}
+
+func hasBEpusdtPayMethodInGeneral() bool {
+	for _, method := range operation_setting.PayMethods {
+		methodType := strings.ToLower(strings.TrimSpace(method["type"]))
+		if strings.HasPrefix(methodType, constant.BEpusdtPaymentMethodPrefix) &&
+			len(methodType) > len(constant.BEpusdtPaymentMethodPrefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBEpusdtTopUpEnabled() bool {
+	if !isPaymentComplianceConfirmed() {
+		return false
+	}
+	if !setting.BEpusdtEnabled {
+		return false
+	}
+	return isBEpusdtConfigured() && hasBEpusdtPayMethodInGeneral()
+}
+
+func isBEpusdtWebhookEnabled() bool {
+	if !isPaymentComplianceConfirmed() {
+		return false
+	}
+	if !setting.BEpusdtEnabled {
+		return false
+	}
+	return isBEpusdtConfigured()
 }

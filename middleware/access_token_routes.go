@@ -99,6 +99,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/user/waffo/pay":                           accessTokenScopeRule("wallet:write"),
 	"POST /api/user/waffo-pancake/amount":                accessTokenScopeRule("wallet:read"),
 	"POST /api/user/waffo-pancake/pay":                   accessTokenScopeRule("wallet:write"),
+	"POST /api/user/bepusdt/amount":                      accessTokenScopeRule("wallet:read"),
+	"POST /api/user/bepusdt/pay":                         accessTokenScopeRule("wallet:write"),
 	"POST /api/user/jingsoft/quote":                      accessTokenScopeRule("wallet:read"),
 	"POST /api/user/jingsoft/pay":                        accessTokenScopeRule("wallet:write"),
 	"GET /api/user/jingsoft/orders/:trade_no":            accessTokenScopeRule("wallet:read"),
@@ -187,6 +189,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/subscription/stripe/pay":                              accessTokenScopeRule("wallet:write"),
 	"POST /api/subscription/creem/pay":                               accessTokenScopeRule("wallet:write"),
 	"POST /api/subscription/waffo-pancake/pay":                       accessTokenScopeRule("wallet:write"),
+	"POST /api/subscription/bepusdt/pay":                             accessTokenScopeRule("wallet:write"),
 	"GET /api/subscription/admin/plans":                              accessTokenScopeRule("billing:read"),
 	"POST /api/subscription/admin/plans":                             accessTokenScopeRule("billing:write"),
 	"PUT /api/subscription/admin/plans/:id":                          accessTokenScopeRule("billing:write"),
@@ -215,6 +218,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/option/jingsoft/merchant-token/check":             accessTokenScopeRule("option:write"),
 	"POST /api/option/jingsoft/compatibility/check":              accessTokenScopeRule("option:write"),
 	"POST /api/option/jingsoft/products/discover":                accessTokenScopeRule("option:write"),
+	"POST /api/option/jingsoft/slots/discover":                   accessTokenScopeRule("option:write"),
 	"POST /api/option/upstream_cost/feishu_test":                 accessTokenScopeRule("option:write"),
 	"POST /api/option/payment_compliance":                        accessTokenSessionRule,
 	"GET /api/option/channel_affinity_cache":                     accessTokenScopeRule("option:read"),
@@ -225,6 +229,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/option/waffo-pancake/save":                        accessTokenScopeRule("option:write"),
 	"POST /api/option/waffo-pancake/subscription-product":        accessTokenScopeRule("option:write"),
 	"GET /api/option/waffo-pancake/subscription-product-options": accessTokenScopeRule("option:read"),
+	"POST /api/option/bepusdt/test":                              accessTokenScopeRule("option:write"),
 
 	// router/api-router.go: /api/custom-oauth-provider, /api/ratio_sync
 	"POST /api/custom-oauth-provider/discovery": accessTokenScopeRule("option:write"),

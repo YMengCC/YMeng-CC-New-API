@@ -27,6 +27,7 @@ import {
   calculateStripeAmount,
   calculateWaffoAmount,
   calculateWaffoPancakeAmount,
+  calculateBEpusdtAmount,
   requestPayment,
   requestStripePayment,
   isApiSuccess,
@@ -35,6 +36,7 @@ import {
   isStripePayment,
   isWaffoPayment,
   isWaffoPancakePayment,
+  isBEpusdtPayment,
   submitPaymentForm,
 } from '../lib'
 import type { AmountRequest, AmountResponse } from '../types'
@@ -50,6 +52,7 @@ export interface PaymentAmountCalculators {
   stripe: AmountCalculator
   waffo: AmountCalculator
   waffoPancake: AmountCalculator
+  bepusdt?: AmountCalculator
 }
 
 const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
@@ -57,23 +60,36 @@ const defaultPaymentAmountCalculators: PaymentAmountCalculators = {
   stripe: calculateStripeAmount,
   waffo: calculateWaffoAmount,
   waffoPancake: calculateWaffoPancakeAmount,
+  bepusdt: calculateBEpusdtAmount,
 }
 
 export async function requestPaymentAmount(
   topupAmount: number,
   paymentType: string,
-  calculators: PaymentAmountCalculators = defaultPaymentAmountCalculators
+  calculators: PaymentAmountCalculators = defaultPaymentAmountCalculators,
+  payMethodIndex?: number | null,
+  channelId?: string
 ): Promise<number> {
   let calculator = calculators.regular
+  const request: AmountRequest = { amount: topupAmount }
   if (isStripePayment(paymentType)) {
     calculator = calculators.stripe
   } else if (isWaffoPayment(paymentType)) {
     calculator = calculators.waffo
   } else if (isWaffoPancakePayment(paymentType)) {
     calculator = calculators.waffoPancake
+  } else if (isBEpusdtPayment(paymentType)) {
+    calculator = calculators.bepusdt ?? calculateBEpusdtAmount
+    request.payment_method = paymentType
+    if (payMethodIndex !== undefined && payMethodIndex !== null) {
+      request.pay_method_index = payMethodIndex
+    }
+    if (channelId) {
+      request.channel_id = channelId
+    }
   }
 
-  const response = await calculator({ amount: topupAmount })
+  const response = await calculator(request)
   if (!isApiSuccess(response) || !response.data) {
     return 0
   }
@@ -88,12 +104,20 @@ export function usePayment() {
 
   // Calculate payment amount
   const calculatePaymentAmount = useCallback(
-    async (topupAmount: number, paymentType: string) => {
+    async (
+      topupAmount: number,
+      paymentType: string,
+      payMethodIndex?: number | null,
+      channelId?: string
+    ) => {
       try {
         setCalculating(true)
         const calculatedAmount = await requestPaymentAmount(
           topupAmount,
-          paymentType
+          paymentType,
+          defaultPaymentAmountCalculators,
+          payMethodIndex,
+          channelId
         )
         setAmount(calculatedAmount)
         return calculatedAmount

@@ -45,6 +45,9 @@ export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
 export type WaffoPaymentResponse = ApiResponse<
   { payment_url?: string } | string
 >
+export type BEpusdtPaymentResponse = ApiResponse<
+  { payment_url?: string; order_id?: string; trade_id?: string } | string
+>
 export type WaffoPancakePaymentResponse = ApiResponse<
   | {
       checkout_url?: string
@@ -126,6 +129,22 @@ export interface WaffoPayMethod {
   payMethodType?: string
   /** Waffo pay method name */
   payMethodName?: string
+}
+
+/**
+ * BEpusdt public payment method configuration
+ */
+export interface BEpusdtPayMethod {
+  /** Display name of payment method */
+  name: string
+  /** Optional react-icons component name or HTTPS icon URL */
+  icon?: string
+  /** BEpusdt trade type or "cashier" */
+  trade_type: string
+  /** Optional per-method minimum top-up amount */
+  min_topup?: number
+  /** Optional channel index bound in General PayMethods */
+  channel_id?: string
 }
 
 /**
@@ -242,6 +261,14 @@ export interface TopupInfo {
   enable_waffo_pancake_topup?: boolean
   /** Minimum topup amount for Waffo Pancake */
   waffo_pancake_min_topup?: number
+  /** Whether BEpusdt topup is enabled */
+  enable_bepusdt_topup?: boolean
+  /** Available BEpusdt payment methods */
+  bepusdt_pay_methods?: BEpusdtPayMethod[]
+  /** Minimum topup amount for BEpusdt */
+  bepusdt_min_topup?: number
+  /** Configured fiat currency for BEpusdt */
+  bepusdt_fiat?: string
   /** Whether redemption code usage is enabled */
   enable_redemption?: boolean
   /** Whether compliance confirmation has been completed */
@@ -297,11 +324,31 @@ export interface WaffoPancakePaymentRequest {
 }
 
 /**
+ * BEpusdt payment request parameters
+ */
+export interface BEpusdtPaymentRequest {
+  /** Topup amount */
+  amount: number
+  /** Server-side BEpusdt payment method index */
+  pay_method_index?: number
+  /** Prefixed BEpusdt payment identifier (e.g. "bepusdt_usdt.trc20" or "bepusdt_cashier") */
+  payment_method?: string
+  /** Optional channel index bound in General PayMethods */
+  channel_id?: string
+}
+
+/**
  * Amount calculation request
  */
 export interface AmountRequest {
   /** Topup amount to calculate */
   amount: number
+  /** Optional server-side payment method index (used by BEpusdt) */
+  pay_method_index?: number
+  /** Optional prefixed BEpusdt payment identifier */
+  payment_method?: string
+  /** Optional channel index bound in General PayMethods */
+  channel_id?: string
 }
 
 /**

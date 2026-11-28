@@ -49,6 +49,7 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { BEPUSDT_CASHIER_TRADE_TYPE } from '@/features/wallet/constants'
 import { getPaymentErrorTranslation } from '@/features/wallet/lib/payment'
 import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -69,6 +70,12 @@ import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
+import {
+  BEpusdtSettingsSection,
+  type BEpusdtFieldValues,
+  type BEpusdtPayMethodConfig,
+  type BEpusdtSettingsValues,
+} from './bepusdt-settings-section'
 import { CreemProductsVisualEditor } from './creem-products-visual-editor'
 import {
   DEFAULT_JINGSOFT_MODE,
@@ -239,14 +246,83 @@ const paymentSchema = z.object({
   WaffoPancakeMerchantID: z.string(),
   WaffoPancakePrivateKey: z.string(),
   WaffoPancakeReturnURL: z.string(),
+  BEpusdtEnabled: z.boolean(),
+  BEpusdtApiUrl: z.string().refine((value) => {
+    const trimmed = value.trim()
+    if (!trimmed) return true
+    return /^https?:\/\//.test(trimmed)
+  }, 'Provide a valid callback URL starting with http:// or https://'),
+  BEpusdtApiToken: z.string(),
+  BEpusdtFiat: z.string(),
+  BEpusdtUnitPrice: z.coerce.number().min(0),
+  BEpusdtMinTopUp: z.coerce.number().int().min(1),
+  BEpusdtTimeout: z.coerce
+    .number()
+    .int()
+    .refine(
+      (value) => value === 0 || value >= 180,
+      'BEpusdt order timeout must be 0 or at least 180 seconds'
+    ),
+  BEpusdtRate: z.string(),
+  BEpusdtNotifyUrl: z.string(),
+  BEpusdtReturnUrl: z.string(),
 })
 
 type PaymentFormValues = z.infer<typeof paymentSchema>
 type WaffoFormFieldValues = Omit<WaffoSettingsValues, 'WaffoPayMethods'>
 type PaymentBaseFormValues = Omit<
   PaymentFormValues,
-  keyof WaffoFormFieldValues | keyof WaffoPancakeSettingsValues
+  | keyof WaffoFormFieldValues
+  | keyof WaffoPancakeSettingsValues
+  | keyof BEpusdtFieldValues
 >
+
+const defaultBEpusdtValues: BEpusdtSettingsValues = {
+  BEpusdtEnabled: false,
+  BEpusdtApiUrl: '',
+  BEpusdtApiToken: '',
+  BEpusdtFiat: 'CNY',
+  BEpusdtUnitPrice: 0,
+  BEpusdtMinTopUp: 1,
+  BEpusdtTimeout: 1200,
+  BEpusdtRate: '',
+  BEpusdtNotifyUrl: '',
+  BEpusdtReturnUrl: '',
+  BEpusdtPayMethods: '[]',
+}
+
+function parseBEpusdtPayMethods(value: string): BEpusdtPayMethodConfig[] {
+  try {
+    const parsed = JSON.parse(value || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (item): item is Record<string, unknown> =>
+          !!item && typeof item === 'object'
+      )
+      .map((item) => {
+        const minTopUp = Number(item.min_topup)
+        const rawTradeType =
+          typeof item.trade_type === 'string' ? item.trade_type.trim() : ''
+        return {
+          name: typeof item.name === 'string' ? item.name : '',
+          icon: typeof item.icon === 'string' ? item.icon : undefined,
+          trade_type: rawTradeType || BEPUSDT_CASHIER_TRADE_TYPE,
+          address: typeof item.address === 'string' ? item.address : undefined,
+          currencies:
+            typeof item.currencies === 'string' ? item.currencies : undefined,
+          rate: typeof item.rate === 'string' ? item.rate : undefined,
+          min_topup:
+            Number.isFinite(minTopUp) && minTopUp > 0
+              ? Math.floor(minTopUp)
+              : undefined,
+        }
+      })
+      .filter((item) => item.name.trim() !== '')
+  } catch {
+    return []
+  }
+}
 
 const CURRENT_COMPLIANCE_TERMS_VERSION = 'v1'
 const paymentTabContentClassName = 'mt-6 min-w-0'
@@ -290,6 +366,8 @@ type PaymentSettingsSectionProps = {
   waffoPancakeDefaultValues: WaffoPancakeSettingsValues
   waffoPancakeProvisionedStoreID?: string
   waffoPancakeProvisionedProductID?: string
+  bepusdtDefaultValues?: BEpusdtSettingsValues
+  bepusdtTokenConfigured?: boolean
   complianceDefaults: PaymentComplianceDefaults
 }
 
@@ -309,11 +387,14 @@ export function PaymentSettingsSection({
   waffoPancakeDefaultValues,
   waffoPancakeProvisionedStoreID,
   waffoPancakeProvisionedProductID,
+  bepusdtDefaultValues,
+  bepusdtTokenConfigured = false,
   complianceDefaults,
 }: PaymentSettingsSectionProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const updateOption = useUpdateOption()
+  const resolvedBEpusdtDefaults = bepusdtDefaultValues ?? defaultBEpusdtValues
   const initialFormValues = React.useMemo<PaymentFormValues>(
     () => ({
       ...defaultValues,
@@ -328,8 +409,23 @@ export function PaymentSettingsSection({
         defaultValues.JingSoftMaxOrdersPerMinute ?? 15,
       ...waffoDefaultValues,
       ...waffoPancakeDefaultValues,
+      BEpusdtEnabled: resolvedBEpusdtDefaults.BEpusdtEnabled,
+      BEpusdtApiUrl: resolvedBEpusdtDefaults.BEpusdtApiUrl,
+      BEpusdtApiToken: resolvedBEpusdtDefaults.BEpusdtApiToken,
+      BEpusdtFiat: resolvedBEpusdtDefaults.BEpusdtFiat || 'CNY',
+      BEpusdtUnitPrice: resolvedBEpusdtDefaults.BEpusdtUnitPrice,
+      BEpusdtMinTopUp: resolvedBEpusdtDefaults.BEpusdtMinTopUp,
+      BEpusdtTimeout: resolvedBEpusdtDefaults.BEpusdtTimeout,
+      BEpusdtRate: resolvedBEpusdtDefaults.BEpusdtRate,
+      BEpusdtNotifyUrl: resolvedBEpusdtDefaults.BEpusdtNotifyUrl,
+      BEpusdtReturnUrl: resolvedBEpusdtDefaults.BEpusdtReturnUrl,
     }),
-    [defaultValues, waffoDefaultValues, waffoPancakeDefaultValues]
+    [
+      defaultValues,
+      waffoDefaultValues,
+      waffoPancakeDefaultValues,
+      resolvedBEpusdtDefaults,
+    ]
   )
   const initialRef = React.useRef(initialFormValues)
   const defaultsSignature = React.useMemo(
@@ -348,6 +444,9 @@ export function PaymentSettingsSection({
   const [waffoPayMethods, setWaffoPayMethods] = React.useState<PayMethod[]>(
     () => parseWaffoPayMethods(waffoDefaultValues.WaffoPayMethods)
   )
+  const [bepusdtPayMethods, setBEpusdtPayMethods] = React.useState<
+    BEpusdtPayMethodConfig[]
+  >(() => parseBEpusdtPayMethods(resolvedBEpusdtDefaults.BEpusdtPayMethods))
   const [waffoPancakeSelection, setWaffoPancakeSelection] =
     React.useState<WaffoPancakeBinding>({
       storeID: waffoPancakeProvisionedStoreID ?? '',
@@ -367,6 +466,12 @@ export function PaymentSettingsSection({
   React.useEffect(() => {
     setWaffoPayMethods(parseWaffoPayMethods(waffoDefaultValues.WaffoPayMethods))
   }, [waffoDefaultValues.WaffoPayMethods])
+
+  React.useEffect(() => {
+    setBEpusdtPayMethods(
+      parseBEpusdtPayMethods(resolvedBEpusdtDefaults.BEpusdtPayMethods)
+    )
+  }, [resolvedBEpusdtDefaults.BEpusdtPayMethods])
 
   React.useEffect(() => {
     setJingSoftChannels(
@@ -543,6 +648,19 @@ export function PaymentSettingsSection({
     [setPaymentValue]
   )
 
+  const setBEpusdtValue = React.useCallback(
+    <K extends keyof BEpusdtFieldValues>(
+      key: K,
+      value: BEpusdtFieldValues[K]
+    ) => {
+      setPaymentValue(
+        key as keyof PaymentFormValues,
+        value as PaymentFormValues[keyof PaymentFormValues]
+      )
+    },
+    [setPaymentValue]
+  )
+
   React.useEffect(() => {
     const parsedDefaults = JSON.parse(defaultsSignature) as PaymentFormValues
     initialRef.current = parsedDefaults
@@ -610,6 +728,17 @@ export function PaymentSettingsSection({
       WaffoPancakeReturnURL: removeTrailingSlash(
         values.WaffoPancakeReturnURL.trim()
       ),
+      BEpusdtEnabled: values.BEpusdtEnabled,
+      BEpusdtApiUrl: removeTrailingSlash(values.BEpusdtApiUrl.trim()),
+      BEpusdtApiToken: values.BEpusdtApiToken.trim(),
+      BEpusdtFiat: values.BEpusdtFiat.trim() || 'CNY',
+      BEpusdtUnitPrice: values.BEpusdtUnitPrice,
+      BEpusdtMinTopUp: values.BEpusdtMinTopUp,
+      BEpusdtTimeout: values.BEpusdtTimeout,
+      BEpusdtRate: values.BEpusdtRate.trim(),
+      BEpusdtNotifyUrl: values.BEpusdtNotifyUrl.trim(),
+      BEpusdtReturnUrl: values.BEpusdtReturnUrl.trim(),
+      BEpusdtPayMethods: JSON.stringify(bepusdtPayMethods),
     }
 
     const initial = {
@@ -670,6 +799,21 @@ export function PaymentSettingsSection({
       WaffoPancakePrivateKey: initialRef.current.WaffoPancakePrivateKey.trim(),
       WaffoPancakeReturnURL: removeTrailingSlash(
         initialRef.current.WaffoPancakeReturnURL.trim()
+      ),
+      BEpusdtEnabled: initialRef.current.BEpusdtEnabled,
+      BEpusdtApiUrl: removeTrailingSlash(
+        initialRef.current.BEpusdtApiUrl.trim()
+      ),
+      BEpusdtApiToken: initialRef.current.BEpusdtApiToken.trim(),
+      BEpusdtFiat: initialRef.current.BEpusdtFiat.trim() || 'CNY',
+      BEpusdtUnitPrice: initialRef.current.BEpusdtUnitPrice,
+      BEpusdtMinTopUp: initialRef.current.BEpusdtMinTopUp,
+      BEpusdtTimeout: initialRef.current.BEpusdtTimeout,
+      BEpusdtRate: initialRef.current.BEpusdtRate.trim(),
+      BEpusdtNotifyUrl: initialRef.current.BEpusdtNotifyUrl.trim(),
+      BEpusdtReturnUrl: initialRef.current.BEpusdtReturnUrl.trim(),
+      BEpusdtPayMethods: JSON.stringify(
+        parseBEpusdtPayMethods(resolvedBEpusdtDefaults.BEpusdtPayMethods)
       ),
     }
 
@@ -866,6 +1010,61 @@ export function PaymentSettingsSection({
       normalizeJsonForComparison(initial.WaffoPayMethods)
     ) {
       updates.push({ key: 'WaffoPayMethods', value: sanitized.WaffoPayMethods })
+    }
+
+    if (sanitized.BEpusdtApiUrl !== initial.BEpusdtApiUrl) {
+      updates.push({ key: 'BEpusdtApiUrl', value: sanitized.BEpusdtApiUrl })
+    }
+    if (sanitized.BEpusdtApiToken) {
+      updates.push({
+        key: 'BEpusdtApiToken',
+        value: sanitized.BEpusdtApiToken,
+      })
+    }
+    if (sanitized.BEpusdtFiat !== initial.BEpusdtFiat) {
+      updates.push({ key: 'BEpusdtFiat', value: sanitized.BEpusdtFiat })
+    }
+    if (sanitized.BEpusdtUnitPrice !== initial.BEpusdtUnitPrice) {
+      updates.push({
+        key: 'BEpusdtUnitPrice',
+        value: sanitized.BEpusdtUnitPrice,
+      })
+    }
+    if (sanitized.BEpusdtMinTopUp !== initial.BEpusdtMinTopUp) {
+      updates.push({
+        key: 'BEpusdtMinTopUp',
+        value: sanitized.BEpusdtMinTopUp,
+      })
+    }
+    if (sanitized.BEpusdtTimeout !== initial.BEpusdtTimeout) {
+      updates.push({ key: 'BEpusdtTimeout', value: sanitized.BEpusdtTimeout })
+    }
+    if (sanitized.BEpusdtRate !== initial.BEpusdtRate) {
+      updates.push({ key: 'BEpusdtRate', value: sanitized.BEpusdtRate })
+    }
+    if (sanitized.BEpusdtNotifyUrl !== initial.BEpusdtNotifyUrl) {
+      updates.push({
+        key: 'BEpusdtNotifyUrl',
+        value: sanitized.BEpusdtNotifyUrl,
+      })
+    }
+    if (sanitized.BEpusdtReturnUrl !== initial.BEpusdtReturnUrl) {
+      updates.push({
+        key: 'BEpusdtReturnUrl',
+        value: sanitized.BEpusdtReturnUrl,
+      })
+    }
+    if (
+      normalizeJsonForComparison(sanitized.BEpusdtPayMethods) !==
+      normalizeJsonForComparison(initial.BEpusdtPayMethods)
+    ) {
+      updates.push({
+        key: 'BEpusdtPayMethods',
+        value: sanitized.BEpusdtPayMethods,
+      })
+    }
+    if (sanitized.BEpusdtEnabled !== initial.BEpusdtEnabled) {
+      updates.push({ key: 'BEpusdtEnabled', value: sanitized.BEpusdtEnabled })
     }
 
     if (sanitized.JingSoftBaseURL !== initial.JingSoftBaseURL) {
@@ -1126,6 +1325,19 @@ export function PaymentSettingsSection({
     WaffoPancakePrivateKey: currentFormValues.WaffoPancakePrivateKey,
     WaffoPancakeReturnURL: currentFormValues.WaffoPancakeReturnURL,
   }
+  const bepusdtValues: BEpusdtSettingsValues = {
+    BEpusdtEnabled: currentFormValues.BEpusdtEnabled,
+    BEpusdtApiUrl: currentFormValues.BEpusdtApiUrl,
+    BEpusdtApiToken: currentFormValues.BEpusdtApiToken,
+    BEpusdtFiat: currentFormValues.BEpusdtFiat,
+    BEpusdtUnitPrice: currentFormValues.BEpusdtUnitPrice,
+    BEpusdtMinTopUp: currentFormValues.BEpusdtMinTopUp,
+    BEpusdtTimeout: currentFormValues.BEpusdtTimeout,
+    BEpusdtRate: currentFormValues.BEpusdtRate,
+    BEpusdtNotifyUrl: currentFormValues.BEpusdtNotifyUrl,
+    BEpusdtReturnUrl: currentFormValues.BEpusdtReturnUrl,
+    BEpusdtPayMethods: JSON.stringify(bepusdtPayMethods),
+  }
 
   const currentJingSoftEnabled = currentFormValues.JingSoftEnabled
   const currentJingSoftMode = normalizeJingSoftMode(
@@ -1235,6 +1447,7 @@ export function PaymentSettingsSection({
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='jingsoft'>{t('JingSoft Pro')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
+                <TabsTrigger value='bepusdt'>BEpusdt</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -1468,6 +1681,7 @@ export function PaymentSettingsSection({
                               value={field.value}
                               onChange={field.onChange}
                               jingSoftChannels={jingSoftChannels}
+                              bepusdtPayMethods={bepusdtPayMethods}
                             />
                           ) : (
                             <JsonCodeEditor
@@ -1719,6 +1933,21 @@ export function PaymentSettingsSection({
                   />
                 </div>
               </SettingsCard>
+            </TabsContent>
+
+            <TabsContent value='bepusdt' className={paymentTabContentClassName}>
+              <BEpusdtSettingsSection
+                values={bepusdtValues}
+                tokenConfigured={bepusdtTokenConfigured}
+                complianceConfirmed={
+                  complianceConfirmed && activeTab === 'bepusdt'
+                }
+                callbackOrigin={currentFormValues.CustomCallbackAddress}
+                onValueChange={setBEpusdtValue}
+                payMethods={bepusdtPayMethods}
+                onPayMethodsChange={setBEpusdtPayMethods}
+                onNavigateToGeneral={() => setActiveTab('general')}
+              />
             </TabsContent>
 
             <TabsContent value='stripe' className={paymentTabContentClassName}>

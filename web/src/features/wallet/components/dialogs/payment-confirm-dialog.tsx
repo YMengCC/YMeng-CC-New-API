@@ -35,6 +35,7 @@ import {
   getPaymentIcon,
   getTopupPromptContent,
   getTopupPromptVisibility,
+  isBEpusdtPayment,
 } from '../../lib'
 import type { JingSoftQuote, PaymentMethod } from '../../types'
 import { JingSoftFeeNote } from '../jingsoft-fee-note'
@@ -86,8 +87,10 @@ export function PaymentConfirmDialog({
     !isValidJingSoftQQ(jingSoft.qq)
   const hasDiscount =
     !jingSoft && discountRate > 0 && discountRate < 1 && paymentAmount > 0
+  const isBEpusdt = !!paymentMethod && isBEpusdtPayment(paymentMethod.type)
   const displayFeePercent =
     !jingSoft &&
+    !isBEpusdt &&
     Number.isFinite(paymentFeePercent) &&
     paymentFeePercent > 0 &&
     paymentFeePercent <= 100

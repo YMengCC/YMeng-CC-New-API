@@ -87,7 +87,7 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
-		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" || k == "JingSoftModes" {
+		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" || k == "BEpusdtApiTokenConfigured" || k == "JingSoftModes" {
 			continue
 		}
 		value := common.Interface2String(v)
@@ -112,6 +112,9 @@ func GetOptions(c *gin.Context) {
 	}
 	options = append(options, &model.Option{
 		Key: "ResendKeyConfigured", Value: strconv.FormatBool(strings.TrimSpace(common.OptionMap["ResendApiKey"]) != ""),
+	})
+	options = append(options, &model.Option{
+		Key: "BEpusdtApiTokenConfigured", Value: strconv.FormatBool(strings.TrimSpace(common.OptionMap["BEpusdtApiToken"]) != ""),
 	})
 	common.OptionMapRWMutex.Unlock()
 	// Display the same effective expressions used by pricing and settlement,
@@ -303,6 +306,27 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorT(c, "Payment, redemption, subscription, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them.")
 			return
 		}
+	}
+	if strings.HasPrefix(option.Key, "BEpusdt") {
+		if option.Key == "BEpusdtApiTokenConfigured" {
+			common.ApiSuccess(c, nil)
+			return
+		}
+		value := option.Value.(string)
+		if option.Key == "BEpusdtApiToken" && strings.TrimSpace(value) == "" {
+			common.ApiSuccess(c, nil)
+			return
+		}
+		normalized, validateErr := setting.ValidateBEpusdtOption(option.Key, value)
+		if validateErr != nil {
+			common.ApiError(c, validateErr)
+			return
+		}
+		if option.Key == "BEpusdtEnabled" && normalized == "true" && !operation_setting.IsPaymentComplianceConfirmed() {
+			common.ApiErrorT(c, "Payment, redemption, subscription, and invitation reward features are disabled. The administrator must confirm compliance terms before enabling them.")
+			return
+		}
+		option.Value = normalized
 	}
 	if option.Key == "TaskPublicAddress" && option.Value.(string) != "" {
 		if err := service.ValidateTaskArtifactBaseURL(option.Value.(string)); err != nil {

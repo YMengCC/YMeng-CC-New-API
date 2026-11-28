@@ -129,6 +129,17 @@ func InitOptionMap() {
 	common.OptionMap["WaffoPancakeMinTopUp"] = strconv.Itoa(setting.WaffoPancakeMinTopUp)
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
 	common.OptionMap["WaffoPancakeProductID"] = setting.WaffoPancakeProductID
+	common.OptionMap["BEpusdtEnabled"] = strconv.FormatBool(setting.BEpusdtEnabled)
+	common.OptionMap["BEpusdtApiUrl"] = setting.BEpusdtApiUrl
+	common.OptionMap["BEpusdtApiToken"] = setting.BEpusdtApiToken
+	common.OptionMap["BEpusdtFiat"] = setting.BEpusdtFiat
+	common.OptionMap["BEpusdtUnitPrice"] = strconv.FormatFloat(setting.BEpusdtUnitPrice, 'f', -1, 64)
+	common.OptionMap["BEpusdtMinTopUp"] = strconv.Itoa(setting.BEpusdtMinTopUp)
+	common.OptionMap["BEpusdtTimeout"] = strconv.Itoa(setting.BEpusdtTimeout)
+	common.OptionMap["BEpusdtRate"] = setting.BEpusdtRate
+	common.OptionMap["BEpusdtNotifyUrl"] = setting.BEpusdtNotifyUrl
+	common.OptionMap["BEpusdtReturnUrl"] = setting.BEpusdtReturnUrl
+	common.OptionMap["BEpusdtPayMethods"] = "[]"
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
 	common.OptionMap["AutoGroups"] = setting.AutoGroups2JsonString()
@@ -618,6 +629,26 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoPancakeUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WaffoPancakeMinTopUp":
 		setting.WaffoPancakeMinTopUp, _ = strconv.Atoi(value)
+	case "BEpusdtEnabled":
+		setting.BEpusdtEnabled = value == "true"
+	case "BEpusdtApiUrl":
+		setting.BEpusdtApiUrl = value
+	case "BEpusdtApiToken":
+		setting.BEpusdtApiToken = value
+	case "BEpusdtFiat":
+		setting.BEpusdtFiat = value
+	case "BEpusdtUnitPrice":
+		setting.BEpusdtUnitPrice, _ = strconv.ParseFloat(value, 64)
+	case "BEpusdtMinTopUp":
+		setting.BEpusdtMinTopUp, _ = strconv.Atoi(value)
+	case "BEpusdtTimeout":
+		setting.BEpusdtTimeout, _ = strconv.Atoi(value)
+	case "BEpusdtRate":
+		setting.BEpusdtRate = value
+	case "BEpusdtNotifyUrl":
+		setting.BEpusdtNotifyUrl = value
+	case "BEpusdtReturnUrl":
+		setting.BEpusdtReturnUrl = value
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":
@@ -725,6 +756,8 @@ func updateOptionMap(key string, value string) (err error) {
 		// WaffoPayMethods is read directly from OptionMap via setting.GetWaffoPayMethods().
 		// The value is already stored in OptionMap at the top of this function (line: common.OptionMap[key] = value).
 		// No additional in-memory variable to update.
+	case "BEpusdtPayMethods":
+		// BEpusdtPayMethods is read directly from OptionMap via setting.GetBEpusdtPayMethods().
 	}
 	return err
 }

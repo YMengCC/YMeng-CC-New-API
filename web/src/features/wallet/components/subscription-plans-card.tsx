@@ -62,7 +62,12 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
-import type { PaymentMethod, TopupInfo } from '../types'
+import {
+  BEPUSDT_CASHIER_TRADE_TYPE,
+  BEPUSDT_PAYMENT_METHOD_PREFIX,
+} from '../constants'
+import { isBEpusdtPayment } from '../lib'
+import type { BEpusdtPayMethod, PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
@@ -77,7 +82,9 @@ function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
       m?.type &&
       m.type !== 'stripe' &&
       m.type !== 'creem' &&
-      !m.type.startsWith('jingsoft')
+      m.type !== 'waffo_pancake' &&
+      !m.type.startsWith('jingsoft') &&
+      !isBEpusdtPayment(m.type)
   )
 }
 
@@ -125,6 +132,50 @@ export function SubscriptionPlansCard({
   const enableStripe = !!topupInfo?.enable_stripe_topup
   const enableCreem = !!topupInfo?.enable_creem_topup
   const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
+  const enableBEpusdt = !!topupInfo?.enable_bepusdt_topup
+  const bepusdtMethods = useMemo<BEpusdtPayMethod[]>(() => {
+    const configuredList = topupInfo?.bepusdt_pay_methods ?? []
+    return (topupInfo?.pay_methods ?? [])
+      .filter((m) => {
+        const lower = m.type.trim().toLowerCase()
+        return (
+          lower.startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX) &&
+          lower.length > BEPUSDT_PAYMENT_METHOD_PREFIX.length
+        )
+      })
+      .map((m) => {
+        const tradeType =
+          m.type.trim().slice(BEPUSDT_PAYMENT_METHOD_PREFIX.length) ||
+          BEPUSDT_CASHIER_TRADE_TYPE
+        let matchedIndex = -1
+        if (m.channel_id !== undefined && m.channel_id !== '') {
+          const parsedIdx = Number.parseInt(m.channel_id, 10)
+          if (
+            Number.isInteger(parsedIdx) &&
+            parsedIdx >= 0 &&
+            parsedIdx < configuredList.length
+          ) {
+            matchedIndex = parsedIdx
+          }
+        }
+        if (matchedIndex === -1) {
+          matchedIndex = configuredList.findIndex(
+            (item) =>
+              (item.trade_type.trim() || BEPUSDT_CASHIER_TRADE_TYPE).toLowerCase() ===
+              tradeType.toLowerCase()
+          )
+        }
+        const matched =
+          matchedIndex >= 0 ? configuredList[matchedIndex] : undefined
+        return {
+          name: m.name || matched?.name || tradeType,
+          icon: m.icon || matched?.icon,
+          trade_type: tradeType,
+          min_topup: Math.max(m.min_topup || 0, matched?.min_topup || 0) || undefined,
+          channel_id: matchedIndex >= 0 ? String(matchedIndex) : m.channel_id,
+        }
+      })
+  }, [topupInfo?.bepusdt_pay_methods, topupInfo?.pay_methods])
   const enableOnlineTopUp = !!topupInfo?.enable_online_topup
   const epayMethods = useMemo(
     () => getEpayMethods(topupInfo?.pay_methods),
@@ -662,6 +713,8 @@ export function SubscriptionPlansCard({
         enableStripe={enableStripe}
         enableCreem={enableCreem}
         enableWaffoPancake={enableWaffoPancake}
+        enableBEpusdt={enableBEpusdt}
+        bepusdtMethods={bepusdtMethods}
         enableOnlineTopUp={enableOnlineTopUp}
         epayMethods={epayMethods}
         userQuota={userQuota}

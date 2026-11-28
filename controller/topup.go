@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -98,12 +99,15 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	enableBEpusdt := isBEpusdtTopUpEnabled()
+
 	data := gin.H{
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
+		"enable_bepusdt_topup":             enableBEpusdt,
 		"jingsoft":                         service.JingSoftPublicInfo(),
 		"enable_redemption":                complianceConfirmed,
 		"payment_compliance_confirmed":     complianceConfirmed,
@@ -114,12 +118,20 @@ func GetTopUpInfo(c *gin.Context) {
 			}
 			return nil
 		}(),
+		"bepusdt_pay_methods": func() any {
+			if enableBEpusdt {
+				return setting.GetPublicBEpusdtPayMethods()
+			}
+			return nil
+		}(),
 		"creem_products":          setting.CreemProducts,
 		"pay_methods":             payMethods,
 		"min_topup":               operation_setting.MinTopUp,
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
+		"bepusdt_min_topup":       getBEpusdtMinTopup(0),
+		"bepusdt_fiat":            setting.GetBEpusdtFiat(),
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,
@@ -310,6 +322,7 @@ func RequestEpay(c *gin.Context) {
 	}
 
 	if operation_setting.IsJingSoftPaymentMethod(req.PaymentMethod) ||
+		constant.IsBEpusdtPaymentMethod(req.PaymentMethod) ||
 		!operation_setting.ContainsPayMethod(req.PaymentMethod) {
 		paymentError(c, common.NewMessage("Payment method does not exist"))
 		return

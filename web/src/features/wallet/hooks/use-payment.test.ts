@@ -46,4 +46,54 @@ describe('payment amount routing', () => {
     expect(amount).toBe(18.75)
     expect(calls).toEqual(['waffo:120'])
   })
+
+  test('uses the dedicated BEpusdt amount calculator with pay_method_index', async () => {
+    const calls: string[] = []
+    const amount = await requestPaymentAmount(
+      10,
+      PAYMENT_TYPES.BEPUSDT,
+      {
+        regular: async () => ({ success: true, data: '1' }),
+        stripe: async () => ({ success: true, data: '2' }),
+        waffo: async () => ({ success: true, data: '3' }),
+        waffoPancake: async () => ({ success: true, data: '4' }),
+        bepusdt: async (request) => {
+          calls.push(`bepusdt:${request.amount}:${request.pay_method_index}`)
+          return { success: true, data: '73.00' }
+        },
+      },
+      2
+    )
+
+    expect(amount).toBe(73)
+    expect(calls).toEqual(['bepusdt:10:2'])
+  })
+
+  test('routes prefixed bepusdt_* payment type to BEpusdt amount calculator with channel_id', async () => {
+    const calls: string[] = []
+    const amount = await requestPaymentAmount(
+      20,
+      'bepusdt_usdt.trc20',
+      {
+        regular: async () => {
+          calls.push('regular')
+          return { success: true, data: '1' }
+        },
+        stripe: async () => ({ success: true, data: '2' }),
+        waffo: async () => ({ success: true, data: '3' }),
+        waffoPancake: async () => ({ success: true, data: '4' }),
+        bepusdt: async (request) => {
+          calls.push(
+            `bepusdt:${request.amount}:${request.payment_method}:${request.channel_id ?? ''}`
+          )
+          return { success: true, data: '146.00' }
+        },
+      },
+      null,
+      '0'
+    )
+
+    expect(amount).toBe(146)
+    expect(calls).toEqual(['bepusdt:20:bepusdt_usdt.trc20:0'])
+  })
 })

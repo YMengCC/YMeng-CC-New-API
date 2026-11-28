@@ -36,6 +36,7 @@ export const PAYMENT_TYPES = {
   CREEM: 'creem',
   WAFFO: 'waffo',
   WAFFO_PANCAKE: 'waffo_pancake',
+  BEPUSDT: 'bepusdt',
 } as const
 
 /**
@@ -53,6 +54,7 @@ export const PAYMENT_ICON_COLORS = {
   [PAYMENT_TYPES.CREEM]: '#6366F1',
   [PAYMENT_TYPES.WAFFO]: '#2563EB',
   [PAYMENT_TYPES.WAFFO_PANCAKE]: '#F97316',
+  [PAYMENT_TYPES.BEPUSDT]: '#26A17B',
 } as const
 
 /**
@@ -64,3 +66,22 @@ export const DEFAULT_DISCOUNT_RATE = 1.0
  * Default minimum topup amount
  */
 export const DEFAULT_MIN_TOPUP = 1
+
+/**
+ * Sentinel BEpusdt trade_type that routes order creation through /api/v1/order/create-order
+ */
+export const BEPUSDT_CASHIER_TRADE_TYPE = 'cashier'
+
+/**
+ * Fixed payment type prefix for BEpusdt entries in General PayMethods
+ * (for example "bepusdt_usdt.trc20" or "bepusdt_cashier") to distinguish them from Epay.
+ */
+export const BEPUSDT_PAYMENT_METHOD_PREFIX = 'bepusdt_'
+
+/**
+ * Format a BEpusdt trade_type into a General PayMethods payment type key.
+ */
+export function formatBEpusdtPaymentType(tradeType: string): string {
+  const trimmed = tradeType.trim()
+  return `${BEPUSDT_PAYMENT_METHOD_PREFIX}${trimmed || BEPUSDT_CASHIER_TRADE_TYPE}`
+}

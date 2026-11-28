@@ -29,10 +29,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  BEPUSDT_CASHIER_TRADE_TYPE,
+  BEPUSDT_PAYMENT_METHOD_PREFIX,
+  formatBEpusdtPaymentType,
+} from '@/features/wallet/constants'
+import { isBEpusdtPayment } from '@/features/wallet/lib/payment'
 import { getPaymentIcon } from '@/features/wallet/lib/ui'
 
 import { safeJsonParseWithValidation } from '../utils/json-parser'
 import { isArray } from '../utils/json-validators'
+import type { BEpusdtPayMethodConfig } from './bepusdt-settings-section'
 import {
   PaymentMethodDialog,
   type PaymentMethodData,
@@ -42,6 +49,7 @@ type PaymentMethodsVisualEditorProps = {
   value: string
   onChange: (value: string) => void
   jingSoftChannels?: import('./jingsoft-schema').JingSoftChannel[]
+  bepusdtPayMethods?: BEpusdtPayMethodConfig[]
 }
 
 const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
@@ -49,13 +57,19 @@ const PAYMENT_TYPE_ICON_NAMES: Record<string, string> = {
   jingsoft_alipay: 'SiAlipay',
   jingsoft_wxpay: 'SiWechat',
   alipay: 'SiAlipay',
+  bepusdt: 'LuCoins',
+  bepusdt_cashier: 'LuCoins',
   stripe: 'SiStripe',
   waffo_pancake: 'LuCreditCard',
   wxpay: 'SiWechat',
 }
 
 function getDefaultIconName(type: string) {
-  return PAYMENT_TYPE_ICON_NAMES[type] ?? ''
+  if (PAYMENT_TYPE_ICON_NAMES[type]) return PAYMENT_TYPE_ICON_NAMES[type]
+  if (type.toLowerCase().startsWith(BEPUSDT_PAYMENT_METHOD_PREFIX)) {
+    return 'SiTether'
+  }
+  return ''
 }
 
 function getEffectiveIconName(method: PaymentMethodData) {
@@ -66,8 +80,37 @@ export function PaymentMethodsVisualEditor({
   value,
   onChange,
   jingSoftChannels = [],
+  bepusdtPayMethods = [],
 }: PaymentMethodsVisualEditorProps) {
   const { t } = useTranslation()
+  const bepusdtTemplates =
+    bepusdtPayMethods.length > 0
+      ? bepusdtPayMethods.map((method, index) => {
+          const paymentType = formatBEpusdtPaymentType(method.trade_type)
+          const template: PaymentMethodData = {
+            icon: method.icon || getDefaultIconName(paymentType),
+            name: method.name,
+            type: paymentType,
+            channel_id: String(index),
+          }
+          if (method.min_topup) {
+            template.min_topup = String(method.min_topup)
+          }
+          return {
+            name: `BEpusdt · ${method.name} (${paymentType})`,
+            template,
+          }
+        })
+      : [
+          {
+            name: `${t('BEpusdt Unified Cashier')} (${formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE)})`,
+            template: {
+              icon: 'LuCoins',
+              name: t('BEpusdt Unified Cashier'),
+              type: formatBEpusdtPaymentType(BEPUSDT_CASHIER_TRADE_TYPE),
+            },
+          },
+        ]
   const paymentTemplates = [
     {
       name: t('Epay Alipay'),
@@ -119,6 +162,7 @@ export function PaymentMethodsVisualEditor({
           },
         }
       }),
+    ...bepusdtTemplates,
     {
       name: t('Custom Epay method'),
       template: {
@@ -193,7 +237,10 @@ export function PaymentMethodsVisualEditor({
           'name' in item &&
           'type' in item &&
           item.name === editData.name &&
-          item.type === editData.type
+          item.type === editData.type &&
+          (('channel_id' in item && typeof item.channel_id === 'string'
+            ? item.channel_id
+            : '') === (editData.channel_id ?? ''))
       )
       if (index !== -1) {
         updatedArray[index] = data
@@ -222,7 +269,10 @@ export function PaymentMethodsVisualEditor({
           'name' in item &&
           'type' in item &&
           item.name === method.name &&
-          item.type === method.type
+          item.type === method.type &&
+          (('channel_id' in item && typeof item.channel_id === 'string'
+            ? item.channel_id
+            : '') === (method.channel_id ?? ''))
         )
     )
 
@@ -254,7 +304,10 @@ export function PaymentMethodsVisualEditor({
         'type' in item &&
         'name' in item &&
         item.type === template.type &&
-        item.name === template.name
+        item.name === template.name &&
+        (('channel_id' in item && typeof item.channel_id === 'string'
+          ? item.channel_id
+          : '') === (template.channel_id ?? ''))
     )
 
     if (!exists) {
@@ -340,7 +393,9 @@ export function PaymentMethodsVisualEditor({
           <StaticDataTable
             className='hidden rounded-none border-0 md:block'
             data={filteredMethods}
-            getRowKey={(method, index) => `${method.type}-${index}`}
+            getRowKey={(method, index) =>
+              `${method.type}-${method.channel_id ?? ''}-${index}`
+            }
             columns={[
               {
                 id: 'name',
@@ -396,7 +451,8 @@ export function PaymentMethodsVisualEditor({
                 id: 'display-fee',
                 header: t('Display fee (%)'),
                 cell: (method) =>
-                  !method.type.startsWith('jingsoft') ? (
+                  !method.type.startsWith('jingsoft') &&
+                  !isBEpusdtPayment(method.type) ? (
                     <span className='font-mono text-sm'>
                       {method.fee_percent || '0'}%
                     </span>
@@ -509,8 +565,9 @@ export function PaymentMethodsVisualEditor({
                         <span className='font-mono'>{method.min_topup}</span>
                       </div>
                     )}
-                    {!method.type.startsWith('jingsoft') && (
-                      <div className='flex items-center gap-2'>
+                    {!method.type.startsWith('jingsoft') &&
+                      !isBEpusdtPayment(method.type) && (
+                        <div className='flex items-center gap-2'>
                         <span className='text-muted-foreground min-w-20'>
                           {t('Display fee (%)')}
                         </span>
@@ -533,6 +590,7 @@ export function PaymentMethodsVisualEditor({
         onSave={handleSave}
         editData={editData}
         jingSoftChannels={jingSoftChannels}
+        bepusdtPayMethods={bepusdtPayMethods}
       />
     </div>
   )

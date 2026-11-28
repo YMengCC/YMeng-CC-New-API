@@ -43,6 +43,7 @@ var (
 		PaymentProviderCreem,
 		PaymentProviderWaffo,
 		PaymentProviderWaffoPancake,
+		PaymentProviderBEpusdt,
 		PaymentProviderRedemption,
 		PaymentProviderJingSoft,
 		"cat" + "fk",
