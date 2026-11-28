@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { HistoryIcon, PlusIcon } from 'lucide-react'
-import { useState } from 'react'
+import { type ChangeEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,11 +31,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { getOfficeStatus, OfficeView } from '@/features/office'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundHistorySidebar } from './components/history/playground-history-sidebar'
+import { PlaygroundImportDialog } from './components/history/playground-import-dialog'
 import { PlaygroundGenerationForm } from './components/input/playground-generation-form'
 import { PlaygroundInput } from './components/input/playground-input'
 import { PlaygroundHeader } from './components/playground-header'
@@ -46,6 +50,13 @@ import {
   usePlaygroundOptions,
   usePlaygroundState,
 } from './hooks'
+import {
+  MAX_IMPORT_FILE_BYTES,
+  parsePlaygroundBackup,
+  type PlaygroundBackupParsed,
+  type PlaygroundBackupParseError,
+  type PlaygroundImportOptions,
+} from './lib'
 
 export type PlaygroundMode = 'chat' | 'office'
 
@@ -55,8 +66,14 @@ type PlaygroundProps = {
 }
 
 export function Playground(props: PlaygroundProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const [isMobileHistoryOpen, setIsMobileHistoryOpen] = useState(false)
+  const [pendingImport, setPendingImport] = useState<{
+    fileName: string
+    parsed: PlaygroundBackupParsed
+  } | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   // The office mode runs an agent on the server: admins only, and only where
   // the office worker is configured.
   const role = useAuthStore((state) => state.auth.user?.role ?? 0)
@@ -89,6 +106,8 @@ export function Playground(props: PlaygroundProps) {
     deleteConversation,
     clearHistory,
     setHistoryCollapsed,
+    exportPlaygroundData,
+    importPlaygroundData,
   } = usePlaygroundState()
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
@@ -168,6 +187,103 @@ export function Playground(props: PlaygroundProps) {
     setIsMobileHistoryOpen(false)
   }
 
+  const getImportErrorMessage = (error: PlaygroundBackupParseError): string => {
+    switch (error) {
+      case 'file_too_large':
+        return t('Import file exceeds the {{size}} MiB limit', {
+          size: formatNumber(MAX_IMPORT_FILE_BYTES / (1024 * 1024), locale),
+        })
+      case 'invalid_json':
+        return t('Invalid JSON file')
+      case 'unsupported_version':
+        return t('Unsupported playground backup version')
+      case 'empty':
+        return t('Backup file contains no conversations')
+      case 'invalid_format':
+      default:
+        return t('Invalid playground backup file')
+    }
+  }
+
+  const handleExportHistory = () => {
+    if (history.conversations.length === 0) return
+
+    const { count } = exportPlaygroundData()
+    toast.success(
+      t('Exported {{count}} conversation(s)', {
+        count: formatNumber(count, locale),
+      })
+    )
+  }
+
+  const handleRequestImport = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportFileChange = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      toast.error(getImportErrorMessage('file_too_large'))
+      return
+    }
+
+    let rawText: string
+    try {
+      rawText = await file.text()
+    } catch {
+      toast.error(t('Failed to read import file'))
+      return
+    }
+
+    const parsed = parsePlaygroundBackup(rawText)
+    if (!parsed.ok) {
+      toast.error(getImportErrorMessage(parsed.error))
+      return
+    }
+
+    setIsMobileHistoryOpen(false)
+    setPendingImport({ fileName: file.name, parsed })
+  }
+
+  const handleConfirmImport = (options: PlaygroundImportOptions) => {
+    if (!pendingImport) return
+
+    stopAll()
+    handleEditOpenChange(false)
+    const result = importPlaygroundData(pendingImport.parsed.backup, options)
+    if (!result.ok) {
+      toast.error(
+        t('Failed to save imported data. Browser storage quota may be full.')
+      )
+      return
+    }
+
+    setPendingImport(null)
+    if (result.droppedCount > 0) {
+      toast.success(
+        t(
+          'Imported {{count}} conversation(s); {{dropped}} older conversation(s) omitted due to browser storage limits',
+          {
+            count: formatNumber(result.importedCount, locale),
+            dropped: formatNumber(result.droppedCount, locale),
+          }
+        )
+      )
+      return
+    }
+
+    toast.success(
+      t('Imported {{count}} conversation(s)', {
+        count: formatNumber(result.importedCount, locale),
+      })
+    )
+  }
+
   const { isLoadingModels } = usePlaygroundOptions({
     currentGroup: config.group,
     currentModel: config.model,
@@ -178,11 +294,13 @@ export function Playground(props: PlaygroundProps) {
 
   const sidebarProps = {
     history,
-    isGenerating: isChatBusy,
+    isGenerating: combinedGenerating,
     onNewConversation: startNewConversation,
     onRenameConversation: renameConversation,
     onDeleteConversation: handleDeleteConversation,
     onClearHistory: handleClearHistory,
+    onExportHistory: handleExportHistory,
+    onImportHistory: handleRequestImport,
     onSelectConversation: selectConversation,
   }
 
@@ -348,6 +466,25 @@ export function Playground(props: PlaygroundProps) {
           </div>
         </div>
       </div>
+      <input
+        accept='.json,application/json'
+        aria-label={t('Import playground history')}
+        className='hidden'
+        onChange={(event) => void handleImportFileChange(event)}
+        ref={importInputRef}
+        type='file'
+      />
+
+      <PlaygroundImportDialog
+        currentHistory={history}
+        fileName={pendingImport?.fileName ?? ''}
+        onConfirm={handleConfirmImport}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null)
+        }}
+        open={pendingImport !== null}
+        parsed={pendingImport?.parsed ?? null}
+      />
     </div>
   )
 }

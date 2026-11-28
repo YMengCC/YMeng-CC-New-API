@@ -21,6 +21,9 @@ import { z } from 'zod'
 import { MAX_CONVERSATION_TITLE_CHARS } from '../../constants'
 
 export const STORAGE_VERSION = 1
+export const PLAYGROUND_BACKUP_FORMAT = 'new-api-playground-backup'
+export const PLAYGROUND_BACKUP_VERSION = 1
+export const MAX_IMPORT_FILE_BYTES = 16 * 1024 * 1024
 export const MAX_STORED_MESSAGES = 100
 export const MAX_STORED_MESSAGES_BYTES = 1024 * 1024
 export const MAX_LOADED_MESSAGES_CHARS = 120_000
@@ -106,12 +109,20 @@ export const messagesSchema = z.array(messageSchema)
 const conversationSchema = z.object({
   id: z.string().min(1),
   title: z.string().max(MAX_CONVERSATION_TITLE_CHARS),
-  createdAt: z.number(),
-  updatedAt: z.number(),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite(),
   messages: messagesSchema,
 })
 
 export const playgroundHistorySchema = z.object({
   activeId: z.string().min(1),
   conversations: z.array(conversationSchema),
+})
+
+export const playgroundBackupSchema = z.object({
+  format: z.literal(PLAYGROUND_BACKUP_FORMAT),
+  version: z.literal(PLAYGROUND_BACKUP_VERSION),
+  exportedAt: z.number().finite().positive().optional(),
+  history: playgroundHistorySchema,
+  config: playgroundConfigSchema.optional(),
 })

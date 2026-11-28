@@ -17,12 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
+  DownloadIcon,
   MoreHorizontalIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
+  UploadIcon,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -61,6 +63,8 @@ type PlaygroundHistorySidebarProps = {
   onRenameConversation: (id: string, title: string) => void
   onDeleteConversation: (id: string) => void
   onClearHistory: () => void
+  onExportHistory: () => void
+  onImportHistory: () => void
   onToggleCollapsed: (collapsed: boolean) => void
   className?: string
 }
@@ -290,32 +294,59 @@ export function PlaygroundHistorySidebar(props: PlaygroundHistorySidebarProps) {
       </div>
 
       {props.isCollapsed ? null : (
-        <ScrollArea className='min-h-0 flex-1'>
-          {conversations.length === 0 ? (
-            <Empty className='border-0'>
-              <EmptyTitle>{t('No conversations yet')}</EmptyTitle>
-              <EmptyDescription>
-                {t('Start a new chat to see it here.')}
-              </EmptyDescription>
-            </Empty>
-          ) : (
-            <div className='space-y-1 px-2.5 pb-3'>
-              {conversations.map((conversation) => (
-                <ConversationItem
-                  conversation={conversation}
-                  isActive={conversation.id === props.history.activeId}
-                  isDisabled={props.isGenerating}
-                  key={conversation.id}
-                  onDelete={() => props.onDeleteConversation(conversation.id)}
-                  onRename={(title) =>
-                    props.onRenameConversation(conversation.id, title)
-                  }
-                  onSelect={() => props.onSelectConversation(conversation.id)}
-                />
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+        <>
+          <ScrollArea className='min-h-0 flex-1'>
+            {conversations.length === 0 ? (
+              <Empty className='border-0'>
+                <EmptyTitle>{t('No conversations yet')}</EmptyTitle>
+                <EmptyDescription>
+                  {t('Start a new chat to see it here.')}
+                </EmptyDescription>
+              </Empty>
+            ) : (
+              <div className='space-y-1 px-2.5 pb-3'>
+                {conversations.map((conversation) => (
+                  <ConversationItem
+                    conversation={conversation}
+                    isActive={conversation.id === props.history.activeId}
+                    isDisabled={props.isGenerating}
+                    key={conversation.id}
+                    onDelete={() => props.onDeleteConversation(conversation.id)}
+                    onRename={(title) =>
+                      props.onRenameConversation(conversation.id, title)
+                    }
+                    onSelect={() => props.onSelectConversation(conversation.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className='border-border/80 flex shrink-0 items-center gap-1.5 border-t p-2.5'>
+            <Button
+              className='h-8 min-w-0 flex-1 gap-1.5'
+              disabled={props.isGenerating || conversations.length === 0}
+              onClick={props.onExportHistory}
+              size='sm'
+              type='button'
+              variant='outline'
+            >
+              <DownloadIcon aria-hidden='true' className='size-3.5 shrink-0' />
+              <span className='truncate'>{t('Export')}</span>
+            </Button>
+            <Button
+              className='h-8 min-w-0 flex-1 gap-1.5'
+              disabled={props.isGenerating}
+              onClick={props.onImportHistory}
+              size='sm'
+              type='button'
+              variant='outline'
+            >
+              <UploadIcon aria-hidden='true' className='size-3.5 shrink-0' />
+              <span className='truncate'>{t('Import')}</span>
+            </Button>
+          </div>
+        </>
       )}
 
       <ConfirmDialog

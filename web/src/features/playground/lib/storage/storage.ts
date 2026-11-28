@@ -99,15 +99,16 @@ export function unwrapStoredValue(value: unknown): unknown {
   return value
 }
 
-export function writeStoredValue<T>(baseKey: string, data: T): void {
+export function writeStoredValue<T>(baseKey: string, data: T): boolean {
   const key = getUserStorageKey(baseKey)
-  if (!key) return
+  if (!key) return false
   const payload: StoredEnvelope<T> = {
     version: STORAGE_VERSION,
     data,
   }
 
   localStorage.setItem(key, JSON.stringify(payload))
+  return true
 }
 
 export function trimMessages(messages: Message[]): Message[] {

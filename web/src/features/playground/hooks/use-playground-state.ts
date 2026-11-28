@@ -21,19 +21,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_CONFIG, DEFAULT_CONVERSATION_TITLE } from '../constants'
 import {
   applyMessageStateUpdate,
+  buildPlaygroundBackup,
   createConversation,
+  downloadPlaygroundBackup,
   getConversationTitle,
+  getGroupFallback,
+  getInitialPlaygroundConfig,
+  getModelFallback,
   loadHistory,
-  removeConversation,
   loadHistoryCollapsed,
+  planPlaygroundImport,
   pruneHistory,
+  removeConversation,
+  sanitizeConversationTitle,
   saveActiveConversationId,
   saveConfig,
   saveHistory,
   saveHistoryCollapsed,
-  getInitialPlaygroundConfig,
-  sanitizeConversationTitle,
   type MessageStateUpdater,
+  type PlaygroundBackupPayload,
+  type PlaygroundImportOptions,
+  type PlaygroundImportResult,
 } from '../lib'
 import type {
   Message,
@@ -57,6 +65,7 @@ export function usePlaygroundState() {
   const [config, setConfig] = useState<PlaygroundConfig>(
     getInitialPlaygroundConfig
   )
+  const configRef = useRef(config)
 
   const [history, setHistory] =
     useState<PlaygroundHistory>(createInitialHistory)
@@ -69,6 +78,20 @@ export function usePlaygroundState() {
 
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
+  const modelsRef = useRef(models)
+  const groupsRef = useRef(groups)
+
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
+
+  useEffect(() => {
+    modelsRef.current = models
+  }, [models])
+
+  useEffect(() => {
+    groupsRef.current = groups
+  }, [groups])
 
   const messages = useMemo(
     () =>
@@ -140,6 +163,7 @@ export function usePlaygroundState() {
     <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) => {
       setConfig((prev) => {
         const updated = { ...prev, [key]: value }
+        configRef.current = updated
         saveConfig(updated)
         return updated
       })
@@ -276,9 +300,78 @@ export function usePlaygroundState() {
   }, [])
 
   const resetConfig = useCallback(() => {
+    configRef.current = DEFAULT_CONFIG
     setConfig(DEFAULT_CONFIG)
     saveConfig(DEFAULT_CONFIG)
   }, [])
+
+  const exportPlaygroundData = useCallback(() => {
+    flushSave()
+    const backup = buildPlaygroundBackup(historyRef.current, configRef.current)
+    downloadPlaygroundBackup(backup)
+    return { count: backup.history.conversations.length }
+  }, [flushSave])
+
+  const importPlaygroundData = useCallback(
+    (
+      backup: PlaygroundBackupPayload,
+      options: PlaygroundImportOptions
+    ): PlaygroundImportResult => {
+      if (messagesSaveTimerRef.current !== null) {
+        window.clearTimeout(messagesSaveTimerRef.current)
+        messagesSaveTimerRef.current = null
+      }
+
+      const plan = planPlaygroundImport(
+        historyRef.current,
+        backup.history,
+        options.mode
+      )
+
+      if (!saveHistory(plan.history)) {
+        return { ok: false, error: 'storage_failed' }
+      }
+
+      saveActiveConversationId(plan.history.activeId)
+      historyRef.current = plan.history
+      hasLoadedMessagesRef.current = true
+      setHistory(plan.history)
+      setIsLoadingMessages(false)
+
+      if (options.restoreConfig && backup.config) {
+        const previousGroup = configRef.current.group
+        const candidate: PlaygroundConfig = {
+          ...DEFAULT_CONFIG,
+          ...configRef.current,
+          ...backup.config,
+        }
+        const resolvedGroup =
+          getGroupFallback(groupsRef.current, candidate.group) ??
+          candidate.group
+        const resolvedModel =
+          resolvedGroup === previousGroup
+            ? (getModelFallback(modelsRef.current, candidate.model) ??
+              candidate.model)
+            : candidate.model
+        const nextConfig: PlaygroundConfig = {
+          ...candidate,
+          group: resolvedGroup,
+          model: resolvedModel,
+        }
+        configRef.current = nextConfig
+        saveConfig(nextConfig)
+        setConfig(nextConfig)
+      }
+
+      return {
+        ok: true,
+        importedCount: plan.importedCount,
+        totalCount: plan.totalCount,
+        droppedCount: plan.droppedCount,
+      }
+    },
+    []
+  )
 
   return {
     // State
@@ -305,5 +398,7 @@ export function usePlaygroundState() {
     clearHistory,
     setHistoryCollapsed,
     resetConfig,
+    exportPlaygroundData,
+    importPlaygroundData,
   }
 }

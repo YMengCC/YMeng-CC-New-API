@@ -84,6 +84,8 @@ vi.mock('../hooks', () => ({
     deleteConversation: vi.fn(),
     clearHistory: vi.fn(),
     setHistoryCollapsed: vi.fn(),
+    exportPlaygroundData: vi.fn(),
+    importPlaygroundData: vi.fn(),
   }),
 }))
 

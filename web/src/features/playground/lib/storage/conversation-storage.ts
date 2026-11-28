@@ -117,7 +117,7 @@ function trimConversationMessages(
   return unchanged ? conversation : { ...conversation, messages }
 }
 
-function normalizeConversationOnLoad(
+export function normalizeConversationOnLoad(
   conversation: PlaygroundConversation
 ): PlaygroundConversation {
   const trimmed = trimConversationMessages(conversation)
@@ -234,13 +234,14 @@ export function loadHistory(): PlaygroundHistory {
   }
 }
 
-export function saveHistory(history: PlaygroundHistory): void {
+export function saveHistory(history: PlaygroundHistory): boolean {
   try {
-    writeStoredValue(STORAGE_KEYS.HISTORY, pruneHistory(history))
+    return writeStoredValue(STORAGE_KEYS.HISTORY, pruneHistory(history))
   } catch (error) {
     // Keep the in-memory state intact when the browser quota is exhausted.
     // eslint-disable-next-line no-console
     console.error('Failed to save conversation history:', error)
+    return false
   }
 }
 

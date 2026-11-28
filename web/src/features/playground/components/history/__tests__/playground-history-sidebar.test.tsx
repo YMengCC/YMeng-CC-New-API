@@ -75,6 +75,8 @@ beforeAll(() => {
       'All conversation history will be permanently deleted.',
     Clear: 'Clear',
     Cancel: 'Cancel',
+    Export: 'Export',
+    Import: 'Import',
     'Conversation deleted': 'Conversation deleted',
     'Conversation history cleared': 'Conversation history cleared',
   })
@@ -100,6 +102,8 @@ function renderSidebar(
   const onRenameConversation = vi.fn()
   const onDeleteConversation = vi.fn()
   const onClearHistory = vi.fn()
+  const onExportHistory = vi.fn()
+  const onImportHistory = vi.fn()
   const onToggleCollapsed = vi.fn()
 
   render(
@@ -109,6 +113,8 @@ function renderSidebar(
       isGenerating={false}
       onClearHistory={onClearHistory}
       onDeleteConversation={onDeleteConversation}
+      onExportHistory={onExportHistory}
+      onImportHistory={onImportHistory}
       onNewConversation={onNewConversation}
       onRenameConversation={onRenameConversation}
       onSelectConversation={onSelectConversation}
@@ -123,6 +129,8 @@ function renderSidebar(
     onRenameConversation,
     onDeleteConversation,
     onClearHistory,
+    onExportHistory,
+    onImportHistory,
     onToggleCollapsed,
   }
 }
@@ -255,6 +263,8 @@ test('the collapse toggle reports its expanded state', async () => {
       isGenerating={false}
       onClearHistory={vi.fn()}
       onDeleteConversation={vi.fn()}
+      onExportHistory={vi.fn()}
+      onImportHistory={vi.fn()}
       onNewConversation={vi.fn()}
       onRenameConversation={vi.fn()}
       onSelectConversation={vi.fn()}
@@ -296,6 +306,62 @@ test('collapsed sidebar hides conversation entries and clear action while keepin
     screen.queryByRole('button', { name: 'Clear conversation history' })
   ).not.toBeInTheDocument()
   expect(
+    screen.queryByRole('button', { name: 'Export' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Import' })
+  ).not.toBeInTheDocument()
+  expect(
     screen.queryByRole('button', { name: /First chat/ })
   ).not.toBeInTheDocument()
+})
+
+test('export and import footer buttons invoke their handlers and respect disabled states', async () => {
+  const user = userEvent.setup()
+  const handlers = renderSidebar()
+
+  await user.click(screen.getByRole('button', { name: 'Export' }))
+  await user.click(screen.getByRole('button', { name: 'Import' }))
+  expect(handlers.onExportHistory).toHaveBeenCalledOnce()
+  expect(handlers.onImportHistory).toHaveBeenCalledOnce()
+})
+
+test('export is disabled when history is empty and both transfer buttons are disabled while generating', () => {
+  const { rerender } = render(
+    <PlaygroundHistorySidebar
+      history={{ activeId: 'empty', conversations: [] }}
+      isCollapsed={false}
+      isGenerating={false}
+      onClearHistory={vi.fn()}
+      onDeleteConversation={vi.fn()}
+      onExportHistory={vi.fn()}
+      onImportHistory={vi.fn()}
+      onNewConversation={vi.fn()}
+      onRenameConversation={vi.fn()}
+      onSelectConversation={vi.fn()}
+      onToggleCollapsed={vi.fn()}
+    />
+  )
+
+  expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled()
+
+  rerender(
+    <PlaygroundHistorySidebar
+      history={history}
+      isCollapsed={false}
+      isGenerating
+      onClearHistory={vi.fn()}
+      onDeleteConversation={vi.fn()}
+      onExportHistory={vi.fn()}
+      onImportHistory={vi.fn()}
+      onNewConversation={vi.fn()}
+      onRenameConversation={vi.fn()}
+      onSelectConversation={vi.fn()}
+      onToggleCollapsed={vi.fn()}
+    />
+  )
+
+  expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled()
 })
