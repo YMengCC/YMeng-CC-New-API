@@ -387,3 +387,134 @@ it('treats rate-limit and max-amount responses as pre-creation rejections and ro
   expect(secondKey).not.toBe(firstKey)
   expect(result.current.statusOrder?.tradeNo).toBe('JingSoft_after_rate_limit')
 })
+
+it('uses prefetched quotes immediately without a duplicate network request and invalidates the cache on confirm', async () => {
+  const firstQuote = {
+    quote_id: 'q-prefetched-1',
+    amount: 73.3,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const secondQuote = {
+    quote_id: 'q-prefetched-2',
+    amount: 73.3,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { success: true, data: firstQuote } })
+    .mockResolvedValueOnce(pendingOrder('JingSoft_prefetched_1'))
+    .mockResolvedValueOnce({ data: { success: true, data: secondQuote } })
+  vi.spyOn(api, 'get').mockResolvedValue(
+    orderRead('JingSoft_prefetched_1', 'pending')
+  )
+
+  const { result } = renderHook(
+    () => useJingSoftPayment({ ...info, mode: 'direct' }, 1),
+    { wrapper }
+  )
+
+  act(() => result.current.prefetchQuote({ directAmount: 10 }, channel))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith('/api/user/jingsoft/quote', {
+      amount: 10,
+      channel_id: 'wechat',
+    })
+  )
+
+  await act(() => result.current.selectDirectAmount(10, channel))
+  expect(result.current.open).toBe(true)
+  expect(result.current.calculating).toBe(false)
+  expect(result.current.quote?.quote_id).toBe('q-prefetched-1')
+  expect(post).toHaveBeenCalledTimes(1)
+
+  await act(() => result.current.confirm())
+  act(() => result.current.closeStatus())
+
+  await act(() => result.current.selectDirectAmount(10, channel))
+  expect(result.current.quote?.quote_id).toBe('q-prefetched-2')
+  expect(post).toHaveBeenCalledTimes(3)
+})
+
+it('refreshes an expired quote in place while preserving typed QQ and invalidates cached quotes when pricing signature changes', async () => {
+  const staleQuote = {
+    quote_id: 'q-stale',
+    amount: 72,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const refreshedQuote = {
+    quote_id: 'q-fresh',
+    amount: 73.44,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const repricedQuote = {
+    quote_id: 'q-repriced',
+    amount: 68,
+    currency: 'CNY',
+    topup_amount: 10,
+  }
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { success: true, data: staleQuote } })
+    .mockResolvedValueOnce({
+      data: {
+        success: false,
+        message: 'JingSoft quote is invalid or expired',
+        message_key: 'JingSoft quote is invalid or expired',
+      },
+    })
+    .mockResolvedValueOnce({ data: { success: true, data: refreshedQuote } })
+    .mockResolvedValueOnce(pendingOrder('JingSoft_after_quote_refresh'))
+    .mockResolvedValueOnce({ data: { success: true, data: repricedQuote } })
+  vi.spyOn(api, 'get').mockResolvedValue(
+    orderRead('JingSoft_after_quote_refresh', 'pending')
+  )
+
+  const { result, rerender } = renderHook(
+    ({ sig }) => useJingSoftPayment(info, 1, undefined, undefined, sig),
+    { wrapper, initialProps: { sig: 'price:7.2' } }
+  )
+
+  await act(() => result.current.selectProduct(product, channel))
+  act(() => result.current.setQQ('123456'))
+  await act(() => result.current.confirm())
+
+  expect(result.current.open).toBe(true)
+  expect(result.current.qq).toBe('123456')
+  expect(result.current.calculating).toBe(false)
+  expect(result.current.quote?.quote_id).toBe('q-fresh')
+  expect(result.current.quote?.amount).toBe(73.44)
+
+  await act(() => result.current.confirm())
+  expect(post).toHaveBeenNthCalledWith(
+    4,
+    '/api/user/jingsoft/pay',
+    expect.objectContaining({
+      product_id: 'ten',
+      channel_id: 'wechat',
+      quote_id: 'q-fresh',
+      qq: '123456',
+    })
+  )
+  expect(result.current.statusOrder?.tradeNo).toBe(
+    'JingSoft_after_quote_refresh'
+  )
+
+  act(() => result.current.closeStatus())
+  act(() => result.current.prefetchQuote({ product }, channel))
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(5))
+
+  post.mockResolvedValueOnce({
+    data: {
+      success: true,
+      data: { ...repricedQuote, quote_id: 'q-after-sig-change' },
+    },
+  })
+  rerender({ sig: 'price:6.8' })
+  await act(() => result.current.selectProduct(product, channel))
+  expect(result.current.quote?.quote_id).toBe('q-after-sig-change')
+  expect(post).toHaveBeenCalledTimes(6)
+})

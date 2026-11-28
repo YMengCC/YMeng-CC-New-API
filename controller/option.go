@@ -535,7 +535,7 @@ func UpdateOption(c *gin.Context) {
 		}
 		return
 	}
-	if option.Key == "jingsoft_setting.base_url" || option.Key == "jingsoft_setting.merchant_token" || option.Key == "jingsoft_setting.store_token" || option.Key == "jingsoft_setting.direct_goods_keys" || option.Key == "jingsoft_setting.mode" {
+	if strings.HasPrefix(option.Key, "jingsoft_setting.") {
 		service.NotifyJingSoftMerchantTokenUpdated()
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。

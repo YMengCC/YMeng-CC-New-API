@@ -40,10 +40,22 @@ export async function quoteJingSoft(
 }
 
 export class JingSoftPaymentRejectedError extends Error {
+  readonly messageKey?: string
+
   constructor(response: unknown) {
     const source = createServerError(response)
     super(source.message, { cause: source })
     this.name = 'JingSoftPaymentRejectedError'
+    if (
+      typeof response === 'object' &&
+      response !== null &&
+      'message_key' in response
+    ) {
+      const key = (response as { message_key?: unknown }).message_key
+      if (typeof key === 'string') {
+        this.messageKey = key
+      }
+    }
   }
 }
 

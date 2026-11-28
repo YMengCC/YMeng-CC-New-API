@@ -20,7 +20,11 @@ import (
 func TestJingSoftHTTPQuoteUsesStockOwnershipAndFeeInclusivePrice(t *testing.T) {
 	for _, condition := range []string{"valid", "missing-stock", "wrong-shop", "disabled-channel"} {
 		t.Run(condition, func(t *testing.T) {
+			var upstreamCalls atomic.Int32
+			var stockCount atomic.Int32
+			stockCount.Store(5)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				upstreamCalls.Add(1)
 				var data any
 				switch r.URL.Path {
 				case "/shopApi/Shop/info":
@@ -32,7 +36,7 @@ func TestJingSoftHTTPQuoteUsesStockOwnershipAndFeeInclusivePrice(t *testing.T) {
 					if condition == "wrong-shop" {
 						shop = "other"
 					}
-					extend := map[string]any{"stock_count": 5}
+					extend := map[string]any{"stock_count": stockCount.Load()}
 					if condition == "missing-stock" {
 						delete(extend, "stock_count")
 					}
@@ -76,6 +80,14 @@ func TestJingSoftHTTPQuoteUsesStockOwnershipAndFeeInclusivePrice(t *testing.T) {
 			assert.Equal(t, "CNY", offer.Currency)
 			assert.Equal(t, "YMengCC", offer.ShopID)
 			assert.True(t, offer.InStock)
+
+			callsAfterFirst := upstreamCalls.Load()
+			assert.EqualValues(t, 5, callsAfterFirst)
+			stockCount.Store(0)
+			recheckedOffer, err := adapter.Quote(context.Background(), "https://wzyp.cn", "YMengCC", "goods", "1")
+			require.NoError(t, err)
+			assert.False(t, recheckedOffer.InStock, "Mode 1 Quote must re-verify live stock before order creation")
+			assert.EqualValues(t, callsAfterFirst+3, upstreamCalls.Load(), "warm Mode 1 Quote reuses cached Shop/info and getUserChannel while checking live stock and price")
 		})
 	}
 }
@@ -780,7 +792,8 @@ func TestJingSoftHTTPCheckMerchantTokenAndAuthExpiryDetection(t *testing.T) {
 }
 
 func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
-	var shopCalls, channelCalls, listCalls, detailCalls, orderCalls atomic.Int32
+	var shopCalls, goodsInfoCalls, channelCalls, priceCalls, listCalls, detailCalls, orderCalls atomic.Int32
+	var sampleFeePayer atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var data any
 		switch r.URL.Path {
@@ -788,6 +801,7 @@ func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
 			shopCalls.Add(1)
 			data = map[string]any{"token": "YMengCC", "nickname": "YMeng CC", "link": "https://wzyp.cn/shop/YMengCC"}
 		case "/shopApi/Shop/goodsInfo":
+			goodsInfoCalls.Add(1)
 			data = map[string]any{
 				"goods_key": "slot1", "goods_type": "card", "status": 1, "price": "10.00",
 				"contact_format": "any", "user": map[string]any{"token": "YMengCC"}, "extend": map[string]any{"limit_count": 1},
@@ -798,7 +812,13 @@ func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
 				map[string]any{"id": 1, "code": "AlipayPc", "show_name": "支付宝", "rate": 1.8, "status": 1, "custom_status": 1},
 			}
 		case "/shopApi/Shop/getGoodsPrice":
-			data = map[string]any{"original_amount": 10.0, "fee": 0.18, "fee_payer": 0, "total_amount": 10.0}
+			priceCalls.Add(1)
+			fp := sampleFeePayer.Load()
+			total := 10.0
+			if fp == 1 {
+				total = 10.18
+			}
+			data = map[string]any{"original_amount": 10.0, "fee": 0.18, "fee_payer": fp, "total_amount": total}
 		case "/merchantApi/Goods/list":
 			listCalls.Add(1)
 			data = map[string]any{"total": 1, "list": []any{
@@ -809,7 +829,7 @@ func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
 			data = map[string]any{
 				"id": 77, "goods_type": "card", "goods_key": "slot1", "category_id": 1, "name": "Direct Slot",
 				"price": "10.00", "market_price": "10.00", "coupon_status": 0, "status": 1,
-				"fee_payer": 0, "show": 0, "contact_format": "any",
+				"fee_payer": -1, "show": 0, "contact_format": "any",
 				"extend": map[string]any{"lock_card": 0, "limit_count": 1},
 			}
 		case "/shopApi/Pay/order":
@@ -830,28 +850,47 @@ func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	adapter.now = func() time.Time { return now }
 
-	// First QuoteDirect warms shop, channels, goods_id, and merchant detail caches.
-	_, err := adapter.QuoteDirect(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "10.00")
+	// Shared HTTP transport reuses connection pooling while isolating cookie jars per client.
+	c1, err := adapter.client(server.URL, false, JingSoftCredentials{})
+	require.NoError(t, err)
+	c2, err := adapter.client(server.URL, false, JingSoftCredentials{})
+	require.NoError(t, err)
+	assert.Same(t, c1.Transport, c2.Transport)
+	assert.NotSame(t, c1.Jar, c2.Jar)
+
+	// First QuoteDirect warms shop, channels, goods_id, merchant detail, direct goods, and price sample caches.
+	_, err = adapter.QuoteDirect(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "10.00")
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, shopCalls.Load())
+	assert.EqualValues(t, 1, goodsInfoCalls.Load())
 	assert.EqualValues(t, 1, channelCalls.Load())
+	assert.EqualValues(t, 1, priceCalls.Load())
 	assert.EqualValues(t, 1, listCalls.Load())
 	assert.EqualValues(t, 1, detailCalls.Load())
 
-	// Second QuoteDirect reuses cached metadata and makes zero merchant API calls.
-	_, err = adapter.QuoteDirect(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "20.00")
+	// Second QuoteDirect reuses cached metadata and makes zero upstream API calls.
+	quotedBefore, err := adapter.QuoteDirect(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "20.00")
 	require.NoError(t, err)
+	assert.Equal(t, "20.00", quotedBefore.Amount)
 	assert.EqualValues(t, 1, shopCalls.Load())
+	assert.EqualValues(t, 1, goodsInfoCalls.Load())
 	assert.EqualValues(t, 1, channelCalls.Load())
+	assert.EqualValues(t, 1, priceCalls.Load())
 	assert.EqualValues(t, 1, listCalls.Load())
 	assert.EqualValues(t, 1, detailCalls.Load())
 
-	// PrepareDirectSlot checks live stock via Goods/list but skips redundant Shop/info and Goods/info.
-	_, err = adapter.PrepareDirectSlot(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "10.00", "10.00", 5, 10)
+	// PrepareDirectSlot checks live stock via Goods/list and refreshes cached priceSamples when upstream fee_payer changes.
+	sampleFeePayer.Store(1)
+	ready, err := adapter.PrepareDirectSlot(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "10.00", "10.00", 5, 10)
 	require.NoError(t, err)
+	assert.Equal(t, "10.18", ready.Offer.Amount)
 	assert.EqualValues(t, 1, shopCalls.Load())
 	assert.EqualValues(t, 2, listCalls.Load())
 	assert.EqualValues(t, 1, detailCalls.Load())
+
+	quotedAfter, err := adapter.QuoteDirect(context.Background(), "https://wzyp.cn", "YMengCC", "valid-merchant-token", "slot1", "1", "20.00")
+	require.NoError(t, err)
+	assert.Equal(t, "20.36", quotedAfter.Amount, "PrepareDirectSlot live readback must update cached fee_payer sample")
 
 	// Out-of-stock rejection on /shopApi/Pay/order surfaces errJingSoftOutOfStock when no trade_no was created.
 	order := &model.JingSoftOrder{

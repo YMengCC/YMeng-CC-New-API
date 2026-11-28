@@ -40,6 +40,24 @@ import type {
 } from '../types'
 
 const finalStatuses = new Set(['completed', 'expired', 'needs_attention'])
+const QUOTE_CACHE_TTL_MS = 30_000
+
+type CachedJingSoftQuote = {
+  promise: Promise<JingSoftQuote>
+  quote?: JingSoftQuote
+  expiresAt: number
+}
+
+function buildQuoteCacheKey(request: {
+  product_id?: string
+  amount?: number
+  channel_id: string
+}): string {
+  if (request.product_id) {
+    return `p:${request.product_id}:${request.channel_id}`
+  }
+  return `d:${request.amount ?? 0}:${request.channel_id}`
+}
 
 // For the user an order lasts only while its payment dialog is open. Closing
 // the dialog ends it; the server keeps settling or expiring the real order,
@@ -49,7 +67,8 @@ export function useJingSoftPayment(
   info: JingSoftInfo | undefined,
   userId?: number,
   onCompleted?: () => Promise<void>,
-  onModeFallback?: () => Promise<void> | void
+  onModeFallback?: () => Promise<void> | void,
+  pricingSignature?: string
 ) {
   const { t } = useTranslation()
   const [channel, setChannel] = useState<JingSoftChannel | null>(null)
@@ -68,11 +87,7 @@ export function useJingSoftPayment(
   // One key per confirmation, so retrying a lost response reuses its order.
   const requestKey = useRef<string | null>(null)
   const creditedTrade = useRef<string | null>(null)
-  const quoteMutation = useMutation({
-    mutationFn: quoteJingSoft,
-    meta: { errorToast: false },
-    retry: false,
-  })
+  const quoteCache = useRef(new Map<string, CachedJingSoftQuote>())
   const payMutation = useMutation({
     mutationFn: payJingSoft,
     meta: { errorToast: false },
@@ -83,6 +98,7 @@ export function useJingSoftPayment(
     generation.current++
     inFlight.current = false
     requestKey.current = null
+    quoteCache.current.clear()
     setChannel(null)
     setProduct(null)
     setDirectAmount(null)
@@ -92,6 +108,97 @@ export function useJingSoftPayment(
     setCalculating(false)
     setStatusOrder(null)
   }, [userId])
+
+  useEffect(() => {
+    quoteCache.current.clear()
+  }, [info?.mode, info?.configured_mode, pricingSignature])
+
+  const loadCachedOrFetchQuote = useCallback(
+    (
+      payload: { product_id?: string; amount?: number; channel_id: string },
+      expectedAmount?: number
+    ): { immediate?: JingSoftQuote; promise: Promise<JingSoftQuote> } => {
+      const cacheKey = buildQuoteCacheKey(payload)
+      const now = Date.now()
+      const existing = quoteCache.current.get(cacheKey)
+      if (existing && now < existing.expiresAt) {
+        if (
+          existing.quote &&
+          isValidJingSoftQuote(existing.quote, expectedAmount)
+        ) {
+          return { immediate: existing.quote, promise: existing.promise }
+        }
+        return { promise: existing.promise }
+      }
+      const accountSnapshot = identity.current
+      const promise = quoteJingSoft(payload)
+        .then((result) => {
+          if (!isValidJingSoftQuote(result, expectedAmount)) {
+            quoteCache.current.delete(cacheKey)
+            throw new Error(t('Invalid payment quote'))
+          }
+          const current = quoteCache.current.get(cacheKey)
+          if (
+            current?.promise === promise &&
+            identity.current === accountSnapshot
+          ) {
+            current.quote = result
+            current.expiresAt = Date.now() + QUOTE_CACHE_TTL_MS
+          }
+          return result
+        })
+        .catch((error: unknown) => {
+          const current = quoteCache.current.get(cacheKey)
+          if (current?.promise === promise) {
+            quoteCache.current.delete(cacheKey)
+          }
+          throw error
+        })
+      quoteCache.current.set(cacheKey, {
+        promise,
+        expiresAt: now + QUOTE_CACHE_TTL_MS,
+      })
+      return { promise }
+    },
+    [t]
+  )
+
+  const prefetchQuote = useCallback(
+    (
+      target: { product?: JingSoftProduct; directAmount?: number },
+      targetChannel: JingSoftChannel
+    ) => {
+      if (
+        !userId ||
+        !targetChannel?.id ||
+        !info?.enabled ||
+        !info.available
+      ) {
+        return
+      }
+      if (
+        target.directAmount !== undefined &&
+        Number.isFinite(target.directAmount) &&
+        target.directAmount > 0
+      ) {
+        void loadCachedOrFetchQuote({
+          amount: target.directAmount,
+          channel_id: targetChannel.id,
+        }).promise.catch(() => undefined)
+        return
+      }
+      if (target.product) {
+        void loadCachedOrFetchQuote(
+          {
+            product_id: target.product.id,
+            channel_id: targetChannel.id,
+          },
+          target.product.amount
+        ).promise.catch(() => undefined)
+      }
+    },
+    [userId, info?.enabled, info?.available, loadCachedOrFetchQuote]
+  )
 
   function reset() {
     if (inFlight.current) return
@@ -122,18 +229,25 @@ export function useJingSoftPayment(
     setProduct(next)
     setDirectAmount(null)
     if (!userId || !selectedChannel || !info?.enabled || !info.available) return
+    const cached = loadCachedOrFetchQuote(
+      {
+        product_id: next.id,
+        channel_id: selectedChannel.id,
+      },
+      next.amount
+    )
+    if (cached.immediate) {
+      setQuote(cached.immediate)
+      setCalculating(false)
+      setOpen(true)
+      return
+    }
     const version = generation.current
     setOpen(true)
     setCalculating(true)
     try {
-      const result = await quoteMutation.mutateAsync({
-        product_id: next.id,
-        channel_id: selectedChannel.id,
-      })
+      const result = await cached.promise
       if (version !== generation.current || identity.current !== userId) return
-      if (!isValidJingSoftQuote(result, next.amount)) {
-        throw new Error(t('Invalid payment quote'))
-      }
       setQuote(result)
     } catch (error) {
       if (version === generation.current && identity.current === userId) {
@@ -157,18 +271,30 @@ export function useJingSoftPayment(
     setProduct(null)
     setDirectAmount(amount)
     if (!userId || !selectedChannel || !info?.enabled || !info.available) return
+    const cached = loadCachedOrFetchQuote({
+      amount,
+      channel_id: selectedChannel.id,
+    })
+    if (cached.immediate) {
+      if (cached.immediate.mode === 'redemption' && cached.immediate.product_id) {
+        setProduct({
+          id: cached.immediate.product_id,
+          name: cached.immediate.product_id,
+          amount: cached.immediate.topup_amount,
+        })
+        void onModeFallback?.()
+      }
+      setQuote(cached.immediate)
+      setCalculating(false)
+      setOpen(true)
+      return
+    }
     const version = generation.current
     setOpen(true)
     setCalculating(true)
     try {
-      const result = await quoteMutation.mutateAsync({
-        amount,
-        channel_id: selectedChannel.id,
-      })
+      const result = await cached.promise
       if (version !== generation.current || identity.current !== userId) return
-      if (!isValidJingSoftQuote(result)) {
-        throw new Error(t('Invalid payment quote'))
-      }
       if (result.mode === 'redemption' && result.product_id) {
         setProduct({
           id: result.product_id,
@@ -223,6 +349,13 @@ export function useJingSoftPayment(
     const version = generation.current
     requestKey.current ??= crypto.randomUUID()
     inFlight.current = true
+    quoteCache.current.delete(
+      buildQuoteCacheKey(
+        confirmDirect
+          ? { amount: directAmount ?? 0, channel_id: channel.id }
+          : { product_id: fallbackProductId, channel_id: channel.id }
+      )
+    )
     try {
       const order = await payMutation.mutateAsync(
         confirmDirect
@@ -273,6 +406,58 @@ export function useJingSoftPayment(
       }
       if (version === generation.current && identity.current === userId) {
         handleServerError(error, t('Payment request failed'))
+        if (
+          error instanceof JingSoftPaymentRejectedError &&
+          error.messageKey === 'JingSoft quote is invalid or expired'
+        ) {
+          inFlight.current = false
+          setQuote(null)
+          setCalculating(true)
+          const refreshed = confirmDirect
+            ? loadCachedOrFetchQuote({
+                amount: directAmount ?? 0,
+                channel_id: channel.id,
+              })
+            : loadCachedOrFetchQuote(
+                {
+                  product_id: fallbackProductId,
+                  channel_id: channel.id,
+                },
+                expectedRedemptionAmount
+              )
+          try {
+            const nextQuote = await refreshed.promise
+            if (version !== generation.current || identity.current !== userId) {
+              return
+            }
+            if (
+              confirmDirect &&
+              nextQuote.mode === 'redemption' &&
+              nextQuote.product_id
+            ) {
+              setProduct({
+                id: nextQuote.product_id,
+                name: nextQuote.product_id,
+                amount: nextQuote.topup_amount,
+              })
+              void onModeFallback?.()
+            }
+            setQuote(nextQuote)
+          } catch {
+            if (
+              version === generation.current &&
+              identity.current === userId &&
+              confirmDirect
+            ) {
+              setOpen(false)
+              void onModeFallback?.()
+            }
+          } finally {
+            if (version === generation.current && identity.current === userId) {
+              setCalculating(false)
+            }
+          }
+        }
       }
     } finally {
       if (version === generation.current && identity.current === userId) {
@@ -350,6 +535,7 @@ export function useJingSoftPayment(
     selectChannel,
     selectProduct,
     selectDirectAmount,
+    prefetchQuote,
     confirm,
     reset,
   }

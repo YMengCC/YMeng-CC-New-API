@@ -1526,6 +1526,9 @@ func (s *jingSoftService) createWithIP(ctx context.Context, userID int, req Jing
 		}
 		ready, prepErr := s.adapter.PrepareDirectSlot(ctx, baseURL, storeToken, merchantToken, slot.GoodsKey, req.ChannelID, snap.BaseAmount, slot.ConfirmedPrice, minStock, restockBatch)
 		if prepErr != nil {
+			if resetter, ok := s.adapter.(interface{ ResetCache() }); ok {
+				resetter.ResetCache()
+			}
 			if errors.Is(prepErr, errJingSoftMerchantAuthExpired) {
 				s.healthTracker().record(baseURL, merchantToken, false, s.now().Unix())
 				_, _ = s.store.ReleaseSlot(slot.ID, slot.Version, slot.HolderToken, slot.ConfirmedPrice, s.now().Unix())
@@ -1543,6 +1546,9 @@ func (s *jingSoftService) createWithIP(ctx context.Context, userID int, req Jing
 		}
 		s.healthTracker().record(baseURL, merchantToken, true, s.now().Unix())
 		if ready == nil || !ready.Offer.InStock || ready.Offer.Quantity != 1 || ready.Offer.ShopID != snap.Offer.ShopID || ready.Offer.ProductID != slot.GoodsKey || ready.Offer.ChannelID != snap.Offer.ChannelID || !jingSoftAmountsEqual(ready.Offer.Amount, snap.Offer.Amount) || ready.Offer.Currency != snap.Offer.Currency {
+			if resetter, ok := s.adapter.(interface{ ResetCache() }); ok {
+				resetter.ResetCache()
+			}
 			confirmed := slot.ConfirmedPrice
 			if ready != nil && ready.ConfirmedPrice != "" {
 				confirmed = ready.ConfirmedPrice
@@ -1558,9 +1564,15 @@ func (s *jingSoftService) createWithIP(ctx context.Context, userID int, req Jing
 		// new confirmation rather than silently accepting a higher upstream amount.
 		fresh, quoteErr := s.adapter.Quote(ctx, baseURL, cfg.StoreToken, snap.Offer.ProductID, req.ChannelID)
 		if quoteErr != nil {
+			if resetter, ok := s.adapter.(interface{ ResetCache() }); ok {
+				resetter.ResetCache()
+			}
 			return nil, quoteErr
 		}
 		if fresh == nil || !fresh.InStock || fresh.Quantity != 1 || fresh.ShopID != snap.Offer.ShopID || fresh.ProductID != snap.Offer.ProductID || fresh.ChannelID != snap.Offer.ChannelID || !jingSoftAmountsEqual(fresh.Amount, snap.Offer.Amount) || fresh.Currency != snap.Offer.Currency {
+			if resetter, ok := s.adapter.(interface{ ResetCache() }); ok {
+				resetter.ResetCache()
+			}
 			return nil, ErrJingSoftInvalidQuote
 		}
 	}

@@ -31,7 +31,15 @@ const (
 	jingSoftShopCacheTTL   = 5 * time.Minute
 	jingSoftDetailCacheTTL = 5 * time.Minute
 	jingSoftGoodsIDTTL     = 10 * time.Minute
+	jingSoftPriceSampleTTL = 45 * time.Second
 )
+
+type jingSoftPriceSample struct {
+	OriginalAmount *decimal.Decimal `json:"original_amount"`
+	Fee            *decimal.Decimal `json:"fee"`
+	FeePayer       *int             `json:"fee_payer"`
+	TotalAmount    *decimal.Decimal `json:"total_amount"`
+}
 
 type jingSoftCachedShop struct {
 	shop      jingSoftShop
@@ -53,20 +61,34 @@ type jingSoftCachedDetail struct {
 	expiresAt time.Time
 }
 
+type jingSoftCachedDirectGoods struct {
+	goods     jingSoftGoods
+	expiresAt time.Time
+}
+
+type jingSoftCachedPriceSample struct {
+	sample    jingSoftPriceSample
+	expiresAt time.Time
+}
+
 type jingSoftMerchantCache struct {
-	mu       sync.Mutex
-	shops    map[string]jingSoftCachedShop
-	channels map[string]jingSoftCachedChannels
-	goodsIDs map[string]jingSoftCachedGoodsID
-	details  map[string]jingSoftCachedDetail
+	mu           sync.Mutex
+	shops        map[string]jingSoftCachedShop
+	channels     map[string]jingSoftCachedChannels
+	goodsIDs     map[string]jingSoftCachedGoodsID
+	details      map[string]jingSoftCachedDetail
+	directGoods  map[string]jingSoftCachedDirectGoods
+	priceSamples map[string]jingSoftCachedPriceSample
 }
 
 func newJingSoftMerchantCache() *jingSoftMerchantCache {
 	return &jingSoftMerchantCache{
-		shops:    make(map[string]jingSoftCachedShop),
-		channels: make(map[string]jingSoftCachedChannels),
-		goodsIDs: make(map[string]jingSoftCachedGoodsID),
-		details:  make(map[string]jingSoftCachedDetail),
+		shops:        make(map[string]jingSoftCachedShop),
+		channels:     make(map[string]jingSoftCachedChannels),
+		goodsIDs:     make(map[string]jingSoftCachedGoodsID),
+		details:      make(map[string]jingSoftCachedDetail),
+		directGoods:  make(map[string]jingSoftCachedDirectGoods),
+		priceSamples: make(map[string]jingSoftCachedPriceSample),
 	}
 }
 
@@ -80,6 +102,8 @@ func (c *jingSoftMerchantCache) reset() {
 	c.channels = make(map[string]jingSoftCachedChannels)
 	c.goodsIDs = make(map[string]jingSoftCachedGoodsID)
 	c.details = make(map[string]jingSoftCachedDetail)
+	c.directGoods = make(map[string]jingSoftCachedDirectGoods)
+	c.priceSamples = make(map[string]jingSoftCachedPriceSample)
 }
 
 func (c *jingSoftMerchantCache) getShop(cacheKey string, now time.Time) (jingSoftShop, bool) {
@@ -202,13 +226,73 @@ func (c *jingSoftMerchantCache) invalidateScope(scope string) {
 	}
 }
 
+func (c *jingSoftMerchantCache) getDirectGoods(cacheKey string, now time.Time) (jingSoftGoods, bool) {
+	if c == nil {
+		return jingSoftGoods{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.directGoods[cacheKey]
+	if !ok || !now.Before(entry.expiresAt) {
+		return jingSoftGoods{}, false
+	}
+	return entry.goods, true
+}
+
+func (c *jingSoftMerchantCache) setDirectGoods(cacheKey string, goods jingSoftGoods, now time.Time) {
+	if c == nil || cacheKey == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.directGoods[cacheKey] = jingSoftCachedDirectGoods{goods: goods, expiresAt: now.Add(jingSoftDetailCacheTTL)}
+}
+
+func (c *jingSoftMerchantCache) getPriceSample(cacheKey string, now time.Time) (jingSoftPriceSample, bool) {
+	if c == nil {
+		return jingSoftPriceSample{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.priceSamples[cacheKey]
+	if !ok || !now.Before(entry.expiresAt) {
+		return jingSoftPriceSample{}, false
+	}
+	return entry.sample, true
+}
+
+func (c *jingSoftMerchantCache) setPriceSample(cacheKey string, sample jingSoftPriceSample, now time.Time) {
+	if c == nil || cacheKey == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.priceSamples[cacheKey] = jingSoftCachedPriceSample{sample: sample, expiresAt: now.Add(jingSoftPriceSampleTTL)}
+}
+
+func (c *jingSoftMerchantCache) invalidateSlotPriceSamples(slotPrefix string) {
+	if c == nil || slotPrefix == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.priceSamples {
+		if strings.HasPrefix(k, slotPrefix) {
+			delete(c.priceSamples, k)
+		}
+	}
+}
+
 type jingSoftHTTPAdapter struct {
-	baseURL      string // Test-only override for local httptest servers; empty in production.
-	ssrfProtect  bool
-	now          func() time.Time
-	cache        *jingSoftMerchantCache
-	restockMu    sync.Mutex
-	restockLocks map[string]*sync.Mutex
+	baseURL       string // Test-only override for local httptest servers; empty in production.
+	ssrfProtect   bool
+	now           func() time.Time
+	cache         *jingSoftMerchantCache
+	transportMu   sync.Mutex
+	protectedRT   http.RoundTripper
+	unprotectedRT http.RoundTripper
+	restockMu     sync.Mutex
+	restockLocks  map[string]*sync.Mutex
 }
 
 func newJingSoftHTTPAdapter() *jingSoftHTTPAdapter {
@@ -279,6 +363,9 @@ func (a *jingSoftHTTPAdapter) newHTTPTransport(useSSRF bool) http.RoundTripper {
 			Proxy:               http.ProxyFromEnvironment,
 			DialContext:         netDialer.DialContext,
 			ForceAttemptHTTP2:   true,
+			MaxIdleConns:        64,
+			MaxIdleConnsPerHost: 16,
+			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 10 * time.Second,
 		}
 	}
@@ -295,8 +382,29 @@ func (a *jingSoftHTTPAdapter) newHTTPTransport(useSSRF bool) http.RoundTripper {
 	return &http.Transport{
 		DialContext:         dialer.DialContext,
 		ForceAttemptHTTP2:   true,
+		MaxIdleConns:        64,
+		MaxIdleConnsPerHost: 16,
+		IdleConnTimeout:     90 * time.Second,
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
+}
+
+func (a *jingSoftHTTPAdapter) sharedTransport(useSSRF bool) http.RoundTripper {
+	if a == nil {
+		return (&jingSoftHTTPAdapter{ssrfProtect: true}).newHTTPTransport(useSSRF)
+	}
+	a.transportMu.Lock()
+	defer a.transportMu.Unlock()
+	if useSSRF {
+		if a.protectedRT == nil {
+			a.protectedRT = a.newHTTPTransport(true)
+		}
+		return a.protectedRT
+	}
+	if a.unprotectedRT == nil {
+		a.unprotectedRT = a.newHTTPTransport(false)
+	}
+	return a.unprotectedRT
 }
 
 func (a *jingSoftHTTPAdapter) client(resolvedBaseURL string, useSSRF bool, credentials JingSoftCredentials) (*http.Client, error) {
@@ -318,7 +426,7 @@ func (a *jingSoftHTTPAdapter) client(resolvedBaseURL string, useSSRF bool, crede
 	return &http.Client{
 		Timeout:       25 * time.Second,
 		Jar:           jar,
-		Transport:     a.newHTTPTransport(useSSRF),
+		Transport:     a.sharedTransport(useSSRF),
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}, nil
 }
@@ -625,7 +733,12 @@ func (a *jingSoftHTTPAdapter) Channels(ctx context.Context, baseURL, token strin
 	if err != nil {
 		return nil, err
 	}
-	return normalizeDiscoveredChannels(wire)
+	channels, err := normalizeDiscoveredChannels(wire)
+	if err != nil {
+		return nil, err
+	}
+	a.cache.setChannels(jingSoftShopCacheKey(resolvedBase, token), wire, a.currentTime())
+	return channels, nil
 }
 
 func (a *jingSoftHTTPAdapter) CheckCompatibility(ctx context.Context, baseURL, storeToken, merchantToken string) (*JingSoftCompatibilityResult, error) {
@@ -1092,7 +1205,39 @@ func (a *jingSoftHTTPAdapter) fetchVerifiedStorefrontDirectGoods(ctx context.Con
 	if goods.Key != slotGoodsKey || goods.User.Token != storeToken || goods.Type != "card" || goods.Status != 1 || goods.ContactFormat != "any" {
 		return nil, nil, ErrJingSoftVerification
 	}
+	a.cache.setDirectGoods(jingSoftShopCacheKey(resolvedBaseURL, storeToken)+":"+slotGoodsKey, goods, a.currentTime())
 	return shop, &goods, nil
+}
+
+func (a *jingSoftHTTPAdapter) getCachedVerifiedDirectGoods(ctx context.Context, client *http.Client, resolvedBaseURL, storeToken, slotGoodsKey string) (*jingSoftShop, *jingSoftGoods, error) {
+	shop, err := a.getShopInfo(ctx, client, resolvedBaseURL, storeToken)
+	if err != nil {
+		return nil, nil, err
+	}
+	goodsKey := jingSoftShopCacheKey(resolvedBaseURL, storeToken) + ":" + slotGoodsKey
+	if cached, ok := a.cache.getDirectGoods(goodsKey, a.currentTime()); ok {
+		if cached.Key == slotGoodsKey && cached.User.Token == storeToken && cached.Type == "card" && cached.Status == 1 && cached.ContactFormat == "any" {
+			return shop, &cached, nil
+		}
+	}
+	return a.fetchVerifiedStorefrontDirectGoods(ctx, client, resolvedBaseURL, storeToken, slotGoodsKey)
+}
+
+func (a *jingSoftHTTPAdapter) getCachedPriceSample(ctx context.Context, client *http.Client, resolvedBaseURL, storeToken, slotGoodsKey string, channelID int) (jingSoftPriceSample, error) {
+	sampleKey := jingSoftShopCacheKey(resolvedBaseURL, storeToken) + ":" + slotGoodsKey + "#" + strconv.Itoa(channelID)
+	now := a.currentTime()
+	if cached, ok := a.cache.getPriceSample(sampleKey, now); ok {
+		return cached, nil
+	}
+	var sample jingSoftPriceSample
+	if err := a.post(ctx, client, resolvedBaseURL, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": slotGoodsKey, "quantity": 1, "coupon_code": "", "channel_id": channelID}, &sample); err != nil {
+		return jingSoftPriceSample{}, err
+	}
+	if sample.TotalAmount == nil || !sample.TotalAmount.IsPositive() {
+		return jingSoftPriceSample{}, ErrJingSoftVerification
+	}
+	a.cache.setPriceSample(sampleKey, sample, now)
+	return sample, nil
 }
 
 func (a *jingSoftHTTPAdapter) replenishPlaceholderStock(ctx context.Context, client *http.Client, resolvedBaseURL, scope, merchantToken, slotGoodsKey string, goodsID, restockBatch int) error {
@@ -1181,22 +1326,52 @@ func (a *jingSoftHTTPAdapter) QuoteDirect(ctx context.Context, baseURL, storeTok
 	if err != nil {
 		return nil, err
 	}
-	shop, _, err := a.fetchVerifiedStorefrontDirectGoods(ctx, client, resolvedBase, storeToken, slotGoodsKey)
-	if err != nil {
-		return nil, err
-	}
 	scope := jingSoftMerchantScope(resolvedBase, storeToken, merchantToken)
-	goodsID, err := a.resolveMerchantGoodsID(ctx, client, resolvedBase, scope, merchantToken, slotGoodsKey)
-	if err != nil {
-		return nil, err
+	var (
+		shop         *jingSoftShop
+		detail       *jingSoftMerchantGoodsDetail
+		storeErr     error
+		merchantErr  error
+		validateWait sync.WaitGroup
+	)
+	validateWait.Go(func() {
+		shop, _, storeErr = a.getCachedVerifiedDirectGoods(ctx, client, resolvedBase, storeToken, slotGoodsKey)
+	})
+	validateWait.Go(func() {
+		goodsID, resolveErr := a.resolveMerchantGoodsID(ctx, client, resolvedBase, scope, merchantToken, slotGoodsKey)
+		if resolveErr != nil {
+			merchantErr = resolveErr
+			return
+		}
+		detail, merchantErr = a.getVerifiedMerchantDetail(ctx, client, resolvedBase, scope, merchantToken, slotGoodsKey, goodsID)
+	})
+	validateWait.Wait()
+	if errors.Is(merchantErr, errJingSoftMerchantAuthExpired) {
+		return nil, merchantErr
 	}
-	detail, err := a.getVerifiedMerchantDetail(ctx, client, resolvedBase, scope, merchantToken, slotGoodsKey, goodsID)
-	if err != nil {
-		return nil, err
+	if storeErr != nil {
+		return nil, storeErr
 	}
-	rawChannels, err := a.getCachedRawChannels(ctx, client, resolvedBase, storeToken)
-	if err != nil {
-		return nil, err
+	if merchantErr != nil {
+		return nil, merchantErr
+	}
+
+	var (
+		rawChannels []jingSoftChannelWire
+		samplePrice jingSoftPriceSample
+		chanErr     error
+		priceErr    error
+		quoteWait   sync.WaitGroup
+	)
+	quoteWait.Go(func() {
+		rawChannels, chanErr = a.getCachedRawChannels(ctx, client, resolvedBase, storeToken)
+	})
+	quoteWait.Go(func() {
+		samplePrice, priceErr = a.getCachedPriceSample(ctx, client, resolvedBase, storeToken, slotGoodsKey, id)
+	})
+	quoteWait.Wait()
+	if chanErr != nil {
+		return nil, chanErr
 	}
 	var matchedChannel *jingSoftChannelWire
 	for i := range rawChannels {
@@ -1215,17 +1390,8 @@ func (a *jingSoftHTTPAdapter) QuoteDirect(ctx context.Context, baseURL, storeTok
 	if matchedChannel == nil {
 		return nil, ErrJingSoftVerification
 	}
-	var samplePrice struct {
-		OriginalAmount *decimal.Decimal `json:"original_amount"`
-		Fee            *decimal.Decimal `json:"fee"`
-		FeePayer       *int             `json:"fee_payer"`
-		TotalAmount    *decimal.Decimal `json:"total_amount"`
-	}
-	if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": slotGoodsKey, "quantity": 1, "coupon_code": "", "channel_id": id}, &samplePrice); err != nil {
-		return nil, err
-	}
-	if samplePrice.TotalAmount == nil || !samplePrice.TotalAmount.IsPositive() {
-		return nil, ErrJingSoftVerification
+	if priceErr != nil {
+		return nil, priceErr
 	}
 	var buyerPaysFee bool
 	if samplePrice.FeePayer != nil {
@@ -1386,6 +1552,7 @@ func (a *jingSoftHTTPAdapter) PrepareDirectSlot(ctx context.Context, baseURL, st
 		updatedDetail.ContactFormat = "any"
 		updatedDetail.Extend.LockCard = 0
 		a.cache.setDetail(scope, updatedDetail, a.currentTime())
+		a.cache.invalidateSlotPriceSamples(jingSoftShopCacheKey(resolvedBase, storeToken) + ":" + slotGoodsKey + "#")
 	}
 
 	// Read back both storefront goodsInfo and getGoodsPrice to prove the updated
@@ -1397,11 +1564,7 @@ func (a *jingSoftHTTPAdapter) PrepareDirectSlot(ctx context.Context, baseURL, st
 	if goodsAfter.Key != slotGoodsKey || goodsAfter.User.Token != storeToken || goodsAfter.Status != 1 || goodsAfter.ContactFormat != "any" || (goodsAfter.Price != nil && !goodsAfter.Price.Equal(baseDecimal)) {
 		return nil, errJingSoftSlotAmbiguous
 	}
-	var livePrice struct {
-		OriginalAmount *decimal.Decimal `json:"original_amount"`
-		Fee            *decimal.Decimal `json:"fee"`
-		TotalAmount    *decimal.Decimal `json:"total_amount"`
-	}
+	var livePrice jingSoftPriceSample
 	if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": slotGoodsKey, "quantity": 1, "coupon_code": "", "channel_id": id}, &livePrice); err != nil {
 		return nil, fmt.Errorf("%w: %v", errJingSoftSlotAmbiguous, err)
 	}
@@ -1411,6 +1574,11 @@ func (a *jingSoftHTTPAdapter) PrepareDirectSlot(ctx context.Context, baseURL, st
 	if livePrice.OriginalAmount != nil && !livePrice.OriginalAmount.Equal(baseDecimal) {
 		return nil, errJingSoftSlotAmbiguous
 	}
+	now := a.currentTime()
+	if goodsAfter.Type == "card" {
+		a.cache.setDirectGoods(jingSoftShopCacheKey(resolvedBase, storeToken)+":"+slotGoodsKey, goodsAfter, now)
+	}
+	a.cache.setPriceSample(jingSoftShopCacheKey(resolvedBase, storeToken)+":"+slotGoodsKey+"#"+strconv.Itoa(id), livePrice, now)
 	offer := JingSoftOffer{
 		ShopID:    storeToken,
 		ShopName:  shop.Nickname,
@@ -1446,52 +1614,80 @@ func (a *jingSoftHTTPAdapter) Quote(ctx context.Context, baseURL, token, goodsKe
 	if err != nil {
 		return nil, err
 	}
-	var shop jingSoftShop
-	if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/info", map[string]any{"token": token}, &shop); err != nil {
-		return nil, err
-	}
-	if shop.Token != token || !jingSoftMatchesShopLink(resolvedBase, token, shop.Link) {
-		return nil, ErrJingSoftVerification
-	}
-	var goods jingSoftGoods
-	if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/goodsInfo", map[string]any{"goods_key": goodsKey}, &goods); err != nil {
-		return nil, err
-	}
-	if goods.Key != goodsKey || goods.User.Token != token || goods.Type != "card" || goods.Status != 1 || (goods.ContactFormat != "any" && goods.ContactFormat != "qq") {
-		return nil, ErrJingSoftVerification
-	}
+	var (
+		shop        *jingSoftShop
+		goods       jingSoftGoods
+		inStock     bool
+		found       bool
+		channels    []operation_setting.JingSoftChannel
+		price       jingSoftPriceSample
+		shopErr     error
+		goodsErr    error
+		stockErr    error
+		channelsErr error
+		priceErr    error
+		wg          sync.WaitGroup
+	)
+	wg.Go(func() {
+		shop, shopErr = a.getShopInfo(ctx, client, resolvedBase, token)
+	})
+	wg.Go(func() {
+		if callErr := a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/goodsInfo", map[string]any{"goods_key": goodsKey}, &goods); callErr != nil {
+			goodsErr = callErr
+			return
+		}
+		if goods.Key != goodsKey || goods.User.Token != token || goods.Type != "card" || goods.Status != 1 || (goods.ContactFormat != "any" && goods.ContactFormat != "qq") {
+			goodsErr = ErrJingSoftVerification
+		}
+	})
 	// The detail endpoint omits stock. Verify the exact product in the shop's
 	// paginated list; a missing stock field is not proof of availability.
-	inStock := false
-	found := false
-	for page := 1; page <= 50; page++ {
-		var list struct {
-			Total int             `json:"total"`
-			List  []jingSoftGoods `json:"list"`
-		}
-		if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/goodsList", map[string]any{"token": token, "goods_type": "card", "current": page, "pageSize": 20}, &list); err != nil {
-			return nil, err
-		}
-		for _, item := range list.List {
-			if item.Key != goodsKey {
-				continue
+	wg.Go(func() {
+		for page := 1; page <= 50; page++ {
+			var list struct {
+				Total int             `json:"total"`
+				List  []jingSoftGoods `json:"list"`
 			}
-			if found || item.Type != "card" || item.User.Token != token || item.Extend.StockCount == nil || *item.Extend.StockCount < 0 {
-				return nil, ErrJingSoftVerification
+			if callErr := a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/goodsList", map[string]any{"token": token, "goods_type": "card", "current": page, "pageSize": 50}, &list); callErr != nil {
+				stockErr = callErr
+				return
 			}
-			found = true
-			inStock = *item.Extend.StockCount > 0
+			for _, item := range list.List {
+				if item.Key != goodsKey {
+					continue
+				}
+				if found || item.Type != "card" || item.User.Token != token || item.Extend.StockCount == nil || *item.Extend.StockCount < 0 {
+					stockErr = ErrJingSoftVerification
+					return
+				}
+				found = true
+				inStock = *item.Extend.StockCount > 0
+			}
+			if found || len(list.List) == 0 || page*50 >= list.Total {
+				break
+			}
 		}
-		if found || len(list.List) == 0 || page*20 >= list.Total {
-			break
+		if !found {
+			stockErr = ErrJingSoftVerification
 		}
-	}
-	if !found {
-		return nil, ErrJingSoftVerification
-	}
-	channels, err := a.Channels(ctx, resolvedBase, token)
-	if err != nil {
-		return nil, err
+	})
+	wg.Go(func() {
+		raw, callErr := a.getCachedRawChannels(ctx, client, resolvedBase, token)
+		if callErr != nil {
+			channelsErr = callErr
+			return
+		}
+		channels, channelsErr = normalizeDiscoveredChannels(raw)
+	})
+	wg.Go(func() {
+		priceErr = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": goodsKey, "quantity": 1, "coupon_code": "", "channel_id": id}, &price)
+	})
+	wg.Wait()
+
+	for _, stepErr := range []error{shopErr, goodsErr, stockErr, channelsErr, priceErr} {
+		if stepErr != nil {
+			return nil, stepErr
+		}
 	}
 	available := false
 	for _, channel := range channels {
@@ -1502,14 +1698,6 @@ func (a *jingSoftHTTPAdapter) Quote(ctx context.Context, baseURL, token, goodsKe
 	}
 	if !available {
 		return nil, ErrJingSoftVerification
-	}
-	var price struct {
-		OriginalAmount *decimal.Decimal `json:"original_amount"`
-		Fee            *decimal.Decimal `json:"fee"`
-		TotalAmount    *decimal.Decimal `json:"total_amount"`
-	}
-	if err = a.post(ctx, client, resolvedBase, "", "/shopApi/Shop/getGoodsPrice", map[string]any{"goods_key": goodsKey, "quantity": 1, "coupon_code": "", "channel_id": id}, &price); err != nil {
-		return nil, err
 	}
 	if price.TotalAmount == nil || !price.TotalAmount.IsPositive() || price.TotalAmount.GreaterThan(decimal.NewFromInt(1000000000)) {
 		return nil, ErrJingSoftVerification
@@ -1608,7 +1796,7 @@ func (a *jingSoftHTTPAdapter) paymentQRCode(ctx context.Context, resolvedBaseURL
 	client := &http.Client{
 		Timeout:       15 * time.Second,
 		Jar:           jar,
-		Transport:     a.newHTTPTransport(useSSRF),
+		Transport:     a.sharedTransport(useSSRF),
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	method, target, form := http.MethodGet, payURL, url.Values(nil)

@@ -216,12 +216,97 @@ export function Wallet(props: WalletProps) {
   }, [])
   const refreshCreditedBalance = useCallback(() => fetchUser(true), [fetchUser])
 
+  const jingSoftPricingSignature = useMemo(
+    () =>
+      JSON.stringify([
+        status?.price,
+        topupInfo?.discount,
+        topupInfo?.jingsoft?.products,
+      ]),
+    [status?.price, topupInfo?.discount, topupInfo?.jingsoft?.products]
+  )
+
   const jingSoft = useJingSoftPayment(
     topupInfo?.jingsoft,
     user?.id,
     refreshCreditedBalance,
-    refetchTopupInfo
+    refetchTopupInfo,
+    jingSoftPricingSignature
   )
+  const prefetchJingSoftQuote = jingSoft.prefetchQuote
+
+  const configuredJingSoftChannels = useMemo(() => {
+    if (!topupInfo?.jingsoft?.enabled || !topupInfo.jingsoft.available) {
+      return []
+    }
+    return topupInfo.jingsoft.channels.filter((ch) => {
+      let methodType: string | undefined
+      if (ch.payment_type === 'wxpay') {
+        methodType = 'jingsoft_wxpay'
+      } else if (ch.payment_type === 'alipay') {
+        methodType = 'jingsoft_alipay'
+      }
+      if (!methodType) return false
+      return topupInfo.pay_methods?.some(
+        (method) => method.type === methodType && method.channel_id === ch.id
+      )
+    })
+  }, [topupInfo])
+
+  useEffect(() => {
+    if (
+      !user?.id ||
+      confirmDialogOpen ||
+      jingSoft.open ||
+      configuredJingSoftChannels.length === 0
+    ) {
+      return
+    }
+    const minTopup = getMinTopupAmount(topupInfo)
+    if (
+      !Number.isFinite(topupAmount) ||
+      topupAmount <= 0 ||
+      topupAmount < minTopup
+    ) {
+      return
+    }
+
+    const isDirect = topupInfo?.jingsoft?.mode === 'direct'
+    const matchedProduct =
+      !isDirect && selectedPreset !== null && selectedPreset === topupAmount
+        ? topupInfo?.jingsoft?.products.find(
+            (item) => item.amount === selectedPreset
+          )
+        : undefined
+    if (!isDirect && !matchedProduct) return
+
+    const runPrefetch = () => {
+      for (const ch of configuredJingSoftChannels) {
+        if (isDirect) {
+          prefetchJingSoftQuote({ directAmount: topupAmount }, ch)
+        } else if (matchedProduct) {
+          prefetchJingSoftQuote({ product: matchedProduct }, ch)
+        }
+      }
+    }
+
+    if (selectedPreset !== null && selectedPreset === topupAmount) {
+      runPrefetch()
+      return
+    }
+    const timer = window.setTimeout(runPrefetch, 250)
+    return () => window.clearTimeout(timer)
+  }, [
+    user?.id,
+    confirmDialogOpen,
+    jingSoft.open,
+    configuredJingSoftChannels,
+    topupInfo,
+    topupAmount,
+    selectedPreset,
+    prefetchJingSoftQuote,
+    jingSoftPricingSignature,
+  ])
 
   useEffect(() => {
     fetchUser()
