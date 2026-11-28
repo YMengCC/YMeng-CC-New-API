@@ -71,6 +71,11 @@ func InitEnv() {
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")
 	}
+	if os.Getenv("UPDATE_MANAGED") == "true" {
+		if err := EnsureManagedOrderEncryptionKey(os.Getenv("UPDATE_JINGSOFT_KEY_FILE")); err != nil {
+			log.Fatal(err)
+		}
+	}
 	if *LogDir != "" {
 		var err error
 		*LogDir, err = filepath.Abs(*LogDir)

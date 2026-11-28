@@ -32,6 +32,7 @@ import { formatCurrencyFromUSD } from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
+import { SettingsCard } from '../components/settings-card'
 import { JingSoftProductDialog } from './jingsoft-product-dialog'
 import {
   inferJingSoftExpectedUSD,
@@ -172,10 +173,20 @@ export function JingSoftRedemptionProductsSection(props: Props) {
   }).length
 
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <h4 className='font-medium'>{t('JingSoft product mappings')}</h4>
-        <div className='flex flex-wrap gap-2'>
+    <SettingsCard
+      title={
+        <span className='inline-flex flex-wrap items-center gap-2'>
+          <span>{t('JingSoft product mappings')}</span>
+          <Badge variant='secondary' className='font-mono text-xs'>
+            {props.products.length}
+          </Badge>
+        </span>
+      }
+      description={t(
+        'Selling prices come from live JingSoft quotes. Each order buys one code.'
+      )}
+      action={
+        <>
           <Button
             type='button'
             variant='outline'
@@ -198,22 +209,18 @@ export function JingSoftRedemptionProductsSection(props: Props) {
           >
             {t('Add product')}
           </Button>
-        </div>
-      </div>
-
-      <p className='text-muted-foreground text-sm'>
-        {t(
-          'Selling prices come from live JingSoft quotes. Each order buys one code.'
-        )}
-      </p>
-      <p className='text-muted-foreground text-sm'>
+        </>
+      }
+      contentClassName='space-y-4'
+    >
+      <p className='text-muted-foreground text-xs leading-relaxed'>
         {t(
           'Match each product’s expected credited balance (USD) to an amount option in General. Use the balance value, not the CNY selling price or converted display amount. Unmatched presets cannot use this payment method.'
         )}
       </p>
 
       {unmappedDiscovered.length > 0 && (
-        <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+        <div className='bg-muted/30 min-w-0 space-y-3 rounded-xl border p-3.5'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <p className='text-sm font-medium'>
               {t('Detected unmapped store products')}
@@ -228,16 +235,18 @@ export function JingSoftRedemptionProductsSection(props: Props) {
               </Button>
             )}
           </div>
-          <div className='space-y-2'>
+          <div className='max-h-80 space-y-2 overflow-y-auto pr-1'>
             {unmappedDiscovered.map((item) => (
               <div
                 key={item.goods_key}
-                className='bg-background flex flex-wrap items-center justify-between gap-3 rounded-md border p-2.5 text-sm'
+                className='bg-background flex flex-col gap-2.5 rounded-lg border p-2.5 text-sm sm:flex-row sm:items-center sm:justify-between'
               >
                 <div className='min-w-0 flex-1 space-y-1'>
                   <div className='flex flex-wrap items-center gap-2'>
-                    <span className='font-medium break-all'>{item.name}</span>
-                    <code className='text-muted-foreground text-xs'>
+                    <span className='max-w-full truncate font-medium'>
+                      {item.name}
+                    </span>
+                    <code className='bg-muted text-muted-foreground max-w-full truncate rounded px-1.5 py-0.5 text-xs'>
                       {item.goods_key}
                     </code>
                     {item.price_cny && (
@@ -253,7 +262,7 @@ export function JingSoftRedemptionProductsSection(props: Props) {
                     )}
                   </div>
                 </div>
-                <div className='flex items-center gap-2'>
+                <div className='flex shrink-0 items-center gap-2'>
                   <Input
                     type='number'
                     min='0'
@@ -287,56 +296,70 @@ export function JingSoftRedemptionProductsSection(props: Props) {
       )}
 
       {props.invalid && (
-        <p role='alert'>{t('Invalid JingSoft mapping configuration')}</p>
-      )}
-      {!props.products.length && (
-        <p className='text-muted-foreground text-sm'>
-          {t('No JingSoft products configured')}
+        <p role='alert' className='text-destructive text-xs'>
+          {t('Invalid JingSoft mapping configuration')}
         </p>
       )}
-      {props.products.map((product) => (
-        <div
-          key={product.id}
-          className='flex flex-wrap items-center justify-between gap-3 rounded-md border p-3'
-        >
-          <div className='min-w-0 break-all'>
-            <p>
-              {product.name} ({product.id})
-            </p>
-            <p className='text-muted-foreground text-sm'>
-              {product.goods_key} ·{' '}
-              {formatCurrencyFromUSD(product.amount, {
-                locale: toIntlLocale(i18n.resolvedLanguage || i18n.language),
-              })}
-            </p>
-          </div>
-          <div className='flex gap-2'>
-            <Button
-              type='button'
-              variant='outline'
-              aria-label={t('Edit JingSoft product {{name}}', {
-                name: product.name,
-              })}
-              onClick={() => {
-                setEditing(product)
-                setOpen(true)
-              }}
-            >
-              {t('Edit')}
-            </Button>
-            <Button
-              type='button'
-              variant='outline'
-              aria-label={t('Delete JingSoft product {{name}}', {
-                name: product.name,
-              })}
-              onClick={() => setDeleting(product)}
-            >
-              {t('Delete')}
-            </Button>
-          </div>
+      {!props.products.length ? (
+        <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-6 text-center text-sm'>
+          {t('No JingSoft products configured')}
         </div>
-      ))}
+      ) : (
+        <div className='max-h-80 space-y-2 overflow-y-auto pr-1'>
+          {props.products.map((product) => (
+            <div
+              key={product.id}
+              className='bg-muted/15 flex flex-col gap-2.5 rounded-lg border px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between'
+            >
+              <div className='min-w-0 flex-1 space-y-0.5'>
+                <p className='truncate text-sm font-medium'>
+                  {product.name} ({product.id})
+                </p>
+                <p className='text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs'>
+                  <code className='bg-muted max-w-full truncate rounded px-1.5 py-0.5 font-mono text-xs'>
+                    {product.goods_key}
+                  </code>
+                  <span>·</span>
+                  <span>
+                    {formatCurrencyFromUSD(product.amount, {
+                      locale: toIntlLocale(
+                        i18n.resolvedLanguage || i18n.language
+                      ),
+                    })}
+                  </span>
+                </p>
+              </div>
+              <div className='flex shrink-0 gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  aria-label={t('Edit JingSoft product {{name}}', {
+                    name: product.name,
+                  })}
+                  onClick={() => {
+                    setEditing(product)
+                    setOpen(true)
+                  }}
+                >
+                  {t('Edit')}
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='outline'
+                  aria-label={t('Delete JingSoft product {{name}}', {
+                    name: product.name,
+                  })}
+                  onClick={() => setDeleting(product)}
+                >
+                  {t('Delete')}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <JingSoftProductDialog
         open={open}
@@ -389,6 +412,6 @@ export function JingSoftRedemptionProductsSection(props: Props) {
           setDeleting(null)
         }}
       />
-    </div>
+    </SettingsCard>
   )
 }

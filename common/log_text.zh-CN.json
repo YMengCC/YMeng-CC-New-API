@@ -122,6 +122,7 @@
   "InitChannelCache failed: %s": "InitChannelCache 失败: %s",
   "InitChannelCache panic: %v": "InitChannelCache 发生 panic: %v",
   "InitChannelCache panic: %v, retrying once": "InitChannelCache 发生 panic: %v，重试一次",
+  "Initialized managed JingSoft order encryption key": "已自动初始化受管站点 JingSoft 订单加密密钥",
   "LoadFileSource starting for: %s": "LoadFileSource 开始加载: %s",
   "Loaded %d custom OAuth providers": "已加载 %d 个自定义 OAuth 提供商",
   "Loaded custom OAuth provider: %s (%s)": "已加载自定义 OAuth 提供商: %s (%s)",

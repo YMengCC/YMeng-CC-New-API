@@ -58,6 +58,7 @@ const BRAND_AND_LITERAL_KEYS = new Set([
   'GitHub',
   'Jimeng',
   'JingSoft',
+  'JingSoft Pro',
   'JiaSu Seedance',
   'JustSong',
   'LingYiWanWu',

@@ -74,8 +74,14 @@ it.each(Object.entries(resources))(
       'Contact method',
       'Enter QQ number (5-12 digits)',
       'Custom amounts are not supported',
-      'JingSoft consignment store payments',
-      'JingSoft payment setup guide',
+      'JingSoft Pro',
+      'JingSoft Pro setup guide',
+      'If JINGSOFT_ORDER_ENCRYPTION_KEY is not set on the server, site version updates configure a 32-byte Base64 key automatically.',
+      'JingSoft Pro uses live CNY quotes and credits the configured USD balance.',
+      'Status & settlement mode',
+      'Platform & store credentials',
+      'Direct-credit & auto-restock',
+      'Risk & rate limits',
       'Open JingSoft merchant console',
       'JingSoft available channels',
       'JingSoft Alipay',
@@ -115,16 +121,24 @@ it.each(Object.entries(resources))(
       expect(i18n.exists(key, { lng: language })).toBe(true)
       const translated = i18n.t(key)
       expect(translated).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
-      if (language !== 'en') expect(translated).not.toBe(key)
+      if (language !== 'en' && key !== 'JingSoft Pro') {
+        expect(translated).not.toBe(key)
+      }
     }
     for (const [entryKey, value] of Object.entries(resource.translation)) {
       expect(entryKey).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
-      expect(String(value)).not.toMatch(/catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i)
+      expect(String(value)).not.toMatch(
+        /catfk|云猫|雲貓|雲猫|Yunmao|Cloud Cat/i
+      )
+      const legacyProNamePattern =
+        /JingSoft\s*(?:consignment|[店商][铺鋪](?:支付|付款)|寄[售託]|PRO\b)/u
+      expect(entryKey).not.toMatch(legacyProNamePattern)
+      expect(String(value)).not.toMatch(legacyProNamePattern)
     }
   }
 )
 
-it('shows exact JingSoft casing in Chinese and English and switches gateway labels with the language', async () => {
+it('shows exact JingSoft Pro naming in Chinese and English and switches gateway labels with the language', async () => {
   const i18n = createInstance()
   await i18n.init({ lng: 'zh', fallbackLng: 'en', resources })
   expect(i18n.t('Cancel payment')).toBe('取消支付')
@@ -144,8 +158,8 @@ it('shows exact JingSoft casing in Chinese and English and switches gateway labe
   )
   expect(i18n.t('Custom amounts are not supported')).toBe('不支持自定义金额')
   expect(i18n.t('Enable JingSoft')).toBe('启用 JingSoft 支付')
-  expect(i18n.t('JingSoft consignment store payments')).toBe('JingSoft 店铺支付')
-  expect(i18n.t('JingSoft payment setup guide')).toBe('JingSoft 支付设置指南')
+  expect(i18n.t('JingSoft Pro')).toBe('JingSoft Pro')
+  expect(i18n.t('JingSoft Pro setup guide')).toBe('JingSoft Pro 配置引导')
   expect(i18n.t('JingSoft Alipay')).toBe('JingSoft 支付宝')
   expect(i18n.t('JingSoft WeChat Pay')).toBe('JingSoft 微信支付')
   expect(i18n.t('Test compatibility')).toBe('测试兼容')
@@ -153,6 +167,8 @@ it('shows exact JingSoft casing in Chinese and English and switches gateway labe
   expect(i18n.t('Select payment type')).toBe('请选择支付处理标识')
   await i18n.changeLanguage('en')
   expect(i18n.t('Enable JingSoft')).toBe('Enable JingSoft payments')
+  expect(i18n.t('JingSoft Pro')).toBe('JingSoft Pro')
   await i18n.changeLanguage('zh-TW')
+  expect(i18n.t('JingSoft Pro')).toBe('JingSoft Pro')
   expect(i18n.t('Custom amounts are not supported')).toBe('不支援自訂金額')
 })

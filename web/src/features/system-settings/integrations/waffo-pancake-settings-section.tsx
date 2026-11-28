@@ -29,6 +29,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { getPaymentErrorTranslation } from '@/features/wallet/lib/payment'
 import { handleServerError } from '@/lib/handle-server-error'
 
+import { SettingsCard } from '../components/settings-card'
 import { removeTrailingSlash } from './utils'
 import {
   type CatalogStore,
@@ -377,29 +378,26 @@ export function WaffoPancakeSettingsSection({
   }
 
   return (
-    <div className='space-y-4 pt-4'>
-      <div>
-        <h3 className='text-lg font-medium'>{t('Waffo Pancake MoR')}</h3>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'Start collecting payments globally without registering a company. Built for indie developers, OPC sole proprietorships, and startups. Waffo Pancake acts as your Merchant of Record, taking on the compliance burden of global payment collection — consumption tax, invoicing, subscription management, refunds, and chargebacks. Solo developers can launch fast and stay focused on product instead of compliance. Onboard in minutes — one prompt to a full integration.'
-          )}
-        </p>
-      </div>
+    <SettingsCard
+      title={t('Waffo Pancake MoR')}
+      description={t(
+        'Start collecting payments globally without registering a company. Built for indie developers, OPC sole proprietorships, and startups. Waffo Pancake acts as your Merchant of Record, taking on the compliance burden of global payment collection — consumption tax, invoicing, subscription management, refunds, and chargebacks. Solo developers can launch fast and stay focused on product instead of compliance. Onboard in minutes — one prompt to a full integration.'
+      )}
+    >
       <div className='grid min-w-0 gap-x-5 gap-y-4 lg:grid-cols-2'>
         {/* Blue box — webhook configuration only. */}
-        <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 lg:col-span-2 dark:bg-blue-950 dark:text-blue-100'>
+        <div className='rounded-lg bg-blue-50 p-4 text-sm text-blue-900 lg:col-span-2 dark:bg-blue-950 dark:text-blue-100'>
           <p className='mb-2 font-medium'>{t('Webhook Configuration:')}</p>
-          <ul className='list-inside list-disc space-y-1'>
+          <ul className='list-inside list-disc space-y-1 break-words'>
             <li>
               {t('Webhook URL (Test):')}{' '}
-              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                 {'<ServerAddress>/api/waffo-pancake/webhook/test'}
               </code>
             </li>
             <li>
               {t('Webhook URL (Production):')}{' '}
-              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                 {'<ServerAddress>/api/waffo-pancake/webhook/prod'}
               </code>
             </li>
@@ -422,7 +420,7 @@ export function WaffoPancakeSettingsSection({
           </ul>
         </div>
 
-        <div className='grid gap-1.5'>
+        <div className='grid min-w-0 gap-1.5'>
           <Label>{t('Merchant ID')}</Label>
           <Input
             placeholder='MER_xxx'
@@ -434,7 +432,7 @@ export function WaffoPancakeSettingsSection({
           />
         </div>
 
-        <div className='grid gap-1.5'>
+        <div className='grid min-w-0 gap-1.5'>
           <Label>{t('API Private Key')}</Label>
           <Textarea
             rows={4}
@@ -453,31 +451,15 @@ export function WaffoPancakeSettingsSection({
           </p>
         </div>
 
-        {/*
-          Binding section — split into two visually distinct paths:
-          (A) "Use existing" pair from the loaded catalog — only rendered when
-              the merchant actually has stores, so first-time setup isn't
-              cluttered by dead dropdowns.
-          (B) "Create a fresh pair" — always available, paired with the
-              return URL field that's only meaningful here.
-          The two paths are split by an "or" divider so the operator never has
-          to wonder which field belongs to which intent.
-        */}
-        <div className='space-y-4 pt-2 lg:col-span-2'>
+        <div className='min-w-0 space-y-4 pt-2 lg:col-span-2'>
           <div>
-            <h4 className='font-medium'>
+            <h4 className='text-sm font-medium'>
               {t('Bind a Pancake store + product')}
             </h4>
             <p className='text-muted-foreground text-xs'>{bindStatusMessage}</p>
           </div>
 
-          {/*
-              Operator-facing explainer: why only ONE store + product needs
-              to be bound at the gateway level, and what each piece is used
-              for. Subscriptions reuse the same Store but get their own
-              per-plan product, configured in the Subscriptions admin.
-            */}
-          <div className='rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100'>
+          <div className='rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100'>
             <p className='mb-1 font-medium'>
               {t('Why only one store + product?')}
             </p>
@@ -500,24 +482,23 @@ export function WaffoPancakeSettingsSection({
             </ul>
           </div>
 
-          {/* Create section — first, since creating auto-fills the pick-existing dropdowns below. */}
           <div className='space-y-1.5'>
             <Label>{t('Payment return URL')}</Label>
-            <div className='flex gap-2'>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
               <Input
                 placeholder='https://example.com/wallet'
                 value={returnURL}
                 onChange={(event) =>
                   onValueChange('WaffoPancakeReturnURL', event.target.value)
                 }
-                className='flex-1'
+                className='min-w-0 flex-1'
               />
               <Button
                 type='button'
                 variant='outline'
                 onClick={handleCreatePair}
                 disabled={creatingPair || verifying || !credsReady}
-                className='shrink-0'
+                className='w-full shrink-0 sm:w-auto'
               >
                 {creatingPair
                   ? t('Creating...')
@@ -541,14 +522,13 @@ export function WaffoPancakeSettingsSection({
                 <div className='flex-1 border-t' />
               </div>
 
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='grid gap-1.5'>
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <div className='grid min-w-0 gap-1.5'>
                   <Label>{t('Store')}</Label>
                   <Combobox
                     options={storeSelectItems}
                     value={chosenStoreID}
                     onValueChange={(value) => {
-                      // Base UI Select can deliver null on deselect.
                       onSelectedBindingChange({
                         storeID: value ?? '',
                         productID: '',
@@ -559,7 +539,7 @@ export function WaffoPancakeSettingsSection({
                   />
                 </div>
 
-                <div className='grid gap-1.5'>
+                <div className='grid min-w-0 gap-1.5'>
                   <Label>{t('Product')}</Label>
                   <Combobox
                     options={productSelectItems}
@@ -603,6 +583,6 @@ export function WaffoPancakeSettingsSection({
           </div>
         </div>
       </div>
-    </div>
+    </SettingsCard>
   )
 }

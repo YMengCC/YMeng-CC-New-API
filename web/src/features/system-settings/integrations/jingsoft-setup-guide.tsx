@@ -16,50 +16,137 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { HelpCircle } from 'lucide-react'
-import { useState } from 'react'
+import { ExternalLink, HelpCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 import { normalizeJingSoftBaseURL } from './jingsoft-schema'
 
-export function JingSoftSetupGuide(props: { baseUrl?: string }) {
+export const JINGSOFT_PRO_GUIDE_STORAGE_KEY =
+  'newapi.jingsoft_pro.setup_guide.dismissed.v1'
+
+function isJingSoftProGuideDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markJingSoftProGuideDismissed(): void {
+  try {
+    window.localStorage.setItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY, '1')
+  } catch {
+    // Ignore restricted storage environments.
+  }
+}
+
+type JingSoftSetupGuideProps = {
+  baseUrl?: string
+  autoOpen?: boolean
+}
+
+export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(
+    () => Boolean(props.autoOpen) && !isJingSoftProGuideDismissed()
+  )
   const resolvedOrigin = normalizeJingSoftBaseURL(props.baseUrl ?? '')
   const exampleOrigin = resolvedOrigin || 'https://wzyp.cn'
   const merchantConsoleUrl = resolvedOrigin ? `${resolvedOrigin}/merchant` : ''
 
+  useEffect(() => {
+    if (props.autoOpen && !isJingSoftProGuideDismissed()) {
+      setOpen(true)
+    }
+  }, [props.autoOpen])
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      markJingSoftProGuideDismissed()
+    }
+    setOpen(nextOpen)
+  }
+
+  const settingGroups = [
+    {
+      title: t('Status & settlement mode'),
+      items: `${t('Enable JingSoft')} · ${t('JingSoft settlement mode')}`,
+      purpose: t(
+        'Controls whether new orders can be created and selects direct-credit, redemption-code, or automatic fallback settlement.'
+      ),
+      advice: t(
+        'Recommended: choose Auto fallback mode or Direct-credit mode so buyers can pay preset or custom amounts without entering a QQ number.'
+      ),
+    },
+    {
+      title: t('Platform & store credentials'),
+      items: `${t('JingSoft platform URL')} · ${t('JingSoft store token')}`,
+      purpose: t(
+        'Connects your HTTPS JingSoft Pro storefront and verifies store ownership, channels, and products.'
+      ),
+      advice: t(
+        'Paste your full /shop/... link to auto-split both fields, then click Test compatibility to confirm connectivity.'
+      ),
+    },
+    {
+      title: t('Direct-credit & auto-restock'),
+      items: `${t('JingSoft merchant token')} · ${t('Direct-credit slot goods keys')} · ${t('Auto-restock threshold')}`,
+      purpose: t(
+        'Enables server-side dynamic slot pricing and automatic placeholder stock replenishment.'
+      ),
+      advice: t(
+        'Create 3–5 card products with Contact format set to Any and Storefront visibility set to Hidden, verify the merchant token, then click Auto-detect hidden slots.'
+      ),
+    },
+    {
+      title: t('JingSoft product mappings'),
+      items: `${t('Auto-detect store products')} · ${t('Expected credited balance (USD)')}`,
+      purpose: t(
+        'Maps public card products to preset USD recharge tiers in General for redemption-code or fallback settlement.'
+      ),
+      advice: t(
+        'Set product Contact format to Any or QQ, click Auto-detect store products to infer USD tiers, then click Import matched.'
+      ),
+    },
+    {
+      title: t('Channels & risk limits'),
+      items: `${t('JingSoft available channels')} · ${t('Max single payment (CNY)')} · ${t('Order rate limit (per minute)')}`,
+      purpose: t(
+        'Syncs upstream Alipay/WeChat channels when saving and bounds single-order amount and per-minute order creation.'
+      ),
+      advice: t(
+        'Keep sensible limits (for example ¥5000 and 15 orders/min), save settings to sync channels, and bind them in General → Payment methods.'
+      ),
+    },
+  ]
+
   return (
     <Dialog
       open={open}
-      onOpenChange={setOpen}
-      title={t('JingSoft payment setup guide')}
+      onOpenChange={handleOpenChange}
+      title={t('JingSoft Pro setup guide')}
       description={t(
-        'Follow these steps to configure the platform URL, store token, and product settings in your JingSoft merchant account.'
+        'Review each setting group, its purpose, and the recommended setup steps. Closing this guide stops automatic pop-ups; click Setup guide anytime to reopen.'
       )}
-      contentClassName='sm:max-w-xl'
-      bodyClassName='text-sm break-words'
-      showCloseButton={false}
+      contentClassName='sm:max-w-2xl'
+      headerClassName='pr-5'
+      bodyClassName='space-y-5 text-sm break-words'
       trigger={
-        <Button type='button' variant='outline' size='sm'>
-          <HelpCircle className='mr-1 h-4 w-4' aria-hidden='true' />
+        <Button type='button' variant='outline' size='sm' className='shrink-0'>
+          <HelpCircle className='mr-1.5 size-4' aria-hidden='true' />
           {t('Setup guide')}
         </Button>
       }
       footer={
         <>
-          <Button
-            type='button'
-            variant='outline'
-            onClick={() => setOpen(false)}
-          >
-            {t('Close')}
-          </Button>
           {merchantConsoleUrl && (
             <Button
+              variant='outline'
               role='link'
               render={
                 <a
@@ -70,111 +157,116 @@ export function JingSoftSetupGuide(props: { baseUrl?: string }) {
               }
             >
               {t('Open JingSoft merchant console')}
+              <ExternalLink className='ml-1.5 size-3.5' aria-hidden='true' />
             </Button>
           )}
+          <Button type='button' onClick={() => handleOpenChange(false)}>
+            {t('Got it')}
+          </Button>
         </>
       }
     >
-      <ol className='list-decimal space-y-5 pl-5'>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>
-            {t('Configure platform URL & test compatibility')}
-          </h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'Enter the HTTPS origin of any JingSoft PRO storefront platform, then click Test compatibility to verify its API endpoints.'
-            )}
+      <div className='bg-muted/30 space-y-3 rounded-xl border p-4'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <p className='text-sm font-semibold'>
+            {t('Recommended setup workflow')}
           </p>
-          <p className='text-muted-foreground'>
-            {t('Example')}:{' '}
-            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              {exampleOrigin}
-            </code>
-          </p>
-        </li>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>{t('Get the store token')}</h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'Sign in to the JingSoft merchant console and open your store page.'
-            )}
-          </p>
-          <p className='text-muted-foreground'>
-            {t(
-              'Copy the part of the store link after /shop/ and paste it into the store token field. You can also paste the full store link.'
-            )}
-          </p>
-          <p className='text-muted-foreground'>
-            {t('Example')}:{' '}
-            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              {`${exampleOrigin}/shop/YourShop`}
-            </code>{' '}
-            →{' '}
-            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              YourShop
-            </code>
-          </p>
-        </li>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>{t('Prepare the products')}</h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'Create one card-code product for each top-up tier. Keep it on sale and in stock.'
-            )}
-          </p>
-          <p className='text-muted-foreground'>
-            {t('Set the contact format to Any or QQ.')}
-          </p>
-        </li>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>{t('Add product mappings')}</h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'Click Auto-detect store products to import on-sale card products automatically, or paste a product key or full /item/... link.'
-            )}
-          </p>
-          <p className='text-muted-foreground'>
-            {t('Example')}:{' '}
-            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              {`${exampleOrigin}/item/jbf7yz`}
-            </code>{' '}
-            →{' '}
-            <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
-              jbf7yz
-            </code>
-          </p>
-          <p className='text-muted-foreground'>
-            {t(
-              'Set the expected credited balance (USD) to a top-up amount option in General, not the CNY selling price.'
-            )}
-          </p>
-        </li>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>
-            {t('Direct-credit mode (optional)')}
-          </h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'To skip manual code exports and enable custom recharge amounts, create 1–20 dedicated card products with Contact format set to Any and Storefront visibility set to Hidden, then enter your merchant token and slot goods keys.'
-            )}
-          </p>
-        </li>
-        <li className='space-y-1.5'>
-          <h3 className='font-medium'>
-            {t('Configure JingSoft payment methods')}
-          </h3>
-          <p className='text-muted-foreground'>
-            {t(
-              'Save settings to automatically read the available channels, then add the matching JingSoft payment methods in General and save again.'
-            )}
-          </p>
-          <p className='text-muted-foreground'>
-            {t(
-              'The server must also set JINGSOFT_ORDER_ENCRYPTION_KEY to a Base64 value that decodes to 32 bytes.'
-            )}
-          </p>
-        </li>
-      </ol>
+          <Badge variant='secondary'>{t('4 steps')}</Badge>
+        </div>
+        <ol className='list-decimal space-y-2.5 pl-5 text-xs leading-relaxed sm:text-sm'>
+          <li>
+            <h3 className='inline font-medium'>
+              {t('Configure platform URL & test compatibility')}
+            </h3>
+            <span className='text-muted-foreground'>
+              {' — '}
+              {t(
+                'Enter the HTTPS origin of any JingSoft Pro platform, then click Test compatibility to verify its API endpoints.'
+              )}{' '}
+              ({t('Example')}:{' '}
+              <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
+                {exampleOrigin}
+              </code>
+              )
+            </span>
+          </li>
+          <li>
+            <h3 className='inline font-medium'>{t('Get the store token')}</h3>
+            <span className='text-muted-foreground'>
+              {' — '}
+              {t(
+                'Copy the part of the store link after /shop/ and paste it into the store token field. You can also paste the full store link.'
+              )}{' '}
+              (
+              <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
+                {`${exampleOrigin}/shop/YourShop`}
+              </code>{' '}
+              →{' '}
+              <code className='bg-muted text-foreground rounded px-1.5 py-0.5 text-xs'>
+                YourShop
+              </code>
+              )
+            </span>
+          </li>
+          <li>
+            <h3 className='inline font-medium'>{t('Add product mappings')}</h3>
+            <span className='text-muted-foreground'>
+              {' — '}
+              {t(
+                'Use Auto-detect hidden slots for direct-credit mode or Auto-detect store products for redemption mode, then click Save all settings to sync channels.'
+              )}
+            </span>
+          </li>
+          <li>
+            <h3 className='inline font-medium'>
+              {t('Configure JingSoft payment methods')}
+            </h3>
+            <span className='text-muted-foreground'>
+              {' — '}
+              {t(
+                'Add the synced JingSoft Alipay / WeChat Pay entries under General → Payment methods and save again.'
+              )}{' '}
+              {t(
+                'If JINGSOFT_ORDER_ENCRYPTION_KEY is not set on the server, site version updates configure a 32-byte Base64 key automatically.'
+              )}
+            </span>
+          </li>
+        </ol>
+      </div>
+
+      <div className='space-y-2.5'>
+        <p className='text-sm font-semibold'>
+          {t('Settings reference & recommended actions')}
+        </p>
+        <div className='grid gap-3 sm:grid-cols-2'>
+          {settingGroups.map((group) => (
+            <div
+              key={group.title}
+              className='bg-card flex min-w-0 flex-col gap-1.5 rounded-xl border p-3.5'
+            >
+              <div className='font-medium'>{group.title}</div>
+              <p className='text-muted-foreground text-xs break-words'>
+                <span className='text-foreground font-medium'>
+                  {t('Included fields')}:
+                </span>{' '}
+                {group.items}
+              </p>
+              <p className='text-muted-foreground text-xs leading-relaxed'>
+                <span className='text-foreground font-medium'>
+                  {t('Purpose')}:
+                </span>{' '}
+                {group.purpose}
+              </p>
+              <p className='text-muted-foreground text-xs leading-relaxed'>
+                <span className='text-foreground font-medium'>
+                  {t('Recommended')}:
+                </span>{' '}
+                {group.advice}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
     </Dialog>
   )
 }

@@ -101,7 +101,8 @@ export function JingSoftDirectSlotsSection(props: Props) {
   const configuredSlots = new Set(props.directSlots)
   const unmappedDiscovered = (discovered ?? []).filter(
     (item) =>
-      !configuredSlots.has(item.goods_key) && !redemptionKeys.has(item.goods_key)
+      !configuredSlots.has(item.goods_key) &&
+      !redemptionKeys.has(item.goods_key)
   )
   const compatibleDiscovered = unmappedDiscovered.filter(
     (item) => item.compatible
@@ -121,9 +122,7 @@ export function JingSoftDirectSlotsSection(props: Props) {
     }
     if (redemptionKeys.has(normalized)) {
       setSlotError(
-        t(
-          'Direct-credit slot keys cannot overlap with redemption product keys'
-        )
+        t('Direct-credit slot keys cannot overlap with redemption product keys')
       )
       return
     }
@@ -137,9 +136,7 @@ export function JingSoftDirectSlotsSection(props: Props) {
     if (configuredSlots.has(item.goods_key)) return
     if (redemptionKeys.has(item.goods_key)) {
       setSlotError(
-        t(
-          'Direct-credit slot keys cannot overlap with redemption product keys'
-        )
+        t('Direct-credit slot keys cannot overlap with redemption product keys')
       )
       return
     }
@@ -160,13 +157,21 @@ export function JingSoftDirectSlotsSection(props: Props) {
   }
 
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <h4 className='font-medium'>{t('Direct-credit slot goods keys')}</h4>
+    <div className='min-w-0 space-y-3'>
+      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+        <div className='flex min-w-0 flex-wrap items-center gap-2'>
+          <h4 className='text-sm font-medium'>
+            {t('Direct-credit slot goods keys')}
+          </h4>
+          <Badge variant='secondary' className='font-mono text-xs'>
+            {props.directSlots.length}/20
+          </Badge>
+        </div>
         <Button
           type='button'
           variant='outline'
           size='sm'
+          className='w-full shrink-0 sm:w-auto'
           disabled={props.invalid || discoverDirectSlots.isPending}
           onClick={() =>
             discoverDirectSlots.mutate({
@@ -181,16 +186,18 @@ export function JingSoftDirectSlotsSection(props: Props) {
             : t('Auto-detect hidden slots')}
         </Button>
       </div>
-      <p className='text-muted-foreground text-sm'>
+      <p className='text-muted-foreground text-xs leading-relaxed'>
         {t(
           'Configure 1–20 dedicated card products in your JingSoft store with Contact format set to Any and Storefront visibility set to Hidden.'
         )}
       </p>
       {props.invalid && (
-        <p role='alert'>{t('Invalid JingSoft direct slot settings')}</p>
+        <p role='alert' className='text-destructive text-xs'>
+          {t('Invalid JingSoft direct slot settings')}
+        </p>
       )}
       {unmappedDiscovered.length > 0 && (
-        <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+        <div className='bg-muted/30 min-w-0 space-y-3 rounded-xl border p-3.5'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <p className='text-sm font-medium'>
               {t('Detected hidden card products')}
@@ -201,7 +208,7 @@ export function JingSoftDirectSlotsSection(props: Props) {
               </Button>
             )}
           </div>
-          <div className='space-y-2'>
+          <div className='max-h-72 space-y-2 overflow-y-auto pr-1'>
             {unmappedDiscovered.map((item) => {
               const incompatibleLabel =
                 item.contact_format && item.contact_format !== 'any'
@@ -210,12 +217,14 @@ export function JingSoftDirectSlotsSection(props: Props) {
               return (
                 <div
                   key={item.goods_key}
-                  className='bg-background flex flex-wrap items-center justify-between gap-3 rounded-md border p-2.5 text-sm'
+                  className='bg-background flex flex-col gap-2.5 rounded-lg border p-2.5 text-sm sm:flex-row sm:items-center sm:justify-between'
                 >
                   <div className='min-w-0 flex-1 space-y-1'>
                     <div className='flex flex-wrap items-center gap-2'>
-                      <span className='font-medium break-all'>{item.name}</span>
-                      <code className='text-muted-foreground text-xs'>
+                      <span className='max-w-full truncate font-medium'>
+                        {item.name}
+                      </span>
+                      <code className='bg-muted text-muted-foreground max-w-full truncate rounded px-1.5 py-0.5 text-xs'>
                         {item.goods_key}
                       </code>
                       <Badge variant={item.in_stock ? 'outline' : 'secondary'}>
@@ -230,7 +239,10 @@ export function JingSoftDirectSlotsSection(props: Props) {
                     type='button'
                     size='sm'
                     variant='outline'
-                    disabled={!item.compatible || props.directSlots.length >= 20}
+                    className='w-full shrink-0 sm:w-auto'
+                    disabled={
+                      !item.compatible || props.directSlots.length >= 20
+                    }
                     onClick={() => addDiscoveredSlot(item)}
                   >
                     {t('Add slot')}
@@ -241,7 +253,7 @@ export function JingSoftDirectSlotsSection(props: Props) {
           </div>
         </div>
       )}
-      <div className='flex flex-wrap gap-2'>
+      <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
         <Input
           id='jingsoft-direct-slot-input'
           aria-label={t('Direct-credit slot goods key')}
@@ -262,6 +274,7 @@ export function JingSoftDirectSlotsSection(props: Props) {
         />
         <Button
           type='button'
+          className='w-full shrink-0 sm:w-auto'
           disabled={
             props.invalid || props.directSlots.length >= 20 || !slotDraft.trim()
           }
@@ -271,36 +284,42 @@ export function JingSoftDirectSlotsSection(props: Props) {
         </Button>
       </div>
       {slotError && (
-        <p role='alert' className='text-destructive text-sm'>
+        <p role='alert' className='text-destructive text-xs'>
           {slotError}
         </p>
       )}
-      {!props.directSlots.length && (
-        <p className='text-muted-foreground text-sm'>
+      {!props.directSlots.length ? (
+        <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-6 text-center text-sm'>
           {t('No direct-credit slots configured')}
-        </p>
-      )}
-      {props.directSlots.map((slotKey) => (
-        <div
-          key={slotKey}
-          className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'
-        >
-          <code className='min-w-0 break-all'>{slotKey}</code>
-          <Button
-            type='button'
-            variant='outline'
-            size='sm'
-            aria-label={t('Remove direct slot {{key}}', { key: slotKey })}
-            onClick={() =>
-              props.onDirectSlotsChange(
-                props.directSlots.filter((item) => item !== slotKey)
-              )
-            }
-          >
-            {t('Delete')}
-          </Button>
         </div>
-      ))}
+      ) : (
+        <div className='grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2'>
+          {props.directSlots.map((slotKey) => (
+            <div
+              key={slotKey}
+              className='bg-muted/15 flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm'
+            >
+              <code className='min-w-0 truncate font-mono text-xs'>
+                {slotKey}
+              </code>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className='shrink-0'
+                aria-label={t('Remove direct slot {{key}}', { key: slotKey })}
+                onClick={() =>
+                  props.onDirectSlotsChange(
+                    props.directSlots.filter((item) => item !== slotKey)
+                  )
+                }
+              >
+                {t('Delete')}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

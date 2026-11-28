@@ -30,7 +30,10 @@ import {
   JingSoftSettingsFields,
   type JingSoftFormValues,
 } from '../jingsoft-settings-fields'
-import { JingSoftSetupGuide } from '../jingsoft-setup-guide'
+import {
+  JINGSOFT_PRO_GUIDE_STORAGE_KEY,
+  JingSoftSetupGuide,
+} from '../jingsoft-setup-guide'
 import { PaymentMethodDialog } from '../payment-method-dialog'
 import { PaymentMethodsVisualEditor } from '../payment-methods-visual-editor'
 import { PaymentSettingsSection } from '../payment-settings-section'
@@ -74,9 +77,14 @@ function Wrapper(props: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>{props.children}</QueryClientProvider>
   )
 }
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  localStorage.clear()
+  vi.restoreAllMocks()
+})
 
-test('store settings have a standalone JingSoft tab and preserve edited fields when switching back to General', async () => {
+test('JingSoft Pro has a standalone second tab, auto-opens the setup guide once on first entry, and preserves edited fields across tabs', async () => {
+  localStorage.clear()
+  const user = userEvent.setup()
   render(
     <PaymentSettingsSection
       defaultValues={{
@@ -133,52 +141,70 @@ test('store settings have a standalone JingSoft tab and preserve edited fields w
     />,
     { wrapper: Wrapper }
   )
+  const tabs = screen.getAllByRole('tab')
+  expect(tabs[0]).toHaveAccessibleName('General')
+  expect(tabs[1]).toHaveAccessibleName('JingSoft Pro')
+  expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+
+  const proTab = screen.getByRole('tab', { name: 'JingSoft Pro' })
+  expect(proTab).toHaveAttribute('aria-selected', 'false')
+  await user.click(proTab)
+  expect(proTab).toHaveAttribute('aria-selected', 'true')
+
+  // First visit automatically opens the setup guide dialog.
+  const guideDialog = await screen.findByRole('dialog', {
+    name: 'JingSoft Pro setup guide',
+  })
+  expect(
+    within(guideDialog).getByText('Status & settlement mode')
+  ).toBeVisible()
+  expect(
+    within(guideDialog).getByText('Platform & store credentials')
+  ).toBeVisible()
+  await user.click(within(guideDialog).getByRole('button', { name: 'Got it' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
+  expect(localStorage.getItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY)).toBe('1')
+
+  expect(screen.getByRole('button', { name: 'Setup guide' })).toBeVisible()
+  expect(screen.getByRole('tablist')).toHaveClass('min-w-max')
+  proTab.focus()
+  await user.keyboard('{ArrowLeft}{Enter}')
   expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute(
     'aria-selected',
     'true'
   )
-  const storeTab = screen.getByRole('tab', {
-    name: 'JingSoft consignment store payments',
-  })
-  expect(storeTab).toHaveAttribute('aria-selected', 'false')
-  expect(
-    screen.queryByRole('button', { name: 'Store payment settings' })
-  ).not.toBeInTheDocument()
-  await userEvent.click(storeTab)
-  expect(storeTab).toHaveAttribute('aria-selected', 'true')
-  expect(screen.getByRole('button', { name: 'Setup guide' })).toBeVisible()
-  expect(screen.getByRole('tablist')).toHaveClass('min-w-max')
-  await userEvent.keyboard('{ArrowLeft}{Enter}')
-  expect(screen.getByRole('tab', { name: 'Creem' })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  )
-  await userEvent.keyboard('{ArrowRight}{Enter}')
-  expect(storeTab).toHaveAttribute('aria-selected', 'true')
+  await user.keyboard('{ArrowRight}{Enter}')
+  expect(proTab).toHaveAttribute('aria-selected', 'true')
+  // Once dismissed, re-entering JingSoft Pro does NOT auto-pop the guide.
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
   expect(screen.getByRole('switch', { name: 'Enable JingSoft' })).toBeVisible()
-  await userEvent.type(
+  await user.type(
     screen.getByLabelText('JingSoft platform URL'),
     'https://wzyp.cn'
   )
-  await userEvent.type(screen.getByLabelText('JingSoft store token'), 'my-shop')
-  await userEvent.click(screen.getByRole('tab', { name: 'General' }))
+  await user.type(screen.getByLabelText('JingSoft store token'), 'my-shop')
+  await user.click(screen.getByRole('button', { name: 'Configure in General' }))
   expect(
     screen.queryByRole('switch', { name: 'Enable JingSoft' })
   ).not.toBeInTheDocument()
-  await userEvent.click(storeTab)
+  await user.click(proTab)
   expect(screen.getByLabelText('JingSoft platform URL')).toHaveValue(
     'https://wzyp.cn'
   )
   expect(screen.getByLabelText('JingSoft store token')).toHaveValue('my-shop')
 })
 
-test('clicking Setup guide opens the platform URL, token and goods key steps, links to the configured merchant console, and Close dismisses it', async () => {
+test('Setup guide can be reopened anytime after dismissal and links to the configured merchant console', async () => {
+  localStorage.setItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY, '1')
   const user = userEvent.setup()
-  render(<JingSoftSetupGuide baseUrl='https://wzyp.cn' />)
+  render(<JingSoftSetupGuide baseUrl='https://wzyp.cn' autoOpen />)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Setup guide' }))
   const dialog = await screen.findByRole('dialog', {
-    name: 'JingSoft payment setup guide',
+    name: 'JingSoft Pro setup guide',
   })
   expect(
     within(dialog).getByRole('heading', {
@@ -191,6 +217,7 @@ test('clicking Setup guide opens the platform URL, token and goods key steps, li
   expect(
     within(dialog).getByRole('heading', { name: 'Add product mappings' })
   ).toBeVisible()
+  expect(within(dialog).getByText('Channels & risk limits')).toBeVisible()
   const link = within(dialog).getByRole('link', {
     name: 'Open JingSoft merchant console',
   })
@@ -240,11 +267,14 @@ test('pasting a full store link splits platform URL and store token, and Test co
     'https://wzyp.cn'
   )
   expect(screen.getByLabelText('JingSoft store token')).toHaveValue('MyShop')
-  expect(post).toHaveBeenCalledWith('/api/option/jingsoft/compatibility/check', {
-    base_url: 'https://wzyp.cn',
-    store_token: 'MyShop',
-    merchant_token: '',
-  })
+  expect(post).toHaveBeenCalledWith(
+    '/api/option/jingsoft/compatibility/check',
+    {
+      base_url: 'https://wzyp.cn',
+      store_token: 'MyShop',
+      merchant_token: '',
+    }
+  )
   expect(
     await screen.findByText(
       'Compatible JingSoft store "MyShop" (2 payment channels, 4 card products)'
@@ -445,11 +475,8 @@ test('configures and saves a per-method display fee for Epay payments', async ()
   )
 })
 
-test('the General payment method editor keeps store payments as a normal method without embedding gateway configuration', () => {
+test('the General payment method editor keeps JingSoft Pro methods as normal entries without embedding gateway configuration', () => {
   render(<PaymentMethodsVisualEditor value='[]' onChange={vi.fn()} />)
-  expect(
-    screen.queryByRole('button', { name: 'Store payment settings' })
-  ).not.toBeInTheDocument()
   expect(
     screen.queryByRole('switch', { name: 'Enable JingSoft' })
   ).not.toBeInTheDocument()
@@ -503,7 +530,9 @@ test('adding via pasted /item/ link auto-generates stable ID, selects preset chi
       name: 'Delete',
     })
   )
-  expect(await screen.findByText('No JingSoft products configured')).toBeVisible()
+  expect(
+    await screen.findByText('No JingSoft products configured')
+  ).toBeVisible()
 })
 
 function PaymentSectionWithSave(props: {
@@ -577,6 +606,7 @@ function PaymentSectionWithSave(props: {
 }
 
 test('saving JingSoft settings automatically reads and persists available channels without a manual read button', async () => {
+  localStorage.setItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY, '1')
   const channels = [
     { id: 'a', name: 'Alipay', icon: '', payment_type: 'alipay' },
     { id: 'w', name: 'WeChat Pay', icon: '', payment_type: 'wxpay' },
@@ -592,9 +622,7 @@ test('saving JingSoft settings automatically reads and persists available channe
 
   render(<PaymentSectionWithSave />, { wrapper: Wrapper })
 
-  await user.click(
-    screen.getByRole('tab', { name: 'JingSoft consignment store payments' })
-  )
+  await user.click(screen.getByRole('tab', { name: 'JingSoft Pro' }))
   expect(
     screen.queryByRole('button', { name: 'Read JingSoft channels' })
   ).not.toBeInTheDocument()
@@ -657,6 +685,7 @@ test('saving non-JingSoft settings on the General tab does not trigger JingSoft 
 })
 
 test('a channel auto-read failure on save shows the error while still saving edited JingSoft fields', async () => {
+  localStorage.setItem(JINGSOFT_PRO_GUIDE_STORAGE_KEY, '1')
   vi.spyOn(api, 'post').mockResolvedValue({
     data: { success: false, message: 'JingSoft protocol is not verified' },
   })
@@ -669,9 +698,7 @@ test('a channel auto-read failure on save shows the error while still saving edi
 
   render(<PaymentSectionWithSave />, { wrapper: Wrapper })
 
-  await user.click(
-    screen.getByRole('tab', { name: 'JingSoft consignment store payments' })
-  )
+  await user.click(screen.getByRole('tab', { name: 'JingSoft Pro' }))
   await user.type(
     screen.getByLabelText('JingSoft platform URL'),
     'https://wzyp.cn'
@@ -704,10 +731,9 @@ test('invalid persisted mappings block edits and an unconfirmed account cannot e
     'Invalid JingSoft mapping configuration'
   )
   expect(screen.getByRole('button', { name: 'Add product' })).toBeDisabled()
-  expect(screen.getByRole('switch', { name: 'Enable JingSoft' })).toHaveAttribute(
-    'aria-disabled',
-    'true'
-  )
+  expect(
+    screen.getByRole('switch', { name: 'Enable JingSoft' })
+  ).toHaveAttribute('aria-disabled', 'true')
 })
 
 test('switching to direct-credit mode configures slots without losing product mappings and rejects overlapping keys', async () => {
@@ -879,5 +905,7 @@ test('Mode 2 Auto-detect hidden slots filters overlapping keys, highlights incom
   await user.click(screen.getByRole('button', { name: 'Add compatible (2)' }))
   expect(screen.getByText('slot_a')).toBeVisible()
   expect(screen.getByText('slot_b')).toBeVisible()
-  expect(screen.queryByRole('button', { name: 'Remove direct slot slot_qq' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Remove direct slot slot_qq' })
+  ).not.toBeInTheDocument()
 })

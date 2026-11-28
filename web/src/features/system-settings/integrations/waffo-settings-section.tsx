@@ -32,7 +32,11 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 
-import { SettingsSwitchField } from '../components/settings-form-layout'
+import { SettingsCard } from '../components/settings-card'
+import {
+  SettingsControlGroup,
+  SettingsSwitchField,
+} from '../components/settings-form-layout'
 
 export interface WaffoSettingsValues {
   WaffoEnabled: boolean
@@ -142,17 +146,13 @@ export function WaffoSettingsSection({
 
   return (
     <>
-      <div className='space-y-4 pt-4'>
-        <div>
-          <h3 className='text-lg font-medium'>
-            {t('Waffo Aggregator Gateway')}
-          </h3>
-          <p className='text-muted-foreground text-sm'>
-            {t(
-              'Payment aggregator mode — onboard with your own registered company (offshore entity). Built for Enterprise.'
-            )}
-          </p>
-        </div>
+      <SettingsCard
+        title={t('Waffo Aggregator Gateway')}
+        description={t(
+          'Payment aggregator mode — onboard with your own registered company (offshore entity). Built for Enterprise.'
+        )}
+        contentClassName='space-y-5'
+      >
         <Alert>
           <AlertDescription className='text-xs'>
             {t(
@@ -162,22 +162,26 @@ export function WaffoSettingsSection({
         </Alert>
 
         <div className='grid gap-4 sm:grid-cols-2'>
-          <SettingsSwitchField
-            checked={values.WaffoEnabled}
-            onCheckedChange={(v) => onValueChange('WaffoEnabled', v)}
-            label={t('Enable Waffo')}
-            className='py-0'
-          />
-          <SettingsSwitchField
-            checked={values.WaffoSandbox}
-            onCheckedChange={(v) => onValueChange('WaffoSandbox', v)}
-            label={t('Sandbox mode')}
-            className='py-0'
-          />
+          <SettingsControlGroup>
+            <SettingsSwitchField
+              checked={values.WaffoEnabled}
+              onCheckedChange={(v) => onValueChange('WaffoEnabled', v)}
+              label={t('Enable Waffo')}
+              className='py-0.5'
+            />
+          </SettingsControlGroup>
+          <SettingsControlGroup>
+            <SettingsSwitchField
+              checked={values.WaffoSandbox}
+              onCheckedChange={(v) => onValueChange('WaffoSandbox', v)}
+              label={t('Sandbox mode')}
+              className='py-0.5'
+            />
+          </SettingsControlGroup>
         </div>
 
-        <div className='grid grid-cols-2 gap-4'>
-          <div className='grid gap-1.5'>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('API Key (Production)')}</Label>
             <Input
               type='password'
@@ -187,7 +191,7 @@ export function WaffoSettingsSection({
               }
             />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('API Key (Sandbox)')}</Label>
             <Input
               type='password'
@@ -199,7 +203,7 @@ export function WaffoSettingsSection({
           </div>
         </div>
 
-        <div className='grid gap-1.5'>
+        <div className='grid min-w-0 gap-1.5'>
           <Label>{t('Merchant ID')}</Label>
           <Input
             value={values.WaffoMerchantId}
@@ -209,8 +213,8 @@ export function WaffoSettingsSection({
           />
         </div>
 
-        <div className='grid grid-cols-2 gap-4'>
-          <div className='grid gap-1.5'>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('RSA Private Key (Production)')}</Label>
             <Textarea
               rows={3}
@@ -221,7 +225,7 @@ export function WaffoSettingsSection({
               className='font-mono text-xs'
             />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('RSA Private Key (Sandbox)')}</Label>
             <Textarea
               rows={3}
@@ -234,8 +238,8 @@ export function WaffoSettingsSection({
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-4'>
-          <div className='grid gap-1.5'>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Waffo Public Key (Production)')}</Label>
             <Textarea
               rows={3}
@@ -246,7 +250,7 @@ export function WaffoSettingsSection({
               className='font-mono text-xs'
             />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Waffo Public Key (Sandbox)')}</Label>
             <Textarea
               rows={3}
@@ -259,12 +263,12 @@ export function WaffoSettingsSection({
           </div>
         </div>
 
-        <div className='grid grid-cols-3 gap-4'>
-          <div className='grid gap-1.5'>
+        <div className='grid gap-4 sm:grid-cols-3'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Currency')}</Label>
             <Input value={values.WaffoCurrency} disabled />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Unit price (USD)')}</Label>
             <Input
               type='number'
@@ -279,7 +283,7 @@ export function WaffoSettingsSection({
               }
             />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Minimum top-up quantity')}</Label>
             <Input
               type='number'
@@ -295,8 +299,8 @@ export function WaffoSettingsSection({
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-4'>
-          <div className='grid gap-1.5'>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Callback notification URL')}</Label>
             <Input
               placeholder='https://example.com/api/waffo/webhook'
@@ -306,7 +310,7 @@ export function WaffoSettingsSection({
               }
             />
           </div>
-          <div className='grid gap-1.5'>
+          <div className='grid min-w-0 gap-1.5'>
             <Label>{t('Payment return URL')}</Label>
             <Input
               placeholder='https://example.com/wallet'
@@ -320,8 +324,8 @@ export function WaffoSettingsSection({
 
         <Separator />
 
-        <div className='flex items-center justify-between'>
-          <h4 className='font-medium'>{t('Payment Methods')}</h4>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <h4 className='text-sm font-medium'>{t('Payment Methods')}</h4>
           <Button type='button' variant='outline' size='sm' onClick={openAdd}>
             <Plus className='mr-1 h-3 w-3' />
             {t('Add payment method')}
@@ -384,7 +388,7 @@ export function WaffoSettingsSection({
             },
           ]}
         />
-      </div>
+      </SettingsCard>
 
       <Dialog
         open={methodDialogOpen}

@@ -44,6 +44,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getPaymentErrorTranslation } from '@/features/wallet/lib/payment'
@@ -53,7 +54,9 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { confirmPaymentCompliance } from '../api'
+import { SettingsCard } from '../components/settings-card'
 import {
+  SettingsControlGroup,
   SettingsForm,
   SettingsSwitchContent,
   SettingsSwitchItem,
@@ -356,7 +359,9 @@ export function PaymentSettingsSection({
   }, [waffoDefaultValues.WaffoPayMethods])
 
   React.useEffect(() => {
-    setJingSoftChannels(parseJingSoftChannels(initialFormValues.JingSoftChannels))
+    setJingSoftChannels(
+      parseJingSoftChannels(initialFormValues.JingSoftChannels)
+    )
     jingSoftTokenGeneration.current++
   }, [initialFormValues.JingSoftChannels])
 
@@ -1199,178 +1204,241 @@ export function PaymentSettingsSection({
             <div className='overflow-x-auto pb-1'>
               <TabsList className='min-w-max'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
+                <TabsTrigger value='jingsoft'>{t('JingSoft Pro')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
-                <TabsTrigger value='jingsoft'>
-                  {t('JingSoft consignment store payments')}
-                </TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
                 <TabsTrigger value='waffo'>Waffo</TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value='general' className={paymentTabContentClassName}>
-              <div className='space-y-4'>
-                <div>
-                  <h3 className='text-lg font-medium'>
-                    {t('General Settings')}
-                  </h3>
-                  <p className='text-muted-foreground text-sm'>
-                    {t('Shared configuration for all payment gateways')}
-                  </p>
-                </div>
+              <div className='min-w-0 space-y-5'>
+                <SettingsCard
+                  title={t('Recharge pricing & tiers')}
+                  description={t(
+                    'Shared configuration for all payment gateways'
+                  )}
+                  contentClassName='space-y-5'
+                >
+                  <div className='grid gap-5 sm:grid-cols-2'>
+                    <FormField
+                      control={form.control}
+                      name='Price'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t('Price (local currency / USD)')}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              step='0.01'
+                              min={0}
+                              {...safeNumberFieldProps(field)}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t(
+                              'How much to charge for each US dollar of balance (Epay)'
+                            )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <div className='grid gap-6 md:grid-cols-2'>
+                    <FormField
+                      control={form.control}
+                      name='MinTopUp'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Minimum top-up (USD)')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type='number'
+                              step='0.01'
+                              min={0}
+                              {...safeNumberFieldProps(field)}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t('Smallest USD amount users can recharge (Epay)')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className='grid gap-6 xl:grid-cols-2 xl:items-start'>
+                    <FormField
+                      control={form.control}
+                      name='AmountOptions'
+                      render={({ field }) => (
+                        <FormItem className='min-w-0'>
+                          <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                            <FormLabel>{t('Top-up amount options')}</FormLabel>
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                setAmountOptionsVisualMode(
+                                  !amountOptionsVisualMode
+                                )
+                              }
+                              className='w-full sm:w-auto'
+                            >
+                              {amountOptionsVisualMode ? (
+                                <>
+                                  <Code2 className='mr-2 h-3 w-3' />
+                                  {t('JSON Editor')}
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className='mr-2 h-3 w-3' />
+                                  {t('Visual Editor')}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          <FormControl>
+                            {amountOptionsVisualMode ? (
+                              <AmountOptionsVisualEditor
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            ) : (
+                              <JsonCodeEditor
+                                value={field.value}
+                                onChange={field.onChange}
+                                name={field.name}
+                                onBlur={field.onBlur}
+                                textareaRef={field.ref}
+                                placeholder='[10, 20, 50, 100]'
+                                heightClassName='h-40 min-h-40 max-h-40'
+                                aria-invalid={Boolean(
+                                  form.formState.errors.AmountOptions
+                                )}
+                              />
+                            )}
+                          </FormControl>
+                          <FormDescription>
+                            {t('Preset recharge amounts (JSON array)')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name='AmountDiscount'
+                      render={({ field }) => (
+                        <FormItem className='min-w-0'>
+                          <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                            <FormLabel>{t('Amount discount')}</FormLabel>
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                setAmountDiscountVisualMode(
+                                  !amountDiscountVisualMode
+                                )
+                              }
+                              className='w-full sm:w-auto'
+                            >
+                              {amountDiscountVisualMode ? (
+                                <>
+                                  <Code2 className='mr-2 h-3 w-3' />
+                                  {t('JSON Editor')}
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className='mr-2 h-3 w-3' />
+                                  {t('Visual Editor')}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          <FormControl>
+                            {amountDiscountVisualMode ? (
+                              <AmountDiscountVisualEditor
+                                value={field.value}
+                                onChange={field.onChange}
+                              />
+                            ) : (
+                              <JsonCodeEditor
+                                value={field.value}
+                                onChange={field.onChange}
+                                name={field.name}
+                                onBlur={field.onBlur}
+                                textareaRef={field.ref}
+                                placeholder='{"100":0.95,"200":0.9}'
+                                heightClassName='h-40 min-h-40 max-h-40'
+                                aria-invalid={Boolean(
+                                  form.formState.errors.AmountDiscount
+                                )}
+                              />
+                            )}
+                          </FormControl>
+                          <FormDescription>
+                            {t('Discount map by recharge amount (JSON object)')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </SettingsCard>
+
+                <SettingsCard
+                  title={t('Payment methods')}
+                  description={t(
+                    'Choose the payment provider. JingSoft Pro channels are synced automatically when saving settings.'
+                  )}
+                  action={
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      onClick={() =>
+                        setPayMethodsVisualMode(!payMethodsVisualMode)
+                      }
+                    >
+                      {payMethodsVisualMode ? (
+                        <>
+                          <Code2 className='mr-2 h-3 w-3' />
+                          {t('JSON Editor')}
+                        </>
+                      ) : (
+                        <>
+                          <Eye className='mr-2 h-3 w-3' />
+                          {t('Visual Editor')}
+                        </>
+                      )}
+                    </Button>
+                  }
+                >
                   <FormField
                     control={form.control}
-                    name='Price'
+                    name='PayMethods'
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t('Price (local currency / USD)')}
+                      <FormItem className='min-w-0'>
+                        <FormLabel className='sr-only'>
+                          {t('Payment methods')}
                         </FormLabel>
                         <FormControl>
-                          <Input
-                            type='number'
-                            step='0.01'
-                            min={0}
-                            {...safeNumberFieldProps(field)}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t(
-                            'How much to charge for each US dollar of balance (Epay)'
-                          )}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name='MinTopUp'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Minimum top-up (USD)')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type='number'
-                            step='0.01'
-                            min={0}
-                            {...safeNumberFieldProps(field)}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t('Smallest USD amount users can recharge (Epay)')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name='PayMethods'
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                        <FormLabel>{t('Payment methods')}</FormLabel>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          onClick={() =>
-                            setPayMethodsVisualMode(!payMethodsVisualMode)
-                          }
-                          className='w-full sm:w-auto'
-                        >
                           {payMethodsVisualMode ? (
-                            <>
-                              <Code2 className='mr-2 h-3 w-3' />
-                              {t('JSON Editor')}
-                            </>
-                          ) : (
-                            <>
-                              <Eye className='mr-2 h-3 w-3' />
-                              {t('Visual Editor')}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      <FormControl>
-                        {payMethodsVisualMode ? (
-                          <PaymentMethodsVisualEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            jingSoftChannels={jingSoftChannels}
-                          />
-                        ) : (
-                          <JsonCodeEditor
-                            value={field.value}
-                            onChange={field.onChange}
-                            name={field.name}
-                            onBlur={field.onBlur}
-                            textareaRef={field.ref}
-                            placeholder={t(
-                              '[{"name":"支付宝","type":"alipay","icon":"SiAlipay"}]'
-                            )}
-                            heightClassName='h-40 min-h-40 max-h-40'
-                            aria-invalid={Boolean(
-                              form.formState.errors.PayMethods
-                            )}
-                          />
-                        )}
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Choose the payment provider. Store payments use the configured product tiers.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className='grid gap-6 md:grid-cols-2 md:items-start'>
-                  <FormField
-                    control={form.control}
-                    name='AmountOptions'
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                          <FormLabel>{t('Top-up amount options')}</FormLabel>
-                          <Button
-                            type='button'
-                            variant='outline'
-                            size='sm'
-                            onClick={() =>
-                              setAmountOptionsVisualMode(
-                                !amountOptionsVisualMode
-                              )
-                            }
-                            className='w-full sm:w-auto'
-                          >
-                            {amountOptionsVisualMode ? (
-                              <>
-                                <Code2 className='mr-2 h-3 w-3' />
-                                {t('JSON Editor')}
-                              </>
-                            ) : (
-                              <>
-                                <Eye className='mr-2 h-3 w-3' />
-                                {t('Visual Editor')}
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                        <FormControl>
-                          {amountOptionsVisualMode ? (
-                            <AmountOptionsVisualEditor
+                            <PaymentMethodsVisualEditor
                               value={field.value}
                               onChange={field.onChange}
+                              jingSoftChannels={jingSoftChannels}
                             />
                           ) : (
                             <JsonCodeEditor
@@ -1379,94 +1447,135 @@ export function PaymentSettingsSection({
                               name={field.name}
                               onBlur={field.onBlur}
                               textareaRef={field.ref}
-                              placeholder='[10, 20, 50, 100]'
+                              placeholder={t(
+                                '[{"name":"支付宝","type":"alipay","icon":"SiAlipay"}]'
+                              )}
                               heightClassName='h-40 min-h-40 max-h-40'
                               aria-invalid={Boolean(
-                                form.formState.errors.AmountOptions
+                                form.formState.errors.PayMethods
                               )}
                             />
                           )}
                         </FormControl>
-                        <FormDescription>
-                          {t('Preset recharge amounts (JSON array)')}
-                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </SettingsCard>
+              </div>
+            </TabsContent>
 
-                  <FormField
-                    control={form.control}
-                    name='AmountDiscount'
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                          <FormLabel>{t('Amount discount')}</FormLabel>
-                          <Button
-                            type='button'
-                            variant='outline'
-                            size='sm'
-                            onClick={() =>
-                              setAmountDiscountVisualMode(
-                                !amountDiscountVisualMode
-                              )
-                            }
-                            className='w-full sm:w-auto'
-                          >
-                            {amountDiscountVisualMode ? (
-                              <>
-                                <Code2 className='mr-2 h-3 w-3' />
-                                {t('JSON Editor')}
-                              </>
-                            ) : (
-                              <>
-                                <Eye className='mr-2 h-3 w-3' />
-                                {t('Visual Editor')}
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                        <FormControl>
-                          {amountDiscountVisualMode ? (
-                            <AmountDiscountVisualEditor
-                              value={field.value}
-                              onChange={field.onChange}
-                            />
-                          ) : (
-                            <JsonCodeEditor
-                              value={field.value}
-                              onChange={field.onChange}
-                              name={field.name}
-                              onBlur={field.onBlur}
-                              textareaRef={field.ref}
-                              placeholder='{"100":0.95,"200":0.9}'
-                              heightClassName='h-40 min-h-40 max-h-40'
-                              aria-invalid={Boolean(
-                                form.formState.errors.AmountDiscount
-                              )}
-                            />
-                          )}
-                        </FormControl>
-                        <FormDescription>
-                          {t('Discount map by recharge amount (JSON object)')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+            <TabsContent
+              value='jingsoft'
+              className={paymentTabContentClassName}
+            >
+              <div className='min-w-0 space-y-5'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                  <div className='min-w-0 space-y-0.5'>
+                    <h3 className='text-base font-semibold'>
+                      {t('JingSoft Pro')}
+                    </h3>
+                    <p className='text-muted-foreground text-xs sm:text-sm'>
+                      {t(
+                        'Connect any compatible JingSoft Pro storefront for direct-credit or redemption-code top-ups.'
+                      )}
+                    </p>
+                  </div>
+                  <JingSoftSetupGuide
+                    baseUrl={form.watch('JingSoftBaseURL')}
+                    autoOpen={complianceConfirmed}
                   />
                 </div>
+                <JingSoftSettingsFields
+                  values={{
+                    JingSoftEnabled: form.watch('JingSoftEnabled'),
+                    JingSoftMode: form.watch('JingSoftMode'),
+                    JingSoftBaseURL: form.watch('JingSoftBaseURL'),
+                    JingSoftStoreToken: form.watch('JingSoftStoreToken'),
+                    JingSoftMerchantToken: form.watch('JingSoftMerchantToken'),
+                    JingSoftProducts: form.watch('JingSoftProducts'),
+                    JingSoftDirectGoodsKeys: form.watch(
+                      'JingSoftDirectGoodsKeys'
+                    ),
+                    JingSoftAutoRestockMin: form.watch(
+                      'JingSoftAutoRestockMin'
+                    ),
+                    JingSoftAutoRestockBatch: form.watch(
+                      'JingSoftAutoRestockBatch'
+                    ),
+                    JingSoftMaxAmountCNY: form.watch('JingSoftMaxAmountCNY'),
+                    JingSoftMaxOrdersPerMinute: form.watch(
+                      'JingSoftMaxOrdersPerMinute'
+                    ),
+                    JingSoftChannels: form.watch('JingSoftChannels'),
+                  }}
+                  complianceConfirmed={complianceConfirmed}
+                  presetOptions={parsedAmountOptions}
+                  priceRatio={Number(currentFormValues.Price) || 1}
+                  amountDiscounts={parsedAmountDiscounts}
+                  onNavigateToGeneral={() => setActiveTab('general')}
+                  onChange={(key, value) => {
+                    if (key === 'JingSoftEnabled') {
+                      form.setValue(key, Boolean(value), {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    } else if (key === 'JingSoftMode') {
+                      const nextMode =
+                        value === 'direct' || value === 'auto'
+                          ? value
+                          : 'redemption'
+                      form.setValue(key, nextMode, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    } else if (
+                      key === 'JingSoftAutoRestockMin' ||
+                      key === 'JingSoftAutoRestockBatch' ||
+                      key === 'JingSoftMaxAmountCNY' ||
+                      key === 'JingSoftMaxOrdersPerMinute'
+                    ) {
+                      form.setValue(key, Number(value), {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    } else {
+                      form.setValue(key, String(value), {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                  }}
+                />
+                {form.formState.errors.JingSoftBaseURL && (
+                  <p role='alert' className='text-destructive text-xs'>
+                    {t('Invalid JingSoft platform URL')}
+                  </p>
+                )}
+                {form.formState.errors.JingSoftProducts && (
+                  <p role='alert' className='text-destructive text-xs'>
+                    {t('Invalid JingSoft mapping configuration')}
+                  </p>
+                )}
+                {form.formState.errors.JingSoftDirectGoodsKeys && (
+                  <p role='alert' className='text-destructive text-xs'>
+                    {t('Invalid JingSoft direct slot settings')}
+                  </p>
+                )}
+                {form.formState.errors.JingSoftChannels && (
+                  <p role='alert' className='text-destructive text-xs'>
+                    {t('Invalid JingSoft mapping configuration')}
+                  </p>
+                )}
               </div>
             </TabsContent>
 
             <TabsContent value='epay' className={paymentTabContentClassName}>
-              <div className='space-y-4'>
-                <div>
-                  <h3 className='text-lg font-medium'>{t('Epay Gateway')}</h3>
-                  <p className='text-muted-foreground text-sm'>
-                    {t('Configuration for Epay payment integration')}
-                  </p>
-                </div>
-
+              <SettingsCard
+                title={t('Epay Gateway')}
+                description={t('Configuration for Epay payment integration')}
+                contentClassName='space-y-5'
+              >
                 <Alert>
                   <ShieldAlert className='h-4 w-4' />
                   <AlertTitle>{t('Epay safety reminder')}</AlertTitle>
@@ -1477,7 +1586,7 @@ export function PaymentSettingsSection({
                   </AlertDescription>
                 </Alert>
 
-                <div className='grid gap-6 md:grid-cols-2'>
+                <div className='grid gap-5 md:grid-cols-2'>
                   <FormField
                     control={form.control}
                     name='PayAddress'
@@ -1527,7 +1636,7 @@ export function PaymentSettingsSection({
                   />
                 </div>
 
-                <div className='grid gap-6 md:grid-cols-2'>
+                <div className='grid gap-5 md:grid-cols-2'>
                   <FormField
                     control={form.control}
                     name='EpayId'
@@ -1574,36 +1683,33 @@ export function PaymentSettingsSection({
                     )}
                   />
                 </div>
-              </div>
+              </SettingsCard>
             </TabsContent>
 
             <TabsContent value='stripe' className={paymentTabContentClassName}>
-              <div className='space-y-4'>
-                <div>
-                  <h3 className='text-lg font-medium'>{t('Stripe Gateway')}</h3>
-                  <p className='text-muted-foreground text-sm'>
-                    {t('Configuration for Stripe payment integration')}
-                  </p>
-                </div>
-
-                <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
+              <SettingsCard
+                title={t('Stripe Gateway')}
+                description={t('Configuration for Stripe payment integration')}
+                contentClassName='space-y-5'
+              >
+                <div className='rounded-lg bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
                   <p className='mb-2 font-medium'>
                     {t('Webhook Configuration:')}
                   </p>
-                  <ul className='list-inside list-disc space-y-1'>
+                  <ul className='list-inside list-disc space-y-1 break-words'>
                     <li>
                       {t('Webhook URL:')}{' '}
-                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                         {'<ServerAddress>/api/stripe/webhook'}
                       </code>
                     </li>
                     <li>
                       {t('Required events:')}{' '}
-                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                         {t('checkout.session.completed')}
                       </code>{' '}
                       {t('and')}{' '}
-                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                         {t('checkout.session.expired')}
                       </code>
                     </li>
@@ -1621,7 +1727,7 @@ export function PaymentSettingsSection({
                   </ul>
                 </div>
 
-                <div className='grid gap-6 md:grid-cols-3'>
+                <div className='grid gap-5 md:grid-cols-3'>
                   <FormField
                     control={form.control}
                     name='StripeApiSecret'
@@ -1698,7 +1804,7 @@ export function PaymentSettingsSection({
                   />
                 </div>
 
-                <div className='grid gap-6 md:grid-cols-3'>
+                <div className='grid gap-5 sm:grid-cols-2'>
                   <FormField
                     control={form.control}
                     name='StripeUnitPrice'
@@ -1744,12 +1850,14 @@ export function PaymentSettingsSection({
                       </FormItem>
                     )}
                   />
+                </div>
 
+                <SettingsControlGroup>
                   <FormField
                     control={form.control}
                     name='StripePromotionCodesEnabled'
                     render={({ field }) => (
-                      <SettingsSwitchItem>
+                      <SettingsSwitchItem className='py-0.5'>
                         <SettingsSwitchContent>
                           <FormLabel>{t('Promotion codes')}</FormLabel>
                           <FormDescription>
@@ -1765,27 +1873,24 @@ export function PaymentSettingsSection({
                       </SettingsSwitchItem>
                     )}
                   />
-                </div>
-              </div>
+                </SettingsControlGroup>
+              </SettingsCard>
             </TabsContent>
 
             <TabsContent value='creem' className={paymentTabContentClassName}>
-              <div className='space-y-4'>
-                <div>
-                  <h3 className='text-lg font-medium'>{t('Creem Gateway')}</h3>
-                  <p className='text-muted-foreground text-sm'>
-                    {t('Configuration for Creem payment integration')}
-                  </p>
-                </div>
-
-                <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
+              <SettingsCard
+                title={t('Creem Gateway')}
+                description={t('Configuration for Creem payment integration')}
+                contentClassName='space-y-5'
+              >
+                <div className='rounded-lg bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
                   <p className='mb-2 font-medium'>
                     {t('Webhook Configuration:')}
                   </p>
-                  <ul className='list-inside list-disc space-y-1'>
+                  <ul className='list-inside list-disc space-y-1 break-words'>
                     <li>
                       {t('Webhook URL:')}{' '}
-                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                      <code className='rounded bg-blue-100 px-1 py-0.5 text-xs break-all dark:bg-blue-900'>
                         {'<ServerAddress>/api/creem/webhook'}
                       </code>
                     </li>
@@ -1793,7 +1898,7 @@ export function PaymentSettingsSection({
                   </ul>
                 </div>
 
-                <div className='grid gap-6 md:grid-cols-2'>
+                <div className='grid gap-5 md:grid-cols-2'>
                   <FormField
                     control={form.control}
                     name='CreemApiKey'
@@ -1847,32 +1952,34 @@ export function PaymentSettingsSection({
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name='CreemTestMode'
-                  render={({ field }) => (
-                    <SettingsSwitchItem>
-                      <SettingsSwitchContent>
-                        <FormLabel>{t('Test Mode')}</FormLabel>
-                        <FormDescription>
-                          {t('Enable test mode for Creem payments')}
-                        </FormDescription>
-                      </SettingsSwitchContent>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </SettingsSwitchItem>
-                  )}
-                />
+                <SettingsControlGroup>
+                  <FormField
+                    control={form.control}
+                    name='CreemTestMode'
+                    render={({ field }) => (
+                      <SettingsSwitchItem className='py-0.5'>
+                        <SettingsSwitchContent>
+                          <FormLabel>{t('Test Mode')}</FormLabel>
+                          <FormDescription>
+                            {t('Enable test mode for Creem payments')}
+                          </FormDescription>
+                        </SettingsSwitchContent>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </SettingsSwitchItem>
+                    )}
+                  />
+                </SettingsControlGroup>
 
                 <FormField
                   control={form.control}
                   name='CreemProducts'
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className='min-w-0'>
                       <div className='mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                         <FormLabel>{t('Products')}</FormLabel>
                         <Button
@@ -1925,93 +2032,7 @@ export function PaymentSettingsSection({
                     </FormItem>
                   )}
                 />
-              </div>
-            </TabsContent>
-
-            <TabsContent
-              value='jingsoft'
-              className={paymentTabContentClassName}
-            >
-              <div className='flex flex-wrap items-center justify-between gap-3'>
-                <h3 className='text-lg font-medium'>
-                  {t('JingSoft consignment store payments')}
-                </h3>
-                <JingSoftSetupGuide baseUrl={form.watch('JingSoftBaseURL')} />
-              </div>
-              <JingSoftSettingsFields
-                values={{
-                  JingSoftEnabled: form.watch('JingSoftEnabled'),
-                  JingSoftMode: form.watch('JingSoftMode'),
-                  JingSoftBaseURL: form.watch('JingSoftBaseURL'),
-                  JingSoftStoreToken: form.watch('JingSoftStoreToken'),
-                  JingSoftMerchantToken: form.watch('JingSoftMerchantToken'),
-                  JingSoftProducts: form.watch('JingSoftProducts'),
-                  JingSoftDirectGoodsKeys: form.watch(
-                    'JingSoftDirectGoodsKeys'
-                  ),
-                  JingSoftAutoRestockMin: form.watch('JingSoftAutoRestockMin'),
-                  JingSoftAutoRestockBatch: form.watch(
-                    'JingSoftAutoRestockBatch'
-                  ),
-                  JingSoftMaxAmountCNY: form.watch('JingSoftMaxAmountCNY'),
-                  JingSoftMaxOrdersPerMinute: form.watch(
-                    'JingSoftMaxOrdersPerMinute'
-                  ),
-                  JingSoftChannels: form.watch('JingSoftChannels'),
-                }}
-                complianceConfirmed={complianceConfirmed}
-                presetOptions={parsedAmountOptions}
-                priceRatio={Number(currentFormValues.Price) || 1}
-                amountDiscounts={parsedAmountDiscounts}
-                onChange={(key, value) => {
-                  if (key === 'JingSoftEnabled') {
-                    form.setValue(key, Boolean(value), {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  } else if (key === 'JingSoftMode') {
-                    const nextMode =
-                      value === 'direct' || value === 'auto'
-                        ? value
-                        : 'redemption'
-                    form.setValue(key, nextMode, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  } else if (
-                    key === 'JingSoftAutoRestockMin' ||
-                    key === 'JingSoftAutoRestockBatch' ||
-                    key === 'JingSoftMaxAmountCNY' ||
-                    key === 'JingSoftMaxOrdersPerMinute'
-                  ) {
-                    form.setValue(key, Number(value), {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  } else {
-                    form.setValue(key, String(value), {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                }}
-              />
-              {form.formState.errors.JingSoftBaseURL && (
-                <p role='alert'>{t('Invalid JingSoft platform URL')}</p>
-              )}
-              {form.formState.errors.JingSoftProducts && (
-                <p role='alert'>
-                  {t('Invalid JingSoft mapping configuration')}
-                </p>
-              )}
-              {form.formState.errors.JingSoftDirectGoodsKeys && (
-                <p role='alert'>{t('Invalid JingSoft direct slot settings')}</p>
-              )}
-              {form.formState.errors.JingSoftChannels && (
-                <p role='alert'>
-                  {t('Invalid JingSoft mapping configuration')}
-                </p>
-              )}
+              </SettingsCard>
             </TabsContent>
 
             <TabsContent

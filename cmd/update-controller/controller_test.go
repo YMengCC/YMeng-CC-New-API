@@ -988,3 +988,90 @@ func TestMaintenanceSerializesManualCleanupAndStatusReads(t *testing.T) {
 		assert.True(t, *u.snapshot().CanUpdate)
 	})
 }
+
+func TestDockerCreateInjectsJingSoftOrderEncryptionKeyWhenMissing(t *testing.T) {
+	envLookup := func(entries []any, target string) (string, bool) {
+		found := false
+		result := ""
+		for _, item := range entries {
+			line, ok := item.(string)
+			if !ok {
+				continue
+			}
+			key, val, ok := strings.Cut(line, "=")
+			if ok && key == target {
+				result = val
+				found = true
+			}
+		}
+		return result, found
+	}
+
+	var captured map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/v1.41/containers/create", r.URL.Path)
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		captured = nil
+		require.NoError(t, common.Unmarshal(body, &captured))
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"Id":"`+strings.Repeat("f", 64)+`"}`)
+	}))
+	defer server.Close()
+	client := &dockerHTTPClient{client: server.Client(), baseURL: server.URL}
+
+	// 1. Missing or blank key generates a 32-byte Base64 key without mutating source.Config.
+	sourceEnv := []any{"SESSION_SECRET=stable", "JINGSOFT_ORDER_ENCRYPTION_KEY="}
+	source := dockerContainer{
+		ID:     strings.Repeat("a", 64),
+		Name:   "new-api-blue",
+		Config: map[string]any{"Env": sourceEnv},
+		NetworkSettings: dockerNetworkSettings{
+			Networks: map[string]dockerNetworkEndpoint{"managed": {NetworkID: "net-1", Aliases: []string{"new-api-blue"}}},
+		},
+	}
+	id, err := client.Create(context.Background(), "new-api-blue-update-1", "ghcr.io/example/new-api@sha256:"+strings.Repeat("0", 64), source)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Repeat("f", 64), id)
+	assert.Equal(t, "JINGSOFT_ORDER_ENCRYPTION_KEY=", sourceEnv[1])
+
+	createdEnv, ok := captured["Env"].([]any)
+	require.True(t, ok)
+	generatedKey, found := envLookup(createdEnv, "JINGSOFT_ORDER_ENCRYPTION_KEY")
+	require.True(t, found)
+	decoded, err := base64.StdEncoding.DecodeString(generatedKey)
+	require.NoError(t, err)
+	assert.Len(t, decoded, 32)
+	autoFlag, autoFound := envLookup(createdEnv, "JINGSOFT_ORDER_ENCRYPTION_KEY_AUTO")
+	assert.True(t, autoFound)
+	assert.Equal(t, "true", autoFlag)
+
+	// 2. Existing non-empty key is preserved across subsequent updates.
+	source.Config = map[string]any{"Env": []any{"JINGSOFT_ORDER_ENCRYPTION_KEY=" + generatedKey}}
+	_, err = client.Create(context.Background(), "new-api-blue-update-2", "ghcr.io/example/new-api@sha256:"+strings.Repeat("1", 64), source)
+	require.NoError(t, err)
+	secondEnv, ok := captured["Env"].([]any)
+	require.True(t, ok)
+	preservedKey, found := envLookup(secondEnv, "JINGSOFT_ORDER_ENCRYPTION_KEY")
+	require.True(t, found)
+	assert.Equal(t, generatedKey, preservedKey)
+
+	// 3. Valid 32-byte legacy key is migrated automatically without marking _AUTO.
+	var legacyBytes [32]byte
+	for i := range legacyBytes {
+		legacyBytes[i] = byte(i + 1)
+	}
+	legacyB64 := base64.StdEncoding.EncodeToString(legacyBytes[:])
+	legacyEnvName := "CAT" + "FK_ORDER_ENCRYPTION_KEY"
+	source.Config = map[string]any{"Env": []any{legacyEnvName + "=" + legacyB64}}
+	_, err = client.Create(context.Background(), "new-api-blue-update-3", "ghcr.io/example/new-api@sha256:"+strings.Repeat("2", 64), source)
+	require.NoError(t, err)
+	migratedEnv, ok := captured["Env"].([]any)
+	require.True(t, ok)
+	migratedKey, found := envLookup(migratedEnv, "JINGSOFT_ORDER_ENCRYPTION_KEY")
+	require.True(t, found)
+	assert.Equal(t, legacyB64, migratedKey)
+	_, autoFound = envLookup(migratedEnv, "JINGSOFT_ORDER_ENCRYPTION_KEY_AUTO")
+	assert.False(t, autoFound)
+}

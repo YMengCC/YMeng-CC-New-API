@@ -285,26 +285,26 @@ export function PaymentMethodsVisualEditor({
               <Lightbulb className='h-4 w-4 sm:mr-2' />
               <span className='sm:inline'>{t('Templates')}</span>
             </PopoverTrigger>
-            <PopoverContent className='w-60'>
+            <PopoverContent className='w-72 max-w-[calc(100vw-2rem)]'>
               <div className='space-y-2'>
                 <p className='text-muted-foreground text-xs'>
                   {t('Quick insert payment entries')}
                 </p>
-                <div className='space-y-1'>
+                <div className='max-h-64 space-y-1 overflow-y-auto pr-1'>
                   {paymentTemplates.map((item) => (
                     <Button
                       key={item.name}
                       type='button'
                       variant='ghost'
-                      className='w-full justify-start text-sm'
+                      className='h-auto min-h-8 w-full justify-start py-1.5 text-left text-sm whitespace-normal'
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
                         handleInsertTemplate(item.template)
                       }}
                     >
-                      <Plus className='mr-2 h-3 w-3' />
-                      {item.name}
+                      <Plus className='mr-2 h-3 w-3 shrink-0' />
+                      <span className='min-w-0 break-words'>{item.name}</span>
                     </Button>
                   ))}
                 </div>
@@ -444,14 +444,16 @@ export function PaymentMethodsVisualEditor({
 
               return (
                 <div key={methodKey} className='p-4'>
-                  <div className='mb-3 flex items-start justify-between'>
-                    <div className='flex-1'>
-                      <div className='mb-1 font-medium'>{method.name}</div>
-                      <code className='bg-muted rounded px-1.5 py-0.5 text-xs'>
+                  <div className='mb-3 flex items-start justify-between gap-2'>
+                    <div className='min-w-0 flex-1'>
+                      <div className='mb-1 font-medium break-words'>
+                        {method.name}
+                      </div>
+                      <code className='bg-muted inline-block max-w-full truncate rounded px-1.5 py-0.5 text-xs'>
                         {method.type}
                       </code>
                     </div>
-                    <div className='flex gap-1'>
+                    <div className='flex shrink-0 gap-1'>
                       <Button
                         type='button'
                         variant='ghost'

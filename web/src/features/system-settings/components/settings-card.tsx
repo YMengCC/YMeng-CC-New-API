@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 
 import {
   Card,
@@ -25,27 +25,47 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type SettingsCardProps = {
-  title: string
-  description?: string
-  children: React.ReactNode
+  title: ReactNode
+  description?: ReactNode
+  action?: ReactNode
+  children: ReactNode
   className?: string
+  contentClassName?: string
 }
 
-export const SettingsCard = memo(function SettingsCard({
-  title,
-  description,
-  children,
-  className,
-}: SettingsCardProps) {
+export const SettingsCard = memo(function SettingsCard(
+  props: SettingsCardProps
+) {
   return (
-    <Card className={className}>
+    <Card className={cn('min-w-0', props.className)}>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+        {props.action ? (
+          <div className='flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+            <div className='min-w-0 space-y-1'>
+              <CardTitle>{props.title}</CardTitle>
+              {props.description ? (
+                <CardDescription>{props.description}</CardDescription>
+              ) : null}
+            </div>
+            <div className='flex shrink-0 flex-wrap items-center gap-2'>
+              {props.action}
+            </div>
+          </div>
+        ) : (
+          <>
+            <CardTitle>{props.title}</CardTitle>
+            {props.description ? (
+              <CardDescription>{props.description}</CardDescription>
+            ) : null}
+          </>
+        )}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className={cn('min-w-0', props.contentClassName)}>
+        {props.children}
+      </CardContent>
     </Card>
   )
 })
