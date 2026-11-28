@@ -374,7 +374,10 @@ func (h *jingSoftMerchantHealthTracker) reset() {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	*h = jingSoftMerchantHealthTracker{}
+	h.tokenHash = ""
+	h.checked = false
+	h.valid = false
+	h.checkedAt = 0
 }
 
 type jingSoftOrderRateLimiter struct {

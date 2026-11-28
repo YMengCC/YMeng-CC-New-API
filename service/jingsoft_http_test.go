@@ -909,3 +909,18 @@ func TestJingSoftHTTPMerchantTemplateCacheAndOutOfStockSentinel(t *testing.T) {
 	assert.Empty(t, created.UpstreamOrderID)
 	assert.EqualValues(t, 1, orderCalls.Load())
 }
+
+func TestNotifyJingSoftMerchantTokenUpdatedResetsStateWithoutUnlockPanic(t *testing.T) {
+	defaultJingSoftMerchantHealth.record("https://wzyp.cn", "expired-token", false, 1700000000)
+	require.True(t, defaultJingSoftMerchantHealth.isInvalid("https://wzyp.cn", "expired-token"))
+	defaultJingSoftHTTPAdapter.cache.setShop("scope", jingSoftShop{Token: "YMengCC"}, time.Now())
+
+	require.NotPanics(t, func() {
+		NotifyJingSoftMerchantTokenUpdated()
+	})
+
+	assert.False(t, defaultJingSoftMerchantHealth.isInvalid("https://wzyp.cn", "expired-token"))
+	assert.True(t, defaultJingSoftMerchantHealth.shouldProbe("https://wzyp.cn", "expired-token", 1700000001))
+	_, ok := defaultJingSoftHTTPAdapter.cache.getShop("scope", time.Now())
+	assert.False(t, ok)
+}
