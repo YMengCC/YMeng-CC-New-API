@@ -80,7 +80,7 @@ it.each(Object.entries(resources))(
       'JingSoft Pro uses live CNY quotes and credits the configured USD balance.',
       'Status & settlement mode',
       'Platform & store credentials',
-      'Direct-credit & auto-restock',
+      'Direct top-up & auto-restock',
       'Risk & rate limits',
       'Open JingSoft merchant console',
       'JingSoft available channels',
@@ -96,14 +96,18 @@ it.each(Object.entries(resources))(
       'JingSoft payment identifiers must use the verified channel list',
       'JingSoft settlement mode',
       'JingSoft merchant token',
-      'Direct-credit & auto-restock mode',
-      'Redemption-code verification mode',
-      'Auto fallback mode (direct first, fallback to redemption)',
+      'Auto fallback',
+      'Direct top-up',
+      'Redemption code top-up',
+      'Recommended mode',
+      'Primary mode',
+      'Fallback mode',
+      'Auto fallback is currently routing orders to Redemption code top-up.',
       'Check merchant token',
       'JingSoft merchant token is valid',
       'JingSoft merchant token is invalid or expired',
       'Custom amounts are temporarily unavailable, please select a preset amount',
-      'Direct-credit slot goods keys',
+      'Direct top-up slot goods keys',
       'Reset quarantined slots',
       'Quarantined slots have been reset',
       'JingSoft payment channel is busy, please try again shortly',
@@ -165,10 +169,22 @@ it('shows exact JingSoft Pro naming in Chinese and English and switches gateway 
   expect(i18n.t('Test compatibility')).toBe('测试兼容')
   expect(i18n.t('Auto-detect store products')).toBe('自动识别店铺商品')
   expect(i18n.t('Select payment type')).toBe('请选择支付处理标识')
+  expect(i18n.t('Auto fallback')).toBe('自动回退')
+  expect(i18n.t('Direct top-up')).toBe('直接充值')
+  expect(i18n.t('Redemption code top-up')).toBe('兑换码充值')
+  expect(i18n.t('Recommended mode')).toBe('推荐')
+  expect(i18n.t('Primary mode')).toBe('优先使用')
+  expect(i18n.t('Fallback mode')).toBe('回退备用')
   await i18n.changeLanguage('en')
   expect(i18n.t('Enable JingSoft')).toBe('Enable JingSoft payments')
   expect(i18n.t('JingSoft Pro')).toBe('JingSoft Pro')
+  expect(i18n.t('Auto fallback')).toBe('Auto fallback')
+  expect(i18n.t('Direct top-up')).toBe('Direct top-up')
+  expect(i18n.t('Redemption code top-up')).toBe('Redemption code top-up')
   await i18n.changeLanguage('zh-TW')
   expect(i18n.t('JingSoft Pro')).toBe('JingSoft Pro')
   expect(i18n.t('Custom amounts are not supported')).toBe('不支援自訂金額')
+  expect(i18n.t('Auto fallback')).toBe('自動回退')
+  expect(i18n.t('Direct top-up')).toBe('直接儲值')
+  expect(i18n.t('Redemption code top-up')).toBe('兌換碼儲值')
 })

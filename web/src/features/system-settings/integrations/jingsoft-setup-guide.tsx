@@ -77,10 +77,10 @@ export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
       title: t('Status & settlement mode'),
       items: `${t('Enable JingSoft')} · ${t('JingSoft settlement mode')}`,
       purpose: t(
-        'Controls whether new orders can be created and selects direct-credit, redemption-code, or automatic fallback settlement.'
+        'Controls whether new orders can be created and selects Auto fallback, Direct top-up, or Redemption code top-up.'
       ),
       advice: t(
-        'Recommended: choose Auto fallback mode or Direct-credit mode so buyers can pay preset or custom amounts without entering a QQ number.'
+        'Recommended: choose Auto fallback or Direct top-up so buyers can pay preset or custom amounts without entering a QQ number.'
       ),
     },
     {
@@ -94,8 +94,8 @@ export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
       ),
     },
     {
-      title: t('Direct-credit & auto-restock'),
-      items: `${t('JingSoft merchant token')} · ${t('Direct-credit slot goods keys')} · ${t('Auto-restock threshold')}`,
+      title: t('Direct top-up & auto-restock'),
+      items: `${t('JingSoft merchant token')} · ${t('Direct top-up slot goods keys')} · ${t('Auto-restock threshold')}`,
       purpose: t(
         'Enables server-side dynamic slot pricing and automatic placeholder stock replenishment.'
       ),
@@ -107,7 +107,7 @@ export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
       title: t('JingSoft product mappings'),
       items: `${t('Auto-detect store products')} · ${t('Expected credited balance (USD)')}`,
       purpose: t(
-        'Maps public card products to preset USD recharge tiers in General for redemption-code or fallback settlement.'
+        'Maps public card products to preset USD recharge tiers in General for Redemption code top-up or Auto fallback.'
       ),
       advice: t(
         'Set product Contact format to Any or QQ, click Auto-detect store products to infer USD tiers, then click Import matched.'
@@ -213,7 +213,7 @@ export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
             <span className='text-muted-foreground'>
               {' — '}
               {t(
-                'Use Auto-detect hidden slots for direct-credit mode or Auto-detect store products for redemption mode, then click Save all settings to sync channels.'
+                'Use Auto-detect hidden slots for Direct top-up or Auto-detect store products for Redemption code top-up, then click Save all settings to sync channels.'
               )}
             </span>
           </li>
@@ -244,20 +244,20 @@ export function JingSoftSetupGuide(props: JingSoftSetupGuideProps) {
               key={group.title}
               className='bg-card flex min-w-0 flex-col gap-1.5 rounded-xl border p-3.5'
             >
-              <div className='font-medium'>{group.title}</div>
+              <div className='font-medium break-words'>{group.title}</div>
               <p className='text-muted-foreground text-xs break-words'>
                 <span className='text-foreground font-medium'>
                   {t('Included fields')}:
                 </span>{' '}
                 {group.items}
               </p>
-              <p className='text-muted-foreground text-xs leading-relaxed'>
+              <p className='text-muted-foreground text-xs leading-relaxed break-words'>
                 <span className='text-foreground font-medium'>
                   {t('Purpose')}:
                 </span>{' '}
                 {group.purpose}
               </p>
-              <p className='text-muted-foreground text-xs leading-relaxed'>
+              <p className='text-muted-foreground text-xs leading-relaxed break-words'>
                 <span className='text-foreground font-medium'>
                   {t('Recommended')}:
                 </span>{' '}

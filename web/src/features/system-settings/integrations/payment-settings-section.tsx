@@ -27,12 +27,14 @@ import * as z from 'zod'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { RiskAcknowledgementDialog } from '@/components/risk-acknowledgement-dialog'
+import { StatusBadge } from '@/components/status-badge'
 import {
   Alert,
   AlertAction,
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -69,11 +71,17 @@ import { AmountDiscountVisualEditor } from './amount-discount-visual-editor'
 import { AmountOptionsVisualEditor } from './amount-options-visual-editor'
 import { CreemProductsVisualEditor } from './creem-products-visual-editor'
 import {
+  DEFAULT_JINGSOFT_MODE,
+  JINGSOFT_MODE_META,
+  JINGSOFT_MODES,
+  jingSoftModeSchema,
   normalizeJingSoftBaseURL,
+  normalizeJingSoftMode,
   parseJingSoftChannels,
   parseJingSoftDirectGoodsKeys,
   parseJingSoftProducts,
   type JingSoftChannel,
+  type JingSoftMode,
 } from './jingsoft-schema'
 import { JingSoftSettingsFields } from './jingsoft-settings-fields'
 import { JingSoftSetupGuide } from './jingsoft-setup-guide'
@@ -176,7 +184,7 @@ const paymentSchema = z.object({
     }
   }),
   JingSoftEnabled: z.boolean(),
-  JingSoftMode: z.enum(['redemption', 'direct', 'auto']),
+  JingSoftMode: jingSoftModeSchema,
   JingSoftBaseURL: z
     .string()
     .max(2048)
@@ -277,6 +285,7 @@ type PaymentSettingsDefaultValues = Omit<
 
 type PaymentSettingsSectionProps = {
   defaultValues: PaymentSettingsDefaultValues
+  jingSoftModes?: readonly JingSoftMode[]
   waffoDefaultValues: WaffoSettingsValues
   waffoPancakeDefaultValues: WaffoPancakeSettingsValues
   waffoPancakeProvisionedStoreID?: string
@@ -295,6 +304,7 @@ function parseWaffoPayMethods(value: string): PayMethod[] {
 
 export function PaymentSettingsSection({
   defaultValues,
+  jingSoftModes,
   waffoDefaultValues,
   waffoPancakeDefaultValues,
   waffoPancakeProvisionedStoreID,
@@ -307,7 +317,7 @@ export function PaymentSettingsSection({
   const initialFormValues = React.useMemo<PaymentFormValues>(
     () => ({
       ...defaultValues,
-      JingSoftMode: defaultValues.JingSoftMode ?? 'redemption',
+      JingSoftMode: defaultValues.JingSoftMode ?? DEFAULT_JINGSOFT_MODE,
       JingSoftBaseURL: defaultValues.JingSoftBaseURL ?? '',
       JingSoftMerchantToken: defaultValues.JingSoftMerchantToken ?? '',
       JingSoftDirectGoodsKeys: defaultValues.JingSoftDirectGoodsKeys ?? '[]',
@@ -1117,6 +1127,25 @@ export function PaymentSettingsSection({
     WaffoPancakeReturnURL: currentFormValues.WaffoPancakeReturnURL,
   }
 
+  const currentJingSoftEnabled = currentFormValues.JingSoftEnabled
+  const currentJingSoftMode = normalizeJingSoftMode(
+    currentFormValues.JingSoftMode
+  )
+  const jingSoftErrors = [
+    ...new Set(
+      [
+        form.formState.errors.JingSoftBaseURL &&
+          t('Invalid JingSoft platform URL'),
+        form.formState.errors.JingSoftProducts &&
+          t('Invalid JingSoft mapping configuration'),
+        form.formState.errors.JingSoftDirectGoodsKeys &&
+          t('Invalid JingSoft direct slot settings'),
+        form.formState.errors.JingSoftChannels &&
+          t('Invalid JingSoft mapping configuration'),
+      ].filter(Boolean) as string[]
+    ),
+  ]
+
   return (
     <SettingsSection title={t('Payment Gateway')}>
       {!complianceConfirmed ? (
@@ -1470,44 +1499,74 @@ export function PaymentSettingsSection({
               className={paymentTabContentClassName}
             >
               <div className='min-w-0 space-y-5'>
-                <div className='flex flex-wrap items-center justify-between gap-3'>
-                  <div className='min-w-0 space-y-0.5'>
-                    <h3 className='text-base font-semibold'>
-                      {t('JingSoft Pro')}
-                    </h3>
-                    <p className='text-muted-foreground text-xs sm:text-sm'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                  <div className='min-w-0 flex-1 space-y-1'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <h3 className='text-base font-semibold'>
+                        {t('JingSoft Pro')}
+                      </h3>
+                      <StatusBadge
+                        variant={currentJingSoftEnabled ? 'success' : 'neutral'}
+                        label={
+                          currentJingSoftEnabled ? t('Enabled') : t('Disabled')
+                        }
+                        showDot
+                        copyable={false}
+                        className='text-xs'
+                      />
+                      <Badge variant='outline'>
+                        {t(JINGSOFT_MODE_META[currentJingSoftMode].labelKey)}
+                      </Badge>
+                    </div>
+                    <p className='text-muted-foreground text-xs leading-relaxed sm:text-sm'>
                       {t(
-                        'Connect any compatible JingSoft Pro storefront for direct-credit or redemption-code top-ups.'
+                        'Connect any compatible JingSoft Pro storefront for Auto fallback, Direct top-up, or Redemption code top-up.'
                       )}
                     </p>
                   </div>
                   <JingSoftSetupGuide
-                    baseUrl={form.watch('JingSoftBaseURL')}
+                    baseUrl={currentFormValues.JingSoftBaseURL}
                     autoOpen={complianceConfirmed}
                   />
                 </div>
+                {jingSoftErrors.length > 0 && (
+                  <Alert variant='destructive'>
+                    <ShieldAlert className='size-4' aria-hidden='true' />
+                    <AlertTitle>
+                      {t(
+                        'Please fix the JingSoft configuration issues before saving.'
+                      )}
+                    </AlertTitle>
+                    <AlertDescription>
+                      <ul className='list-disc space-y-0.5 pl-4'>
+                        {jingSoftErrors.map((message) => (
+                          <li key={message}>{message}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <JingSoftSettingsFields
+                  availableModes={jingSoftModes ?? JINGSOFT_MODES}
                   values={{
-                    JingSoftEnabled: form.watch('JingSoftEnabled'),
-                    JingSoftMode: form.watch('JingSoftMode'),
-                    JingSoftBaseURL: form.watch('JingSoftBaseURL'),
-                    JingSoftStoreToken: form.watch('JingSoftStoreToken'),
-                    JingSoftMerchantToken: form.watch('JingSoftMerchantToken'),
-                    JingSoftProducts: form.watch('JingSoftProducts'),
-                    JingSoftDirectGoodsKeys: form.watch(
-                      'JingSoftDirectGoodsKeys'
-                    ),
-                    JingSoftAutoRestockMin: form.watch(
-                      'JingSoftAutoRestockMin'
-                    ),
-                    JingSoftAutoRestockBatch: form.watch(
-                      'JingSoftAutoRestockBatch'
-                    ),
-                    JingSoftMaxAmountCNY: form.watch('JingSoftMaxAmountCNY'),
-                    JingSoftMaxOrdersPerMinute: form.watch(
-                      'JingSoftMaxOrdersPerMinute'
-                    ),
-                    JingSoftChannels: form.watch('JingSoftChannels'),
+                    JingSoftEnabled: currentFormValues.JingSoftEnabled,
+                    JingSoftMode: currentFormValues.JingSoftMode,
+                    JingSoftBaseURL: currentFormValues.JingSoftBaseURL,
+                    JingSoftStoreToken: currentFormValues.JingSoftStoreToken,
+                    JingSoftMerchantToken:
+                      currentFormValues.JingSoftMerchantToken,
+                    JingSoftProducts: currentFormValues.JingSoftProducts,
+                    JingSoftDirectGoodsKeys:
+                      currentFormValues.JingSoftDirectGoodsKeys,
+                    JingSoftAutoRestockMin:
+                      currentFormValues.JingSoftAutoRestockMin,
+                    JingSoftAutoRestockBatch:
+                      currentFormValues.JingSoftAutoRestockBatch,
+                    JingSoftMaxAmountCNY:
+                      currentFormValues.JingSoftMaxAmountCNY,
+                    JingSoftMaxOrdersPerMinute:
+                      currentFormValues.JingSoftMaxOrdersPerMinute,
+                    JingSoftChannels: currentFormValues.JingSoftChannels,
                   }}
                   complianceConfirmed={complianceConfirmed}
                   presetOptions={parsedAmountOptions}
@@ -1521,11 +1580,7 @@ export function PaymentSettingsSection({
                         shouldValidate: true,
                       })
                     } else if (key === 'JingSoftMode') {
-                      const nextMode =
-                        value === 'direct' || value === 'auto'
-                          ? value
-                          : 'redemption'
-                      form.setValue(key, nextMode, {
+                      form.setValue(key, normalizeJingSoftMode(value), {
                         shouldDirty: true,
                         shouldValidate: true,
                       })
@@ -1547,26 +1602,6 @@ export function PaymentSettingsSection({
                     }
                   }}
                 />
-                {form.formState.errors.JingSoftBaseURL && (
-                  <p role='alert' className='text-destructive text-xs'>
-                    {t('Invalid JingSoft platform URL')}
-                  </p>
-                )}
-                {form.formState.errors.JingSoftProducts && (
-                  <p role='alert' className='text-destructive text-xs'>
-                    {t('Invalid JingSoft mapping configuration')}
-                  </p>
-                )}
-                {form.formState.errors.JingSoftDirectGoodsKeys && (
-                  <p role='alert' className='text-destructive text-xs'>
-                    {t('Invalid JingSoft direct slot settings')}
-                  </p>
-                )}
-                {form.formState.errors.JingSoftChannels && (
-                  <p role='alert' className='text-destructive text-xs'>
-                    {t('Invalid JingSoft mapping configuration')}
-                  </p>
-                )}
               </div>
             </TabsContent>
 

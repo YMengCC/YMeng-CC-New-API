@@ -87,7 +87,7 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
-		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" {
+		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" || k == "JingSoftModes" {
 			continue
 		}
 		value := common.Interface2String(v)
@@ -127,6 +127,15 @@ func GetOptions(c *gin.Context) {
 		}
 		options = append(options, &model.Option{Key: key, Value: string(encoded)})
 	}
+	jingSoftModesJSON, err := common.Marshal(operation_setting.JingSoftModes())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	options = append(options, &model.Option{
+		Key:   "JingSoftModes",
+		Value: string(jingSoftModesJSON),
+	})
 	options = append(options, &model.Option{
 		Key:   "CompletionRatioMeta",
 		Value: buildCompletionRatioMetaValue(optionValues),

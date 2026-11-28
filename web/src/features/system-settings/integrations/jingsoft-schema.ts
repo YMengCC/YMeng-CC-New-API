@@ -18,11 +18,72 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-export const jingSoftModeSchema = z.enum(['redemption', 'direct', 'auto'])
+export const JINGSOFT_MODES = ['auto', 'direct', 'redemption'] as const
+export const DEFAULT_JINGSOFT_MODE = 'auto' as const
+
+export const jingSoftModeSchema = z.enum(JINGSOFT_MODES)
 export type JingSoftMode = z.infer<typeof jingSoftModeSchema>
 
+export type JingSoftModeMeta = {
+  labelKey: string
+  descriptionKey: string
+  recommended?: boolean
+}
+
+export const JINGSOFT_MODE_META: Record<JingSoftMode, JingSoftModeMeta> = {
+  auto: {
+    labelKey: 'Auto fallback',
+    descriptionKey:
+      'Uses Direct top-up by default; automatically falls back to Redemption code top-up if the merchant token expires, and resumes Direct top-up once updated.',
+    recommended: true,
+  },
+  direct: {
+    labelKey: 'Direct top-up',
+    descriptionKey:
+      'Supports preset and custom amounts with no QQ required, auto-replenishes placeholder stock, and keeps existing orders on their original mode.',
+  },
+  redemption: {
+    labelKey: 'Redemption code top-up',
+    descriptionKey:
+      'Sells mapped fixed-tier products only; buyers enter a QQ number for JingSoft order lookup and receive balance by redeeming real codes.',
+  },
+}
+
+export function isJingSoftMode(value: unknown): value is JingSoftMode {
+  return value === 'auto' || value === 'direct' || value === 'redemption'
+}
+
+export function normalizeJingSoftMode(value: unknown): JingSoftMode {
+  return isJingSoftMode(value) ? value : DEFAULT_JINGSOFT_MODE
+}
+
+export function parseJingSoftModes(raw?: string): JingSoftMode[] {
+  if (!raw?.trim()) return [...JINGSOFT_MODES]
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return [...JINGSOFT_MODES]
+    const ordered: JingSoftMode[] = []
+    for (const item of parsed) {
+      if (isJingSoftMode(item) && !ordered.includes(item)) {
+        ordered.push(item)
+      }
+    }
+    for (const fallbackMode of JINGSOFT_MODES) {
+      if (!ordered.includes(fallbackMode)) {
+        ordered.push(fallbackMode)
+      }
+    }
+    return ordered
+  } catch {
+    return [...JINGSOFT_MODES]
+  }
+}
+
 function isPrivateOrLocalHost(hostname: string): boolean {
-  const lower = hostname.trim().toLowerCase().replaceAll(/^\[|\]$/g, '')
+  const lower = hostname
+    .trim()
+    .toLowerCase()
+    .replaceAll(/^\[|\]$/g, '')
   if (
     !lower ||
     lower === 'localhost' ||
@@ -93,7 +154,13 @@ export function extractJingSoftStoreUrlParts(
   try {
     const parsed = new URL(trimmed)
     const baseUrl = normalizeJingSoftBaseURL(parsed.origin)
-    if (!baseUrl || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    if (
+      !baseUrl ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
       return null
     }
     const cleanPath = parsed.pathname.replace(/\/$/, '')

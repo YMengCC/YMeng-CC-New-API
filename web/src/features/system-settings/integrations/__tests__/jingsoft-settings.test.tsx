@@ -47,6 +47,7 @@ const defaults: JingSoftFormValues = {
 }
 function Fixture(props: {
   initial?: Partial<JingSoftFormValues>
+  availableModes?: ('auto' | 'direct' | 'redemption')[]
   presetOptions?: number[]
   priceRatio?: number
 }) {
@@ -54,6 +55,7 @@ function Fixture(props: {
   return (
     <JingSoftSettingsFields
       values={values}
+      availableModes={props.availableModes}
       complianceConfirmed
       presetOptions={props.presetOptions}
       priceRatio={props.priceRatio}
@@ -736,7 +738,99 @@ test('invalid persisted mappings block edits and an unconfirmed account cannot e
   ).toHaveAttribute('aria-disabled', 'true')
 })
 
-test('switching to direct-credit mode configures slots without losing product mappings and rejects overlapping keys', async () => {
+test('renders settlement modes in Auto fallback, Direct top-up, Redemption code top-up order with Auto fallback selected by default and responsive non-truncating cards', async () => {
+  const user = userEvent.setup()
+  render(<Fixture />, { wrapper: Wrapper })
+
+  const group = screen.getByRole('radiogroup', {
+    name: 'JingSoft settlement mode',
+  })
+  expect(group).toHaveClass('grid-cols-1', '@2xl/jingsoft-modes:grid-cols-3')
+  expect(group.parentElement).toHaveClass('@container/jingsoft-modes')
+
+  const radios = within(group).getAllByRole('radio')
+  expect(radios).toHaveLength(3)
+  expect(radios[0]).toHaveAccessibleName('Auto fallback')
+  expect(radios[1]).toHaveAccessibleName('Direct top-up')
+  expect(radios[2]).toHaveAccessibleName('Redemption code top-up')
+  expect(radios[0]).toHaveAccessibleDescription(
+    'Uses Direct top-up by default; automatically falls back to Redemption code top-up if the merchant token expires, and resumes Direct top-up once updated.'
+  )
+  expect(radios[1]).toHaveAccessibleDescription(
+    'Supports preset and custom amounts with no QQ required, auto-replenishes placeholder stock, and keeps existing orders on their original mode.'
+  )
+  expect(radios[2]).toHaveAccessibleDescription(
+    'Sells mapped fixed-tier products only; buyers enter a QQ number for JingSoft order lookup and receive balance by redeeming real codes.'
+  )
+  expect(radios[0]).toBeChecked()
+  expect(radios[1]).not.toBeChecked()
+  expect(radios[2]).not.toBeChecked()
+  expect(within(group).getByText('Recommended mode')).toBeVisible()
+
+  // Auto fallback shows both Direct top-up (primary) and Product mappings (fallback).
+  expect(screen.getByText('Direct top-up & auto-restock')).toBeVisible()
+  expect(screen.getByText('Primary mode')).toBeVisible()
+  expect(screen.getByText('JingSoft product mappings')).toBeVisible()
+  expect(screen.getByText('Fallback mode')).toBeVisible()
+
+  // Switching to Direct top-up hides Redemption product mappings and role badges.
+  await user.click(radios[1])
+  expect(radios[1]).toBeChecked()
+  expect(screen.getByText('Direct top-up & auto-restock')).toBeVisible()
+  expect(screen.queryByText('Primary mode')).not.toBeInTheDocument()
+  expect(
+    screen.queryByText('JingSoft product mappings')
+  ).not.toBeInTheDocument()
+
+  // Switching to Redemption code top-up hides Direct top-up section.
+  await user.click(radios[2])
+  expect(radios[2]).toBeChecked()
+  expect(
+    screen.queryByText('Direct top-up & auto-restock')
+  ).not.toBeInTheDocument()
+  expect(screen.getByText('JingSoft product mappings')).toBeVisible()
+  expect(screen.queryByText('Fallback mode')).not.toBeInTheDocument()
+})
+
+test('follows backend-provided settlement mode order and shows auto fallback notice when merchant token check reports fallback active', async () => {
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        configured: true,
+        valid: false,
+        fallback_active: true,
+      },
+    },
+  })
+  vi.spyOn(toast, 'error').mockImplementation(() => 'err')
+  const user = userEvent.setup()
+
+  render(
+    <Fixture
+      availableModes={['auto', 'direct', 'redemption']}
+      initial={{ JingSoftMerchantToken: 'expired-token' }}
+    />,
+    { wrapper: Wrapper }
+  )
+
+  const radios = screen.getAllByRole('radio')
+  expect(radios).toHaveLength(3)
+  expect(radios[0]).toHaveAccessibleName('Auto fallback')
+  expect(radios[1]).toHaveAccessibleName('Direct top-up')
+  expect(radios[2]).toHaveAccessibleName('Redemption code top-up')
+
+  await user.click(screen.getByRole('button', { name: 'Check merchant token' }))
+  const status = await screen.findByRole('status')
+  expect(status).toHaveTextContent(
+    'JingSoft merchant token is invalid or expired'
+  )
+  expect(status).toHaveTextContent(
+    'Auto fallback is currently routing orders to Redemption code top-up.'
+  )
+})
+
+test('switching to Direct top-up configures slots without losing product mappings and rejects overlapping keys', async () => {
   vi.spyOn(api, 'post').mockResolvedValue({
     data: { success: true, data: { reset_count: 1 } },
   })
@@ -747,6 +841,7 @@ test('switching to direct-credit mode configures slots without losing product ma
   ])
   let latestValues: JingSoftFormValues = {
     ...defaults,
+    JingSoftMode: 'redemption',
     JingSoftProducts: existingProducts,
   }
   function ModeFixture() {
@@ -765,18 +860,11 @@ test('switching to direct-credit mode configures slots without losing product ma
   render(<ModeFixture />, { wrapper: Wrapper })
   expect(screen.getByText('Ten (ten)')).toBeVisible()
 
-  await user.click(
-    screen.getByRole('combobox', { name: 'JingSoft settlement mode' })
-  )
-  await user.click(
-    await screen.findByRole('option', {
-      name: 'Direct-credit & auto-restock mode',
-    })
-  )
+  await user.click(screen.getByRole('radio', { name: 'Direct top-up' }))
 
   expect(screen.getByLabelText('JingSoft merchant token')).toBeVisible()
   const slotInput = screen.getByRole('textbox', {
-    name: 'Direct-credit slot goods key',
+    name: 'Direct top-up slot goods key',
   })
 
   // Overlapping with redemption product goods_key is blocked.
@@ -803,15 +891,8 @@ test('switching to direct-credit mode configures slots without losing product ma
     expect(notice).toHaveBeenCalledWith('Quarantined slots have been reset')
   )
 
-  // Switching to auto fallback mode shows both direct slots and fallback product mappings.
-  await user.click(
-    screen.getByRole('combobox', { name: 'JingSoft settlement mode' })
-  )
-  await user.click(
-    await screen.findByRole('option', {
-      name: 'Auto fallback mode (direct first, fallback to redemption)',
-    })
-  )
+  // Switching to Auto fallback shows both direct slots and fallback product mappings.
+  await user.click(screen.getByRole('radio', { name: 'Auto fallback' }))
   expect(latestValues.JingSoftMode).toBe('auto')
   expect(screen.getByText('direct-slot-1')).toBeVisible()
   expect(screen.getByText('Ten (ten)')).toBeVisible()
@@ -906,6 +987,6 @@ test('Mode 2 Auto-detect hidden slots filters overlapping keys, highlights incom
   expect(screen.getByText('slot_a')).toBeVisible()
   expect(screen.getByText('slot_b')).toBeVisible()
   expect(
-    screen.queryByRole('button', { name: 'Remove direct slot slot_qq' })
+    screen.queryByRole('button', { name: 'Remove Direct top-up slot slot_qq' })
   ).not.toBeInTheDocument()
 })

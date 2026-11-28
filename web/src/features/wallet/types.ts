@@ -148,8 +148,9 @@ export interface JingSoftChannel {
 export interface JingSoftInfo {
   enabled: boolean
   available: boolean
-  mode?: 'redemption' | 'direct'
-  configured_mode?: 'redemption' | 'direct' | 'auto'
+  mode?: 'direct' | 'redemption'
+  configured_mode?: 'auto' | 'direct' | 'redemption'
+  available_modes?: Array<'auto' | 'direct' | 'redemption'>
   fallback_active?: boolean
   max_amount_cny?: number
   unavailable_reason?: string
@@ -162,7 +163,7 @@ export interface JingSoftQuote {
   amount: number
   currency: string
   topup_amount: number
-  mode?: 'redemption' | 'direct'
+  mode?: 'direct' | 'redemption'
   product_id?: string
   /** Included in amount; fee_rate is its percentage of the goods price. */
   fee?: number

@@ -22,6 +22,10 @@ import { AffiliateSettingsSection } from '../general/affiliate-settings-section'
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
+import {
+  normalizeJingSoftMode,
+  parseJingSoftModes,
+} from '../integrations/jingsoft-schema'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
@@ -159,11 +163,9 @@ const BILLING_SECTIONS = [
           CreemTestMode: settings.CreemTestMode,
           CreemProducts: settings.CreemProducts,
           JingSoftEnabled: settings['jingsoft_setting.enabled'],
-          JingSoftMode:
-            settings['jingsoft_setting.mode'] === 'direct' ||
-            settings['jingsoft_setting.mode'] === 'auto'
-              ? settings['jingsoft_setting.mode']
-              : 'redemption',
+          JingSoftMode: normalizeJingSoftMode(
+            settings['jingsoft_setting.mode']
+          ),
           JingSoftBaseURL: settings['jingsoft_setting.base_url'] ?? '',
           JingSoftStoreToken: settings['jingsoft_setting.store_token'],
           JingSoftMerchantToken:
@@ -181,6 +183,7 @@ const BILLING_SECTIONS = [
             settings['jingsoft_setting.max_orders_per_minute'] ?? 15,
           JingSoftChannels: settings['jingsoft_setting.channels'],
         }}
+        jingSoftModes={parseJingSoftModes(settings.JingSoftModes)}
         waffoDefaultValues={{
           WaffoEnabled: settings.WaffoEnabled ?? false,
           WaffoApiKey: settings.WaffoApiKey ?? '',

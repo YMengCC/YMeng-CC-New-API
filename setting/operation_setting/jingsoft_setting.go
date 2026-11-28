@@ -29,10 +29,18 @@ type JingSoftChannel struct {
 }
 
 const (
-	JingSoftModeRedemption = "redemption"
-	JingSoftModeDirect     = "direct"
 	JingSoftModeAuto       = "auto"
+	JingSoftModeDirect     = "direct"
+	JingSoftModeRedemption = "redemption"
 )
+
+func JingSoftModes() []string {
+	return []string{
+		JingSoftModeAuto,
+		JingSoftModeDirect,
+		JingSoftModeRedemption,
+	}
+}
 
 const (
 	JingSoftDefaultAutoRestockMin     = 5
@@ -140,7 +148,7 @@ var jingSoftSetting = JingSoftSetting{
 	MaxAmountCNY:       JingSoftDefaultMaxAmountCNY,
 	MaxOrdersPerMinute: JingSoftDefaultMaxOrdersPerMinute,
 	Channels:           []JingSoftChannel{},
-	Mode:               JingSoftModeRedemption,
+	Mode:               JingSoftModeAuto,
 }
 
 var (
@@ -351,7 +359,7 @@ func ValidateJingSoftOption(key, value string) error {
 			return common.NewMessage("Invalid JingSoft settings")
 		}
 	case "jingsoft_setting.mode":
-		if value != JingSoftModeRedemption && value != JingSoftModeDirect && value != JingSoftModeAuto {
+		if !slices.Contains(JingSoftModes(), value) {
 			return common.NewMessage("Invalid JingSoft settings")
 		}
 	case "jingsoft_setting.channels":

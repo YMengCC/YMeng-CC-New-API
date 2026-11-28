@@ -1054,4 +1054,10 @@ export const STATIC_I18N_KEYS = [
   'JingSoft store API detected. Enter a store token to verify store channels and products.',
   'JingSoft API is reachable, but the store token was not found on this platform',
   'JingSoft store compatibility verified',
+  'Auto fallback',
+  'Direct top-up',
+  'Redemption code top-up',
+  'Uses Direct top-up by default; automatically falls back to Redemption code top-up if the merchant token expires, and resumes Direct top-up once updated.',
+  'Supports preset and custom amounts with no QQ required, auto-replenishes placeholder stock, and keeps existing orders on their original mode.',
+  'Sells mapped fixed-tier products only; buyers enter a QQ number for JingSoft order lookup and receive balance by redeeming real codes.',
 ] as const

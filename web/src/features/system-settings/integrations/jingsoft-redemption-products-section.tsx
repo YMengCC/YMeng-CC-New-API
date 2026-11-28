@@ -17,14 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation } from '@tanstack/react-query'
-import { useState } from 'react'
+import { AlertCircle } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { toIntlLocale } from '@/i18n/languages'
 import { api } from '@/lib/api'
@@ -52,6 +55,7 @@ type Props = {
   presetOptions: number[]
   priceRatio: number
   amountDiscounts: Record<number, number>
+  roleBadge?: ReactNode
   onProductsChange: (nextProducts: JingSoftProduct[]) => void
 }
 
@@ -180,6 +184,7 @@ export function JingSoftRedemptionProductsSection(props: Props) {
           <Badge variant='secondary' className='font-mono text-xs'>
             {props.products.length}
           </Badge>
+          {props.roleBadge}
         </span>
       }
       description={t(
@@ -239,14 +244,14 @@ export function JingSoftRedemptionProductsSection(props: Props) {
             {unmappedDiscovered.map((item) => (
               <div
                 key={item.goods_key}
-                className='bg-background flex flex-col gap-2.5 rounded-lg border p-2.5 text-sm sm:flex-row sm:items-center sm:justify-between'
+                className='bg-background flex flex-col gap-2.5 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between'
               >
                 <div className='min-w-0 flex-1 space-y-1'>
                   <div className='flex flex-wrap items-center gap-2'>
-                    <span className='max-w-full truncate font-medium'>
+                    <span className='min-w-0 font-medium break-words'>
                       {item.name}
                     </span>
-                    <code className='bg-muted text-muted-foreground max-w-full truncate rounded px-1.5 py-0.5 text-xs'>
+                    <code className='bg-muted text-muted-foreground max-w-full rounded px-1.5 py-0.5 font-mono text-xs break-all'>
                       {item.goods_key}
                     </code>
                     {item.price_cny && (
@@ -262,7 +267,7 @@ export function JingSoftRedemptionProductsSection(props: Props) {
                     )}
                   </div>
                 </div>
-                <div className='flex shrink-0 items-center gap-2'>
+                <div className='flex shrink-0 flex-wrap items-center gap-2'>
                   <Input
                     type='number'
                     min='0'
@@ -277,11 +282,10 @@ export function JingSoftRedemptionProductsSection(props: Props) {
                         [item.goods_key]: event.target.value,
                       }))
                     }
-                    className='h-8 w-24'
+                    className='w-24'
                   />
                   <Button
                     type='button'
-                    size='sm'
                     variant='outline'
                     disabled={!item.compatible || props.products.length >= 100}
                     onClick={() => importSingleDiscovered(item)}
@@ -296,14 +300,22 @@ export function JingSoftRedemptionProductsSection(props: Props) {
       )}
 
       {props.invalid && (
-        <p role='alert' className='text-destructive text-xs'>
-          {t('Invalid JingSoft mapping configuration')}
-        </p>
+        <Alert variant='destructive'>
+          <AlertCircle aria-hidden='true' />
+          <AlertDescription>
+            {t('Invalid JingSoft mapping configuration')}
+          </AlertDescription>
+        </Alert>
       )}
+
       {!props.products.length ? (
-        <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-6 text-center text-sm'>
-          {t('No JingSoft products configured')}
-        </div>
+        <Empty className='border py-6'>
+          <EmptyHeader>
+            <EmptyDescription>
+              {t('No JingSoft products configured')}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className='max-h-80 space-y-2 overflow-y-auto pr-1'>
           {props.products.map((product) => (
@@ -311,15 +323,15 @@ export function JingSoftRedemptionProductsSection(props: Props) {
               key={product.id}
               className='bg-muted/15 flex flex-col gap-2.5 rounded-lg border px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between'
             >
-              <div className='min-w-0 flex-1 space-y-0.5'>
-                <p className='truncate text-sm font-medium'>
+              <div className='min-w-0 flex-1 space-y-1'>
+                <p className='text-sm leading-snug font-medium break-words'>
                   {product.name} ({product.id})
                 </p>
-                <p className='text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs'>
-                  <code className='bg-muted max-w-full truncate rounded px-1.5 py-0.5 font-mono text-xs'>
+                <div className='text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs'>
+                  <code className='bg-muted max-w-full rounded px-1.5 py-0.5 font-mono text-xs break-all'>
                     {product.goods_key}
                   </code>
-                  <span>·</span>
+                  <span aria-hidden='true'>·</span>
                   <span>
                     {formatCurrencyFromUSD(product.amount, {
                       locale: toIntlLocale(
@@ -327,9 +339,9 @@ export function JingSoftRedemptionProductsSection(props: Props) {
                       ),
                     })}
                   </span>
-                </p>
+                </div>
               </div>
-              <div className='flex shrink-0 gap-2'>
+              <div className='flex shrink-0 flex-wrap gap-2'>
                 <Button
                   type='button'
                   size='sm'

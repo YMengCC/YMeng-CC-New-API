@@ -17,13 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation } from '@tanstack/react-query'
+import { AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -152,20 +155,27 @@ export function JingSoftDirectSlotsSection(props: Props) {
     setSlotError(null)
     props.onDirectSlotsChange([...props.directSlots, ...additions])
     toast.success(
-      t('Added {{count}} direct-credit slots', { count: additions.length })
+      t('Added {{count}} Direct top-up slots', { count: additions.length })
     )
   }
 
   return (
-    <div className='min-w-0 space-y-3'>
-      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-        <div className='flex min-w-0 flex-wrap items-center gap-2'>
-          <h4 className='text-sm font-medium'>
-            {t('Direct-credit slot goods keys')}
-          </h4>
-          <Badge variant='secondary' className='font-mono text-xs'>
-            {props.directSlots.length}/20
-          </Badge>
+    <div className='@container/jingsoft-slots min-w-0 space-y-3.5'>
+      <div className='flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between'>
+        <div className='min-w-0 space-y-1'>
+          <div className='flex min-w-0 flex-wrap items-center gap-2'>
+            <h4 className='text-sm leading-snug font-medium'>
+              {t('Direct top-up slot goods keys')}
+            </h4>
+            <Badge variant='secondary' className='font-mono text-xs'>
+              {props.directSlots.length}/20
+            </Badge>
+          </div>
+          <p className='text-muted-foreground text-xs leading-relaxed'>
+            {t(
+              'Configure 1–20 dedicated card products in your JingSoft store with Contact format set to Any and Storefront visibility set to Hidden.'
+            )}
+          </p>
         </div>
         <Button
           type='button'
@@ -186,16 +196,16 @@ export function JingSoftDirectSlotsSection(props: Props) {
             : t('Auto-detect hidden slots')}
         </Button>
       </div>
-      <p className='text-muted-foreground text-xs leading-relaxed'>
-        {t(
-          'Configure 1–20 dedicated card products in your JingSoft store with Contact format set to Any and Storefront visibility set to Hidden.'
-        )}
-      </p>
+
       {props.invalid && (
-        <p role='alert' className='text-destructive text-xs'>
-          {t('Invalid JingSoft direct slot settings')}
-        </p>
+        <Alert variant='destructive'>
+          <AlertCircle aria-hidden='true' />
+          <AlertDescription>
+            {t('Invalid JingSoft direct slot settings')}
+          </AlertDescription>
+        </Alert>
       )}
+
       {unmappedDiscovered.length > 0 && (
         <div className='bg-muted/30 min-w-0 space-y-3 rounded-xl border p-3.5'>
           <div className='flex flex-wrap items-center justify-between gap-2'>
@@ -217,14 +227,14 @@ export function JingSoftDirectSlotsSection(props: Props) {
               return (
                 <div
                   key={item.goods_key}
-                  className='bg-background flex flex-col gap-2.5 rounded-lg border p-2.5 text-sm sm:flex-row sm:items-center sm:justify-between'
+                  className='bg-background flex flex-col gap-2.5 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between'
                 >
                   <div className='min-w-0 flex-1 space-y-1'>
                     <div className='flex flex-wrap items-center gap-2'>
-                      <span className='max-w-full truncate font-medium'>
+                      <span className='min-w-0 font-medium break-words'>
                         {item.name}
                       </span>
-                      <code className='bg-muted text-muted-foreground max-w-full truncate rounded px-1.5 py-0.5 text-xs'>
+                      <code className='bg-muted text-muted-foreground max-w-full rounded px-1.5 py-0.5 font-mono text-xs break-all'>
                         {item.goods_key}
                       </code>
                       <Badge variant={item.in_stock ? 'outline' : 'secondary'}>
@@ -253,13 +263,15 @@ export function JingSoftDirectSlotsSection(props: Props) {
           </div>
         </div>
       )}
+
       <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
         <Input
           id='jingsoft-direct-slot-input'
-          aria-label={t('Direct-credit slot goods key')}
+          aria-label={t('Direct top-up slot goods key')}
           placeholder={t('Enter slot goods key or https://.../item/... link')}
           value={slotDraft}
           disabled={props.invalid || props.directSlots.length >= 20}
+          aria-invalid={Boolean(slotError)}
           onChange={(event) => {
             setSlotDraft(event.target.value)
             if (slotError) setSlotError(null)
@@ -288,18 +300,23 @@ export function JingSoftDirectSlotsSection(props: Props) {
           {slotError}
         </p>
       )}
+
       {!props.directSlots.length ? (
-        <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-6 text-center text-sm'>
-          {t('No direct-credit slots configured')}
-        </div>
+        <Empty className='border py-6'>
+          <EmptyHeader>
+            <EmptyDescription>
+              {t('No Direct top-up slots configured')}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className='grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2'>
+        <div className='grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 @xl/jingsoft-slots:grid-cols-2'>
           {props.directSlots.map((slotKey) => (
             <div
               key={slotKey}
               className='bg-muted/15 flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm'
             >
-              <code className='min-w-0 truncate font-mono text-xs'>
+              <code className='min-w-0 font-mono text-xs break-all'>
                 {slotKey}
               </code>
               <Button
@@ -307,7 +324,9 @@ export function JingSoftDirectSlotsSection(props: Props) {
                 variant='outline'
                 size='sm'
                 className='shrink-0'
-                aria-label={t('Remove direct slot {{key}}', { key: slotKey })}
+                aria-label={t('Remove Direct top-up slot {{key}}', {
+                  key: slotKey,
+                })}
                 onClick={() =>
                   props.onDirectSlotsChange(
                     props.directSlots.filter((item) => item !== slotKey)

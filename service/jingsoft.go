@@ -101,6 +101,7 @@ type JingSoftInfo struct {
 	Available         bool                                `json:"available"`
 	Mode              string                              `json:"mode"`
 	ConfiguredMode    string                              `json:"configured_mode,omitempty"`
+	AvailableModes    []string                            `json:"available_modes,omitempty"`
 	FallbackActive    bool                                `json:"fallback_active,omitempty"`
 	MaxAmountCNY      float64                             `json:"max_amount_cny,omitempty"`
 	UnavailableReason string                              `json:"unavailable_reason"`
@@ -109,11 +110,12 @@ type JingSoftInfo struct {
 }
 
 type JingSoftMerchantTokenStatus struct {
-	Configured     bool   `json:"configured"`
-	Valid          bool   `json:"valid"`
-	ConfiguredMode string `json:"configured_mode"`
-	EffectiveMode  string `json:"effective_mode"`
-	FallbackActive bool   `json:"fallback_active"`
+	Configured     bool     `json:"configured"`
+	Valid          bool     `json:"valid"`
+	ConfiguredMode string   `json:"configured_mode"`
+	EffectiveMode  string   `json:"effective_mode"`
+	AvailableModes []string `json:"available_modes,omitempty"`
+	FallbackActive bool     `json:"fallback_active"`
 }
 
 type JingSoftCompatibilityResult struct {
@@ -514,21 +516,19 @@ func jingSoftModeFromOrder(order *model.JingSoftOrder) string {
 
 func jingSoftConfiguredMode(cfg *operation_setting.JingSoftSetting) string {
 	if cfg == nil {
-		return operation_setting.JingSoftModeRedemption
+		return operation_setting.JingSoftModeAuto
 	}
 	switch cfg.Mode {
-	case operation_setting.JingSoftModeDirect, operation_setting.JingSoftModeAuto:
+	case operation_setting.JingSoftModeAuto, operation_setting.JingSoftModeDirect, operation_setting.JingSoftModeRedemption:
 		return cfg.Mode
 	default:
-		return operation_setting.JingSoftModeRedemption
+		return operation_setting.JingSoftModeAuto
 	}
 }
 
 func (s *jingSoftService) effectiveMode(cfg *operation_setting.JingSoftSetting) (string, bool) {
 	configured := jingSoftConfiguredMode(cfg)
 	switch configured {
-	case operation_setting.JingSoftModeDirect:
-		return operation_setting.JingSoftModeDirect, false
 	case operation_setting.JingSoftModeAuto:
 		merchantToken := strings.TrimSpace(cfg.MerchantToken)
 		hasDirect := merchantToken != "" && len(jingSoftValidDirectSlotKeys(cfg)) > 0
@@ -536,6 +536,8 @@ func (s *jingSoftService) effectiveMode(cfg *operation_setting.JingSoftSetting) 
 			return operation_setting.JingSoftModeDirect, false
 		}
 		return operation_setting.JingSoftModeRedemption, true
+	case operation_setting.JingSoftModeDirect:
+		return operation_setting.JingSoftModeDirect, false
 	default:
 		return operation_setting.JingSoftModeRedemption, false
 	}
@@ -611,6 +613,7 @@ func CheckJingSoftMerchantTokenStatus(ctx context.Context, candidateBaseURL, can
 			Valid:          false,
 			ConfiguredMode: configuredMode,
 			EffectiveMode:  effMode,
+			AvailableModes: operation_setting.JingSoftModes(),
 			FallbackActive: fallback,
 		}, nil
 	}
@@ -637,6 +640,7 @@ func CheckJingSoftMerchantTokenStatus(ctx context.Context, candidateBaseURL, can
 		Valid:          valid,
 		ConfiguredMode: configuredMode,
 		EffectiveMode:  effMode,
+		AvailableModes: operation_setting.JingSoftModes(),
 		FallbackActive: fallback,
 	}, nil
 }
@@ -834,10 +838,6 @@ func JingSoftUnavailableReason() string {
 	configured := jingSoftConfiguredMode(cfg)
 	effMode, _ := svc.effectiveMode(cfg)
 	switch configured {
-	case operation_setting.JingSoftModeDirect:
-		if strings.TrimSpace(cfg.MerchantToken) == "" || len(jingSoftValidDirectSlotKeys(cfg)) == 0 {
-			return "Direct-credit mode requires a JingSoft merchant token and dedicated slot goods keys"
-		}
 	case operation_setting.JingSoftModeAuto:
 		if effMode == operation_setting.JingSoftModeDirect {
 			if strings.TrimSpace(cfg.MerchantToken) == "" || len(jingSoftValidDirectSlotKeys(cfg)) == 0 {
@@ -845,6 +845,10 @@ func JingSoftUnavailableReason() string {
 			}
 		} else if len(cfg.Products) == 0 {
 			return "Invalid JingSoft settings"
+		}
+	case operation_setting.JingSoftModeDirect:
+		if strings.TrimSpace(cfg.MerchantToken) == "" || len(jingSoftValidDirectSlotKeys(cfg)) == 0 {
+			return "Direct-credit mode requires a JingSoft merchant token and dedicated slot goods keys"
 		}
 	default:
 		if len(cfg.Products) == 0 {
@@ -875,6 +879,7 @@ func JingSoftPublicInfo() JingSoftInfo {
 		Available:         reason == "",
 		Mode:              effMode,
 		ConfiguredMode:    jingSoftConfiguredMode(cfg),
+		AvailableModes:    operation_setting.JingSoftModes(),
 		FallbackActive:    fallback,
 		MaxAmountCNY:      maxCNY,
 		UnavailableReason: reason,

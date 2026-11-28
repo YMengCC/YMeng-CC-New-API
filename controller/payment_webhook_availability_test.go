@@ -326,9 +326,57 @@ func TestJingSoftSettingsRejectInvalidMappings(t *testing.T) {
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.base_url", "https://wzyp.cn/"))
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.products", `[{"id":"tier","name":"Credit","goods_key":"https://wzyp.cn/item/goods","amount":1.5}]`))
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.direct_goods_keys", `["slot-a","https://wzyp.cn/item/slot-b"]`))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.mode", operation_setting.JingSoftModeAuto))
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.mode", operation_setting.JingSoftModeDirect))
+	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.mode", operation_setting.JingSoftModeRedemption))
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.max_amount_cny", "5000"))
 	require.NoError(t, operation_setting.ValidateJingSoftOption("jingsoft_setting.max_orders_per_minute", "15"))
+}
+
+func TestJingSoftOptionsReturnOrderedModesAndAutoDefault(t *testing.T) {
+	assert.Equal(t, operation_setting.JingSoftModeAuto, operation_setting.GetJingSoftSetting().Mode)
+	assert.Equal(t, []string{
+		operation_setting.JingSoftModeAuto,
+		operation_setting.JingSoftModeDirect,
+		operation_setting.JingSoftModeRedemption,
+	}, operation_setting.JingSoftModes())
+
+	common.OptionMapRWMutex.Lock()
+	previous := common.OptionMap
+	common.OptionMap = make(map[string]string, len(previous)+1)
+	for optionKey, value := range previous {
+		common.OptionMap[optionKey] = value
+	}
+	common.OptionMap["jingsoft_setting.mode"] = operation_setting.GetJingSoftSetting().Mode
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		common.OptionMap = previous
+	})
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/option/", nil)
+	GetOptions(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var body struct {
+		Success bool `json:"success"`
+		Data    []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &body))
+	require.True(t, body.Success)
+
+	valuesByKey := make(map[string]string, len(body.Data))
+	for _, item := range body.Data {
+		valuesByKey[item.Key] = item.Value
+	}
+	assert.Equal(t, operation_setting.JingSoftModeAuto, valuesByKey["jingsoft_setting.mode"])
+	assert.Equal(t, `["auto","direct","redemption"]`, valuesByKey["JingSoftModes"])
 }
 
 func TestJingSoftStoreTokenIsNotReturnedByOptions(t *testing.T) {

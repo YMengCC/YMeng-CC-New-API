@@ -909,8 +909,27 @@ func TestJingSoftDirectModeCustomAmountSlotQuarantineAndModeIsolation(t *testing
 	operation_setting.Price = 7.2
 	operation_setting.MinTopUp = 2
 
+	t.Run("mode order and defaults prefer auto fallback while preserving existing payment semantics", func(t *testing.T) {
+		assert.Equal(t, []string{
+			operation_setting.JingSoftModeAuto,
+			operation_setting.JingSoftModeDirect,
+			operation_setting.JingSoftModeRedemption,
+		}, operation_setting.JingSoftModes())
+		assert.Equal(t, operation_setting.JingSoftModeAuto, jingSoftConfiguredMode(nil))
+		assert.Equal(t, operation_setting.JingSoftModeAuto, jingSoftConfiguredMode(&operation_setting.JingSoftSetting{}))
+		assert.Equal(t, operation_setting.JingSoftModeRedemption, jingSoftModeFromOrder(&model.JingSoftOrder{}))
+
+		info := JingSoftPublicInfo()
+		assert.Equal(t, []string{
+			operation_setting.JingSoftModeAuto,
+			operation_setting.JingSoftModeDirect,
+			operation_setting.JingSoftModeRedemption,
+		}, info.AvailableModes)
+	})
+
 	t.Run("redemption mode rejects custom amount", func(t *testing.T) {
-		s, _, _, _ := jingSoftFixture(t)
+		s, _, _, cfg := jingSoftFixture(t)
+		cfg.Mode = operation_setting.JingSoftModeRedemption
 		amount := int64(10)
 		_, err := s.quoteRequest(context.Background(), 7, JingSoftQuoteRequest{Amount: &amount, ChannelID: "pay"})
 		require.ErrorIs(t, err, ErrJingSoftInvalidRequest)

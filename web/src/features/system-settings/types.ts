@@ -337,6 +337,7 @@ export type BillingSettings = {
   CreemProducts: string
   'jingsoft_setting.enabled': boolean
   'jingsoft_setting.mode': string
+  JingSoftModes?: string
   'jingsoft_setting.base_url': string
   'jingsoft_setting.store_token': string
   'jingsoft_setting.merchant_token': string
