@@ -39,7 +39,7 @@ export function CTA(props: CTAProps) {
   return (
     <section
       className={cn(
-        'relative z-10 overflow-hidden px-6 py-20 md:py-28',
+        'relative z-10 overflow-hidden px-6 py-14 md:py-20',
         props.className
       )}
     >

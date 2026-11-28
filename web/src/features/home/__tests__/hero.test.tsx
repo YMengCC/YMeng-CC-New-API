@@ -64,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useSystemConfigStore.setState({ config: initialSystemConfig })
+  cleanup()
 })
 
 async function renderHero(options: {
@@ -100,10 +101,6 @@ async function renderHero(options: {
   await screen.findByRole('heading', { level: 1 })
 }
 
-afterEach(() => {
-  cleanup()
-})
-
 it.each([
   [undefined, 'https://baocode.dev/?ymengcc'],
   ['', 'https://baocode.dev/?ymengcc'],
@@ -115,21 +112,63 @@ it.each([
     'https://example.com/install?ref=site#download',
   ],
 ])(
-  'uses a safe configured destination for both BaoCode links with %s',
+  'uses a safe configured destination for the BaoCode app link with %s',
   async (baocodeLink, expected) => {
     await renderHero({ isAuthenticated: false, baocodeLink })
 
-    for (const link of [
-      screen.getByRole('button', { name: /Get BaoCode/ }),
-      screen.getByRole('link', { name: 'BaoCode' }),
-    ]) {
-      expect(link).toHaveAttribute('href', expected)
-      expect(link).toHaveAttribute('target', '_blank')
-      expect(link.getAttribute('rel')).toContain('noopener')
-      expect(link.getAttribute('rel')).toContain('noreferrer')
-    }
+    const link = screen.getByRole('link', { name: 'BaoCode' })
+    expect(link).toHaveAttribute('href', expected)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+    expect(link.getAttribute('rel')).toContain('noreferrer')
   }
 )
+
+it('renders YMeng CC as the sole H1 in a seamless centered layout without diagonal seams', async () => {
+  await renderHero({
+    isAuthenticated: false,
+    qqGroupLink: 'https://qm.qq.com/q/example',
+  })
+
+  const headings = screen.getAllByRole('heading', { level: 1 })
+  expect(headings).toHaveLength(1)
+  expect(headings[0]).toHaveAccessibleName('YMeng CC')
+  expect(headings[0].textContent?.replaceAll('\u00A0', ' ')).toBe('YMeng CC')
+  expect(document.querySelector('[data-home-typewriter]')).not.toBeNull()
+
+  for (const selector of [
+    '.home-split',
+    '.home-seam-lg',
+    '.home-seam-sm',
+    '.home-seam-badge',
+    '.home-community-wedge',
+    '.home-community-seam',
+    '.home-paper-clip-lg',
+    '.home-paper-clip-sm',
+  ]) {
+    expect(document.querySelector(selector)).toBeNull()
+  }
+})
+
+it('mounts the decorative particle backdrop behind hero content without blocking pointer interaction', async () => {
+  await renderHero({ isAuthenticated: false })
+
+  const particles = document.querySelector('canvas[data-home-particles]')
+  expect(particles).not.toBeNull()
+  expect(particles).toHaveAttribute('aria-hidden', 'true')
+  expect(particles).toHaveClass('pointer-events-none')
+})
+
+it('renders the wide API terminal demo with a two-column desktop body', async () => {
+  await renderHero({ isAuthenticated: false })
+
+  const requestLabel = screen.getByText('Request')
+  const responseLabel = screen.getByText('Response')
+  const body = requestLabel.closest('[data-relief="inset"]')
+  expect(body).not.toBeNull()
+  expect(body).toHaveClass('grid-cols-1', 'md:grid-cols-2')
+  expect(body?.contains(responseLabel)).toBe(true)
+})
 
 it('links the QQ group entry to the configured link in a new tab', async () => {
   await renderHero({
@@ -161,7 +200,7 @@ it('links the Telegram group entry to the configured link in a new tab', async (
   expect(screen.queryByRole('button', { name: /Join QQ group/ })).toBeNull()
 })
 
-it('shows both group entries and both platform logos when both links are configured', async () => {
+it('shows both group entries and both platform labels when both links are configured', async () => {
   await renderHero({
     isAuthenticated: false,
     qqGroupLink: 'https://qm.qq.com/q/example',
@@ -175,9 +214,8 @@ it('shows both group entries and both platform logos when both links are configu
   expect(
     screen.getByRole('button', { name: /Join Telegram group/ })
   ).toHaveAttribute('href', 'https://t.me/example')
-  const community = screen
-    .getByText('Join the Test Site community group')
-    .closest('.landing-animate-fade-up')
+
+  const community = document.querySelector('[data-community-card]')
   expect(community).not.toBeNull()
   expect(
     within(community as HTMLElement).getByText('QQ', { exact: true })
@@ -193,133 +231,77 @@ it('titles the community card with the configured system name', async () => {
     qqGroupLink: 'https://qm.qq.com/q/example',
   })
 
-  const community = screen
-    .getByText('Join the Test Site community group')
-    .closest('.landing-animate-fade-up')
+  const community = document.querySelector('[data-community-card]')
   expect(community).not.toBeNull()
+  expect(
+    within(community as HTMLElement).getByText(
+      'Join the Test Site community group'
+    )
+  ).toBeInTheDocument()
   expect(within(community as HTMLElement).queryByText(/YMeng CC/)).toBeNull()
 })
 
-it('replaces the static console headline with the dynamic YMeng CC showcase', async () => {
+it('omits the entire community strip when no group links are configured', async () => {
   await renderHero({ isAuthenticated: false })
 
-  const showcaseHeading = screen.getByRole('heading', {
-    level: 2,
-    name: 'YMeng CC',
-  })
-  expect(showcaseHeading.textContent?.replaceAll('\u00A0', ' ')).toBe(
-    'YMeng CC'
-  )
-  expect(document.querySelector('[data-home-typewriter]')).not.toBeNull()
-  expect(screen.queryByText('For developers')).toBeNull()
-  expect(
-    screen.queryByText('AI Application Infrastructure Foundation')
-  ).toBeNull()
-  expect(screen.queryByText('Unified API Gateway for')).toBeNull()
-  expect(screen.queryByText('Vast Range of AI Models')).toBeNull()
-})
-
-it('hides the community card and the example chat when no group links are configured', async () => {
-  await renderHero({ isAuthenticated: false })
-
+  expect(document.querySelector('[data-community-strip]')).toBeNull()
+  expect(document.querySelector('[data-community-emblem]')).toBeNull()
   expect(screen.queryByText('Q&A, feedback and new model updates')).toBeNull()
   expect(screen.queryByRole('button', { name: /Join QQ group/ })).toBeNull()
   expect(
     screen.queryByRole('button', { name: /Join Telegram group/ })
   ).toBeNull()
   expect(screen.queryByText('How do I connect this model?')).toBeNull()
-  expect(document.querySelector('[data-community-emblem]')).toBeNull()
-  expect(document.querySelector('.home-community-wedge')).toBeNull()
-  expect(document.querySelector('.home-community-slice')).toHaveClass('mb-0')
-  expect(
-    document.querySelector('.home-community-content')
-  ).toBeEmptyDOMElement()
 })
 
-it('mounts the decorative particle backdrop behind hero content without blocking pointer interaction', async () => {
-  await renderHero({ isAuthenticated: false })
-
-  const particles = document.querySelector('canvas[data-home-particles]')
-  expect(particles).not.toBeNull()
-  expect(particles).toHaveAttribute('aria-hidden', 'true')
-  expect(particles).toHaveClass('pointer-events-none')
-})
-
-it('shows the example chat at every width the community card shows at', async () => {
+it('places the lightweight community strip between the brand showcase and the API terminal demo', async () => {
   await renderHero({
     isAuthenticated: false,
     qqGroupLink: 'https://qm.qq.com/q/example',
     telegramLink: 'https://t.me/example',
   })
 
-  const preview = screen
-    .getByText('How do I connect this model?')
-    .closest('[aria-hidden="true"].rounded-xl') as HTMLElement
+  const heading = screen.getByRole('heading', { level: 1, name: 'YMeng CC' })
+  const requestLabel = screen.getByText('Request')
+  const strip = document.querySelector('[data-community-strip]')
+  const content = document.querySelector('.home-community-content')
+  if (!strip || !content) throw new Error('Expected community strip')
 
-  // The preview used to be hidden below 2xl, so most desktops never saw it.
-  expect(preview.className).not.toMatch(/\bhidden\b|\b2xl:block\b/)
-  expect(preview).toHaveClass('w-full')
+  expect(
+    heading.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy()
+  expect(
+    strip.compareDocumentPosition(requestLabel) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy()
+  expect(strip.firstElementChild).toHaveAttribute('data-community-emblem')
+  expect(strip.contains(content)).toBe(true)
 })
 
-it('wraps the brand and BaoCode as two whole blocks in the hero title', async () => {
-  await renderHero({ isAuthenticated: false })
-
-  const title = screen.getByRole('heading', { level: 1 })
-  expect(title).toHaveClass('flex-wrap')
-  expect(title).not.toHaveClass('whitespace-nowrap')
-  const blocks = [...title.children]
-  expect(blocks).toHaveLength(2)
-  expect(blocks[0]).toHaveClass('min-w-0', 'max-w-full')
-  expect(blocks[0].querySelector('.break-words')).toHaveTextContent('Test Site')
-  expect(blocks[1]).toHaveTextContent('BaoCode')
-  expect(blocks[1]).toHaveClass('shrink-0')
-})
-
-it('keeps the developer entry after the community region without an absolute gap', async () => {
+it('keeps long community names wrapping cleanly beside the example chat preview', async () => {
+  useSystemConfigStore.setState({
+    config: { ...initialSystemConfig, systemName: 'LongSiteName'.repeat(30) },
+  })
   await renderHero({
     isAuthenticated: false,
     qqGroupLink: 'https://qm.qq.com/q/example',
   })
 
-  const community = document.querySelector('.home-community-content')
-  const developerEntry = screen.getByRole('heading', {
-    level: 2,
-    name: 'YMeng CC',
-  })
-  const slice = document.querySelector('.home-community-slice')
-  if (!community || !slice) throw new Error('Expected community content')
-  expect(community).not.toHaveClass('absolute')
-  expect(community.className).toMatch(/\bempty:mb-0\b/)
-  expect(slice.className).toMatch(/\bempty:mb-0\b|\bmb-10\b/)
-  // The emblem layer sits behind the community text and the chat example.
-  expect(slice.firstElementChild).toHaveAttribute('data-community-emblem')
-  expect(slice.contains(community)).toBe(true)
-  expect(
-    community.compareDocumentPosition(developerEntry) &
-      Node.DOCUMENT_POSITION_FOLLOWING
-  ).toBeTruthy()
-  // Full-width fluid hero layout: left rail pinned near the viewport edge,
-  // community slice tightened at top-right, and YMeng CC wrapped in its
-  // centered console stage.
-  const heroGrid = document.querySelector('.home-hero-grid')
-  expect(heroGrid).toHaveClass('w-full')
-  expect(heroGrid).not.toHaveClass('max-w-7xl', 'mx-auto', 'lg:px-8')
-  expect(document.querySelector('.home-community-wedge')).toHaveClass(
-    'h-[17.5rem]'
-  )
-  expect(document.querySelector('.home-community-seam')).toHaveClass(
-    'h-[17.5rem]'
-  )
-  const consoleStage = developerEntry.closest('.home-console-stage')
-  expect(consoleStage).not.toBeNull()
-  const developerColumn = developerEntry.closest('.home-hero-grid > div')
-  expect(developerColumn).toHaveClass('lg:min-w-0')
-  expect(developerColumn?.contains(consoleStage)).toBe(true)
+  const title = screen.getByText(/Join the LongSiteName/)
+  expect(title).toHaveClass('break-words')
+  expect(title).not.toHaveClass('truncate')
 
-  const baocodePanel = screen
-    .getByRole('button', { name: /Get BaoCode/ })
-    .closest('.home-paper')
-  expect(baocodePanel).toHaveClass('lg:max-w-[23.5rem]')
+  const content = title.closest('.home-community-content')
+  if (!content) throw new Error('Expected community content')
+  expect(content).toHaveClass('flex-col', 'lg:flex-row')
+  expect(content).not.toHaveClass('absolute')
+
+  const preview = content.querySelector('[aria-hidden="true"].rounded-xl')
+  expect(preview).toHaveClass('w-full', 'lg:w-72', 'lg:shrink-0')
+  expect(preview).not.toHaveClass('hidden')
+  const card = title.closest('[data-community-card]')
+  if (!card || !preview) throw new Error('Expected community card and preview')
+  expect(preview.previousElementSibling).toBe(card)
 })
 
 it.each([
@@ -342,7 +324,7 @@ it.each([
     )
     expect(slot.children).toHaveLength(count)
     for (const round of slot.children) {
-      expect(round).toHaveClass('col-start-1', 'row-start-1')
+      expect(round).toHaveClass('col-start-1', 'row-start-1', 'w-full')
       expect(round.querySelectorAll('.home-qq-bubble')).toHaveLength(3)
       expect(round.querySelectorAll('.home-chat-answer')).toHaveLength(1)
       for (const message of round.querySelectorAll(
@@ -375,61 +357,6 @@ it.each([
   }
 )
 
-it('keeps long community names wrapping above the preview and console in normal flow', async () => {
-  useSystemConfigStore.setState({
-    config: { ...initialSystemConfig, systemName: 'LongSiteName'.repeat(30) },
-  })
-  await renderHero({
-    isAuthenticated: false,
-    qqGroupLink: 'https://qm.qq.com/q/example',
-  })
-
-  const title = screen.getByText(/Join the LongSiteName/)
-  expect(title).toHaveClass('break-words')
-  expect(title).not.toHaveClass('truncate')
-  const community = title.closest('.home-community-content')
-  if (!community) throw new Error('Expected community content')
-  expect(community).toHaveClass(
-    'flex-col',
-    'gap-5',
-    'lg:flex-row',
-    'lg:items-start',
-    'empty:mb-0'
-  )
-  expect(community).not.toHaveClass('absolute')
-  const preview = community.querySelector('[aria-hidden="true"].rounded-xl')
-  expect(preview).toHaveClass('w-full', 'max-w-md', 'lg:w-60', 'lg:shrink-0')
-  expect(preview).not.toHaveClass('absolute')
-  // From lg up the chat example sits to the right of the join text, not below it.
-  const card = title.closest('.landing-animate-fade-up')
-  if (!card || !preview) throw new Error('Expected the community card')
-  expect(preview.previousElementSibling).toBe(card)
-  expect(
-    community.compareDocumentPosition(
-      screen.getByRole('heading', { level: 2 })
-    ) & Node.DOCUMENT_POSITION_FOLLOWING
-  ).toBeTruthy()
-  // The hero title wraps its brand name instead of clipping it.
-  expect(screen.getByRole('heading', { level: 1 })).toHaveClass('flex-wrap')
-})
-
-it('lets the example chat bubbles span the full card width', async () => {
-  await renderHero({
-    isAuthenticated: false,
-    qqGroupLink: 'https://qm.qq.com/q/example',
-    telegramLink: 'https://t.me/example',
-  })
-
-  const rounds = [...document.querySelectorAll('.home-qq-round')]
-  expect(rounds.length).toBeGreaterThan(0)
-  for (const round of rounds) {
-    expect(round).toHaveClass('w-full')
-    for (const bubble of round.querySelectorAll('.home-qq-bubble')) {
-      expect(bubble).toHaveClass('w-full')
-    }
-  }
-})
-
 it.each([
   ['https://qm.qq.com/q/example', '', 1],
   ['', 'https://t.me/example', 1],
@@ -446,14 +373,13 @@ it.each([
   }
 )
 
-it('keeps the example chat in the community slice out of the accessibility tree', async () => {
+it('keeps the example chat out of the accessibility tree', async () => {
   await renderHero({
     isAuthenticated: false,
     qqGroupLink: 'https://qm.qq.com/q/example',
   })
 
   const example = screen.getByText('How do I connect this model?')
-
   expect(example.closest('[aria-hidden="true"]')).not.toBeNull()
 })
 
@@ -503,37 +429,3 @@ it.each([['https://docs.example.com/guide'], ['/about']])(
     expect(apiGuide).not.toHaveAttribute('target')
   }
 )
-
-it('stacks the developer entry above the BaoCode entry below lg', async () => {
-  await renderHero({ isAuthenticated: false })
-
-  const developerEntry = screen.getByRole('heading', {
-    level: 2,
-    name: 'YMeng CC',
-  })
-  const baocodeEntry = screen.getByRole('button', { name: /Get BaoCode/ })
-  expect(
-    developerEntry.compareDocumentPosition(baocodeEntry) &
-      Node.DOCUMENT_POSITION_FOLLOWING
-  ).toBeTruthy()
-
-  const developerColumn = developerEntry.closest('.grid > div')
-  const baocodeColumn = baocodeEntry.closest('.grid > div')
-  expect(developerColumn).toHaveClass('lg:col-start-2')
-  expect(baocodeColumn).toHaveClass('lg:col-start-1')
-})
-
-it('exposes one page heading and hides the decorative seam badges', async () => {
-  await renderHero({ isAuthenticated: false })
-
-  const pageHeadings = screen.getAllByRole('heading', { level: 1 })
-  expect(pageHeadings).toHaveLength(1)
-  expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument()
-  const badges = screen
-    .getAllByText('×')
-    .filter((element) => !pageHeadings[0].contains(element))
-  expect(badges.length).toBeGreaterThan(0)
-  for (const badge of badges) {
-    expect(badge).toHaveAttribute('aria-hidden', 'true')
-  }
-})

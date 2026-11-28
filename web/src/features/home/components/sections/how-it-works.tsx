@@ -50,7 +50,7 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className='border-border/45 relative z-10 border-t px-6 py-24 md:py-32'>
+    <section className='relative z-10 px-6 py-14 md:py-20'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
           <p

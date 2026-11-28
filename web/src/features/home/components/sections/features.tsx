@@ -215,10 +215,10 @@ export function Features(props: FeaturesProps) {
 
   return (
     <section
-      className={cn('relative z-10 px-6 py-24 md:py-32', props.className)}
+      className={cn('relative z-10 px-6 py-14 md:py-20', props.className)}
     >
       <div className='mx-auto max-w-6xl'>
-        <AnimateInView className='mb-14 max-w-xl md:mb-16'>
+        <AnimateInView className='mx-auto mb-12 max-w-2xl text-center md:mb-14'>
           <p
             data-depth='1'
             className='text-primary/80 mb-3 font-mono text-xs font-semibold tracking-[0.2em] uppercase'

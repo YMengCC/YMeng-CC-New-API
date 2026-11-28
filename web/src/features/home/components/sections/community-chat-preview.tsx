@@ -81,12 +81,11 @@ export function CommunityChatPreview(props: CommunityChatPreviewProps) {
   return (
     <div
       aria-hidden
-      data-relief='raised'
-      data-depth-tilt='6'
-      data-depth-float='3'
+      data-relief='plate'
+      data-depth-tilt='4'
       data-depth-glare=''
       className={cn(
-        'relative w-full rounded-xl border border-sky-500/20 bg-white/80 p-2.5 shadow-[0_18px_42px_-28px_rgba(18,183,245,0.75)] backdrop-blur-md dark:border-sky-400/20 dark:bg-[#0b0f17]/85',
+        'relative w-full rounded-xl border border-sky-500/15 bg-background/75 p-2.5 shadow-[0_14px_32px_-24px_rgba(18,183,245,0.55)] backdrop-blur-sm dark:border-sky-400/15 dark:bg-[#0b0f17]/75',
         props.className
       )}
     >

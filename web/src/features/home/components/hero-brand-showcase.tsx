@@ -136,22 +136,25 @@ export function HeroBrandShowcase(props: HeroBrandShowcaseProps): ReactElement {
 
   return (
     <div
-      className={cn('relative w-full min-w-0 py-2 lg:py-4', props.className)}
+      className={cn(
+        'relative flex w-full min-w-0 flex-col items-center py-2 text-center lg:py-3',
+        props.className
+      )}
     >
       <div
         aria-hidden='true'
         data-home-brand-glow=''
-        className='pointer-events-none absolute -top-8 -left-10 -z-10 h-44 w-[min(100%+4rem,46rem)] rounded-full opacity-75 blur-3xl dark:opacity-60'
+        className='pointer-events-none absolute -top-8 left-1/2 -z-10 h-44 w-[min(100%+4rem,46rem)] -translate-x-1/2 rounded-full opacity-75 blur-3xl dark:opacity-60'
         style={{
           background:
-            'radial-gradient(ellipse 62% 58% at 38% 48%, color-mix(in oklch, var(--primary) 22%, transparent) 0%, transparent 74%)',
+            'radial-gradient(ellipse 62% 58% at 50% 48%, color-mix(in oklch, var(--primary) 22%, transparent) 0%, transparent 74%)',
         }}
       />
-      <h2
+      <h1
         aria-label='YMeng CC'
         data-depth='2'
-        className='home-brand-title landing-animate-fade-up text-foreground cursor-default pb-1.5 text-[clamp(2.85rem,10.5vw,4.5rem)] leading-[1.04] tracking-[-0.026em] whitespace-nowrap opacity-0 transition-colors duration-350 select-none lg:text-[clamp(4.4rem,6.8vw,7.5rem)]'
-        style={{ animationDelay: '180ms' }}
+        className='home-brand-title landing-animate-fade-up text-foreground cursor-default pb-1.5 text-center text-[clamp(2.9rem,10vw,4.6rem)] leading-[1.04] tracking-[-0.026em] whitespace-nowrap opacity-0 transition-colors duration-350 select-none lg:text-[clamp(4.4rem,6.6vw,6.8rem)]'
+        style={{ animationDelay: '120ms' }}
       >
         <span aria-hidden='true'>
           {BRAND_GLYPHS.map((glyph) => (
@@ -164,12 +167,12 @@ export function HeroBrandShowcase(props: HeroBrandShowcaseProps): ReactElement {
             </span>
           ))}
         </span>
-      </h2>
+      </h1>
       <p
         data-depth='1'
         data-home-typewriter=''
-        className='home-brand-subtitle landing-animate-fade-up text-foreground/75 dark:text-foreground/82 mt-4 flex min-h-[3.25em] max-w-2xl items-center text-[clamp(1.2rem,2.15vw,1.62rem)] leading-[1.62] font-medium tracking-[0.015em] opacity-0 transition-colors duration-350 sm:min-h-[2.25em] lg:mt-5'
-        style={{ animationDelay: '240ms' }}
+        className='home-brand-subtitle landing-animate-fade-up text-foreground/75 dark:text-foreground/82 mx-auto mt-3.5 flex min-h-[2.75em] max-w-2xl items-center justify-center text-center text-[clamp(1.15rem,2vw,1.5rem)] leading-[1.55] font-medium tracking-[0.015em] opacity-0 transition-colors duration-350 sm:min-h-[2em] lg:mt-4'
+        style={{ animationDelay: '180ms' }}
       >
         <span className='inline'>
           <span data-home-typed-text=''>

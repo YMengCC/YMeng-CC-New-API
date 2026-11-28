@@ -54,10 +54,9 @@ export function BaoCodeAdvantages() {
   return (
     <div
       data-relief='raised'
-      data-depth-tilt='6'
-      data-depth-float='4'
+      data-depth-tilt='5'
       data-depth-glare=''
-      className='relative w-full max-w-md overflow-hidden rounded-2xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/85 p-4 shadow-[0_20px_44px_-28px_rgba(122,78,20,0.42)] backdrop-blur-xs'
+      className='relative w-full overflow-hidden rounded-2xl border border-[var(--paper-rule)] bg-[var(--paper-tint)]/85 p-4 shadow-[0_20px_44px_-28px_rgba(122,78,20,0.42)] backdrop-blur-xs sm:p-5'
     >
       <div
         aria-hidden

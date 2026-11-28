@@ -212,7 +212,12 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
   const accent = ACCENT_CLASSES[demo.accent]
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-2xl', props.className)}>
+    <div
+      className={cn(
+        'relative mx-auto w-full max-w-4xl text-left',
+        props.className
+      )}
+    >
       {/* Ambient protocol-tinted backlight */}
       <div
         aria-hidden
@@ -225,11 +230,10 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
       <div
         data-relief='raised'
         data-depth='2'
-        data-depth-tilt='5'
-        data-depth-float='1'
+        data-depth-tilt='4'
         data-depth-glare=''
         className={cn(
-          'relative overflow-hidden rounded-2xl border backdrop-blur-md xl:[transform:perspective(1200px)_rotateY(-3deg)_rotateX(1.5deg)]',
+          'relative overflow-hidden rounded-2xl border backdrop-blur-md',
           'border-border/80 bg-white/95 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.22)]',
           'dark:border-white/[0.1] dark:bg-[#0b0f19]/95 dark:shadow-[0_28px_70px_-20px_rgba(0,0,0,0.82)]'
         )}
@@ -265,7 +269,7 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
                 type='button'
                 onClick={() => handleSelect(index)}
                 className={cn(
-                  'relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-semibold tracking-wide transition-colors sm:px-3 sm:text-xs',
+                  'relative -mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-2 py-2.5 text-[11px] font-semibold tracking-wide whitespace-nowrap transition-colors sm:px-3 sm:text-xs',
                   isActive
                     ? `${tone.activeBorder} ${tone.activeText}`
                     : 'text-foreground/45 hover:text-foreground/75 border-transparent'
@@ -275,9 +279,9 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
               </button>
             )
           })}
-          <div className='ml-auto flex items-center gap-2 pr-1.5 sm:pr-2.5'>
-            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.55)]' />
-            <span className='text-foreground/50 font-mono text-[10px] font-medium tracking-wider uppercase'>
+          <div className='ml-auto flex shrink-0 items-center gap-2 pr-1.5 whitespace-nowrap sm:pr-2.5'>
+            <span className='inline-block size-1.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.55)]' />
+            <span className='text-foreground/50 hidden font-mono text-[10px] font-medium tracking-wider whitespace-nowrap uppercase sm:inline'>
               200 ok
             </span>
           </div>
@@ -311,10 +315,10 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
           </code>
         </div>
 
-        {/* Body — responsive height on small screens, fixed rows from sm up so neither block shifts */}
+        {/* Body — stacked on small screens, balanced side-by-side Request | Response from md up */}
         <div
           data-relief='inset'
-          className='grid min-h-[360px] grid-rows-[auto_auto] font-mono text-xs leading-[1.55] sm:h-[400px] sm:grid-rows-[235px_minmax(0,1fr)] sm:text-[12.5px]'
+          className='grid grid-cols-1 font-mono text-xs leading-[1.55] sm:text-[12.5px] md:min-h-[224px] md:grid-cols-2'
         >
           {/* Request */}
           <RequestBlock demo={demo} transitioning={transitioning} />
@@ -404,8 +408,8 @@ function ResponseBlock(props: { demo: ApiDemoConfig; transitioning: boolean }) {
   return (
     <div
       className={cn(
-        'relative border-t px-4 py-4 sm:px-5',
-        'border-border/40 bg-muted/20 dark:border-white/[0.05] dark:bg-white/[0.015]'
+        'relative border-t px-4 py-4 sm:px-5 md:border-t-0 md:border-l',
+        'border-border/35 bg-muted/20 dark:border-white/[0.05] dark:bg-white/[0.015]'
       )}
     >
       <SectionLabel>Response</SectionLabel>

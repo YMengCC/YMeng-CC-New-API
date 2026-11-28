@@ -27,7 +27,6 @@ import { isHttpUrl } from '@/lib/content-format'
 
 import { BAOCODE_ICON_URL, DEFAULT_BAOCODE_URL } from '../../constants'
 import { HeroBrandShowcase } from '../hero-brand-showcase'
-import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface ConsolePanelProps {
   isAuthenticated?: boolean
@@ -64,13 +63,13 @@ export function ConsolePanel(props: ConsolePanelProps) {
   )
 
   return (
-    <div className='flex w-full min-w-0 flex-col items-start text-left'>
+    <div className='flex w-full min-w-0 flex-col items-center text-center'>
       <HeroBrandShowcase />
 
       <div
         data-depth-group
-        className='landing-animate-fade-up mt-7 flex flex-wrap items-center gap-3 opacity-0 lg:mt-9'
-        style={{ animationDelay: '300ms' }}
+        className='landing-animate-fade-up mt-6 flex flex-wrap items-center justify-center gap-3 opacity-0 lg:mt-7'
+        style={{ animationDelay: '240ms' }}
       >
         {props.isAuthenticated ? (
           <Button
@@ -110,19 +109,19 @@ export function ConsolePanel(props: ConsolePanelProps) {
       </div>
 
       <div
-        className='landing-animate-fade-up mt-7 w-full max-w-2xl opacity-0'
-        style={{ animationDelay: '360ms' }}
+        className='landing-animate-fade-up mt-7 flex w-full max-w-2xl flex-col items-center opacity-0'
+        style={{ animationDelay: '300ms' }}
       >
-        <div data-depth='1' className='mb-3 flex items-center gap-3'>
-          <span className='text-muted-foreground/75 text-[10.5px] font-bold tracking-[0.16em] uppercase'>
-            {t('Supported Applications')}
-          </span>
-          <span
-            className='via-border from-border/80 h-px flex-1 bg-gradient-to-r to-transparent'
-            aria-hidden
-          />
-        </div>
-        <div data-depth-group className='flex flex-wrap items-center gap-2.5'>
+        <span
+          data-depth='1'
+          className='text-muted-foreground/75 mb-3 text-[10.5px] font-bold tracking-[0.16em] uppercase'
+        >
+          {t('Supported Applications')}
+        </span>
+        <div
+          data-depth-group
+          className='flex flex-wrap items-center justify-center gap-2.5'
+        >
           <a
             href={baocodeLink}
             target='_blank'
@@ -182,13 +181,6 @@ export function ConsolePanel(props: ConsolePanelProps) {
             {t('More Apps')}
           </span>
         </div>
-      </div>
-
-      <div
-        className='landing-animate-fade-up mt-8 w-full opacity-0'
-        style={{ animationDelay: '420ms' }}
-      >
-        <HeroTerminalDemo className='max-w-2xl lg:mx-0' />
       </div>
     </div>
   )

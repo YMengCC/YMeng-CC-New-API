@@ -165,26 +165,31 @@ export function RechargeFormCard({
     hasConfigurableTopup ||
     enableCreemTopup ||
     (topupInfo?.jingsoft?.enabled && topupInfo.jingsoft.channels.length > 0)
-  const paymentMethods: Array<PaymentMethod & { channel?: JingSoftChannel }> = (
-    topupInfo?.pay_methods ?? []
-  ).filter(
-    (method) =>
-      method.type !== 'jingsoft' &&
-      method.type !== 'jingsoft_alipay' &&
-      method.type !== 'jingsoft_wxpay'
-  )
+  const jingSoftChannelsByTypeAndId = new Map<string, JingSoftChannel>()
   if (topupInfo?.jingsoft?.enabled) {
     for (const channel of topupInfo.jingsoft.channels) {
-      let jingSoftType: string | undefined
-      if (channel.payment_type === 'wxpay') jingSoftType = 'jingsoft_wxpay'
-      if (channel.payment_type === 'alipay') jingSoftType = 'jingsoft_alipay'
-      if (!jingSoftType) continue
-      const configured = topupInfo.pay_methods?.find(
-        (method) =>
-          method.type === jingSoftType && method.channel_id === channel.id
+      if (channel.payment_type === 'wxpay') {
+        jingSoftChannelsByTypeAndId.set(`jingsoft_wxpay:${channel.id}`, channel)
+      } else if (channel.payment_type === 'alipay') {
+        jingSoftChannelsByTypeAndId.set(
+          `jingsoft_alipay:${channel.id}`,
+          channel
+        )
+      }
+    }
+  }
+  const seenJingSoftChannelIds = new Set<string>()
+  const paymentMethods: Array<PaymentMethod & { channel?: JingSoftChannel }> =
+    []
+  for (const method of topupInfo?.pay_methods ?? []) {
+    if (method.type === 'jingsoft') continue
+    if (method.type === 'jingsoft_alipay' || method.type === 'jingsoft_wxpay') {
+      if (!method.channel_id) continue
+      const channel = jingSoftChannelsByTypeAndId.get(
+        `${method.type}:${method.channel_id}`
       )
-      const method = configured
-      if (!method) continue
+      if (!channel || seenJingSoftChannelIds.has(channel.id)) continue
+      seenJingSoftChannelIds.add(channel.id)
       paymentMethods.push({
         ...method,
         fee_percent: undefined,
@@ -193,7 +198,9 @@ export function RechargeFormCard({
         icon: method.icon || channel.icon,
         channel,
       })
+      continue
     }
+    paymentMethods.push(method)
   }
   const hasStandardPaymentMethods = paymentMethods.length > 0
   const hasWaffoPaymentMethods =

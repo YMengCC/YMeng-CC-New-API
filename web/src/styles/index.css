@@ -631,29 +631,7 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
-/* Full-width fluid hero grid: the left beginner rail occupies `--seam-top`
-   pinned to the viewport left edge, while `.home-console-stage` keeps at least
-   a safe seam gutter on smaller desktops and optically centers the `YMeng CC`
-   showcase at 50% of the viewport width on wide screens. */
-@variant lg {
-  .home-hero-grid {
-    grid-template-columns: var(--seam-top) minmax(0, 1fr);
-  }
-  .home-console-stage {
-    padding-left: 2rem;
-  }
-}
-@variant xl {
-  .home-console-stage {
-    padding-left: max(2.5rem, calc(50% - var(--seam-top) * 0.5 - 20.5rem));
-  }
-}
-@variant 2xl {
-  .home-console-stage {
-    padding-left: max(3rem, calc(50% - var(--seam-top) * 0.5 - 20.5rem));
-  }
-}
-/* ── Home community slice: QQ group in the cut-off corner ── */
+/* ── Home community strip: QQ & Telegram animations ── */
 @keyframes home-qq-float {
   0%,
   100% {
@@ -798,31 +776,7 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
-/* ── Home split hero: BaoCode's paper look on the left, a slanted seam ── */
-.home-split {
-  /* Compact left-pinned paper rail: both seams and the grid share one full-width
-     coordinate origin so the beginner rail, community corner, and YMeng CC
-     centerpiece stay aligned at every viewport width. */
-  --seam-top: 25.5rem;
-  --seam-bottom: 20.5rem;
-  --seam-middle: calc((var(--seam-top) + var(--seam-bottom)) / 2);
-  --seam-width: 2px;
-  --community-seam-x: var(--seam-middle);
-  --community-seam-left-y: 17.25rem;
-  --community-seam-right-y: 12.75rem;
-}
-@variant xl {
-  .home-split {
-    --seam-top: 29.5rem;
-    --seam-bottom: 22.5rem;
-  }
-}
-@variant 2xl {
-  .home-split {
-    --seam-top: 32rem;
-    --seam-bottom: 24.5rem;
-  }
-}
+/* ── BaoCode partner card: warm paper tokens & subtle background grid ── */
 .home-paper {
   --paper: #fbfaf6;
   --paper-tint: #f3efe6;
@@ -853,123 +807,7 @@ For commercial licensing, please contact support@quantumnous.com
   --paper-pill-bg: rgba(226, 179, 115, 0.13);
   --paper-pill-border: rgba(226, 179, 115, 0.34);
 }
-.home-paper-clip-lg {
-  clip-path: polygon(0 0, var(--seam-top) 0, var(--seam-bottom) 100%, 0 100%);
-}
-.home-seam-lg {
-  background: linear-gradient(
-    180deg,
-    rgba(226, 179, 115, 0.22) 0%,
-    rgba(218, 162, 86, 0.9) 35%,
-    rgba(235, 194, 130, 0.95) 65%,
-    rgba(226, 179, 115, 0.22) 100%
-  );
-  clip-path: polygon(
-    var(--seam-top) 0,
-    calc(var(--seam-top) + var(--seam-width)) 0,
-    calc(var(--seam-bottom) + var(--seam-width)) 100%,
-    var(--seam-bottom) 100%
-  );
-}
-.home-seam-badge {
-  left: var(--seam-middle);
-  width: 2.875rem;
-  height: 2.875rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--paper-pill-border);
-  border-radius: 9999px;
-  background: radial-gradient(
-    circle at 35% 30%,
-    var(--paper) 0%,
-    var(--paper-tint) 100%
-  );
-  color: var(--paper-pill-ink);
-  font: 400 1.375rem/1 var(--paper-serif);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    0 0 0 4px rgba(226, 179, 115, 0.12),
-    0 10px 26px -8px rgba(122, 78, 20, 0.42);
-}
-.dark .home-seam-badge {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 0 0 4px rgba(226, 179, 115, 0.08),
-    0 12px 28px -8px rgba(0, 0, 0, 0.65);
-}
-/* The community corner: a second seam emerging from behind the shifted paper
-   side (`--community-seam-x`, 17.25rem down) rising to the right edge 12.75rem
-   down. Decoration only, keeping a compact height so the YMeng CC showcase
-   sits higher in the visual center while taller community content extends
-   cleanly into the console background. */
-.home-community-wedge,
-.home-community-seam {
-  height: 17.5rem;
-}
-.home-community-wedge {
-  background:
-    radial-gradient(rgba(18, 183, 245, 0.22) 1px, transparent 1.2px) 0 0 / 14px
-      14px,
-    linear-gradient(
-      100deg,
-      rgba(18, 183, 245, 0.12),
-      rgba(18, 183, 245, 0.03) 70%
-    );
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% var(--community-seam-right-y),
-    var(--community-seam-x) var(--community-seam-left-y),
-    0 var(--community-seam-left-y)
-  );
-}
-.dark .home-community-wedge {
-  background:
-    radial-gradient(rgba(18, 183, 245, 0.16) 1px, transparent 1.2px) 0 0 / 14px
-      14px,
-    linear-gradient(
-      100deg,
-      rgba(18, 183, 245, 0.09),
-      rgba(18, 183, 245, 0.02) 70%
-    );
-}
-.home-community-seam {
-  background: linear-gradient(
-    90deg,
-    rgba(226, 179, 115, 0.4),
-    rgba(226, 179, 115, 0.85) 50%,
-    rgba(56, 189, 248, 0.45)
-  );
-  clip-path: polygon(
-    var(--community-seam-x) var(--community-seam-left-y),
-    100% var(--community-seam-right-y),
-    100% calc(var(--community-seam-right-y) + 2px),
-    var(--community-seam-x) calc(var(--community-seam-left-y) + 2px)
-  );
-}
-.home-paper-clip-sm {
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 3.5rem), 0 100%);
-}
-.home-seam-sm {
-  background: linear-gradient(
-    90deg,
-    rgba(226, 179, 115, 0.35),
-    rgba(218, 162, 86, 0.92) 50%,
-    rgba(226, 179, 115, 0.35)
-  );
-  clip-path: polygon(
-    0 calc(100% - 2px),
-    100% calc(100% - 3.5rem - 2px),
-    100% calc(100% - 3.5rem),
-    0 100%
-  );
-}
-@media (max-width: 63.99rem) {
-  .home-seam-badge {
-    left: 50%;
-  }
-}
-/* BaoCode's tilted grid, slowly zooming, faded where the text sits. */
+/* BaoCode's tilted grid, slowly zooming, faded smoothly near the card center. */
 .home-paper-grid {
   position: absolute;
   inset: -40%;
@@ -980,8 +818,8 @@ For commercial licensing, please contact support@quantumnous.com
   transform: perspective(900px) rotateX(48deg) rotateZ(-14deg);
   transform-origin: 50% 50%;
   mask-image: radial-gradient(
-    ellipse 70% 60% at 16% 50%,
-    rgba(0, 0, 0, 0.12) 0%,
+    ellipse 72% 62% at 50% 50%,
+    rgba(0, 0, 0, 0.14) 0%,
     rgba(0, 0, 0, 0.85) 100%
   );
   animation: home-paper-grid-zoom 48s linear infinite alternate;
@@ -1179,8 +1017,8 @@ For commercial licensing, please contact support@quantumnous.com
   );
   will-change: opacity;
 }
-/* Paper panels catch the same light across both hero columns. */
-:root[data-home-depth] :is(.home-paper-clip-lg, .home-paper-clip-sm) {
+/* Standalone warm-paper card catches the same top-left scene light. */
+:root[data-home-depth] .home-paper-card {
   background-image: linear-gradient(
     155deg,
     var(--home-hi-soft) 0%,

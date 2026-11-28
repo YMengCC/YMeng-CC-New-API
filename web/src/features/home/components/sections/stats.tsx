@@ -107,18 +107,13 @@ export function Stats(props: StatsProps) {
   ]
 
   return (
-    <div
-      data-relief='band'
+    <section
       className={cn(
-        'border-border/50 bg-muted/15 relative z-10 overflow-hidden border-y',
+        'relative z-10 overflow-hidden px-6 py-8 md:py-12',
         props.className
       )}
     >
-      <div
-        aria-hidden
-        className='via-primary/30 pointer-events-none absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent to-transparent'
-      />
-      <div className='mx-auto max-w-6xl px-6 py-10 md:py-14'>
+      <div className='mx-auto max-w-6xl'>
         <div
           data-depth-reveal
           className='grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6'
@@ -148,6 +143,6 @@ export function Stats(props: StatsProps) {
           ))}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

@@ -156,6 +156,105 @@ it('does not show a JingSoft payment method whose configured channel does not ma
   ).not.toBeInTheDocument()
 })
 
+it('preserves pay_methods order for JingSoft methods and deduplicates repeated channel entries', () => {
+  const alipayChannel = {
+    id: 'alipay-ch',
+    name: 'Store Alipay',
+    payment_type: 'alipay' as const,
+  }
+  render(
+    <RechargeFormCard
+      {...base}
+      topupInfo={{
+        ...topupInfo,
+        enable_online_topup: true,
+        jingsoft: {
+          enabled: true,
+          available: true,
+          products: [product],
+          channels: [alipayChannel, channel],
+        },
+        pay_methods: [
+          {
+            type: 'jingsoft_wxpay',
+            channel_id: 'wechat',
+            name: 'JingSoft WeChat',
+          },
+          { type: 'alipay', name: 'Epay Alipay' },
+          {
+            type: 'jingsoft_alipay',
+            channel_id: 'alipay-ch',
+            name: 'JingSoft Alipay',
+          },
+          {
+            type: 'jingsoft_wxpay',
+            channel_id: 'wechat',
+            name: 'Duplicate JingSoft WeChat',
+          },
+          { type: 'stripe', name: 'Stripe' },
+        ],
+      }}
+      onJingSoftPaymentSelect={vi.fn()}
+    />
+  )
+
+  const firstMethodButton = screen.getByRole('button', {
+    name: 'JingSoft WeChat',
+  })
+  const grid = firstMethodButton.parentElement
+  expect(grid).not.toBeNull()
+  if (!grid) return
+  const renderedNames = within(grid)
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+  expect(renderedNames).toEqual([
+    'JingSoft WeChat',
+    'Epay Alipay',
+    'JingSoft Alipay',
+    'Stripe',
+  ])
+})
+
+it('hides JingSoft methods when JingSoft is disabled while keeping regular payment methods in order', () => {
+  render(
+    <RechargeFormCard
+      {...base}
+      topupInfo={{
+        ...topupInfo,
+        enable_online_topup: true,
+        jingsoft: {
+          enabled: false,
+          available: true,
+          products: [product],
+          channels: [channel],
+        },
+        pay_methods: [
+          {
+            type: 'jingsoft_wxpay',
+            channel_id: 'wechat',
+            name: 'JingSoft WeChat',
+          },
+          { type: 'alipay', name: 'Epay Alipay' },
+          { type: 'stripe', name: 'Stripe' },
+        ],
+      }}
+      onJingSoftPaymentSelect={vi.fn()}
+    />
+  )
+
+  expect(
+    screen.queryByRole('button', { name: 'JingSoft WeChat' })
+  ).not.toBeInTheDocument()
+  const firstMethodButton = screen.getByRole('button', { name: 'Epay Alipay' })
+  const grid = firstMethodButton.parentElement
+  expect(grid).not.toBeNull()
+  if (!grid) return
+  const renderedNames = within(grid)
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+  expect(renderedNames).toEqual(['Epay Alipay', 'Stripe'])
+})
+
 it('adds the configured payment method display fee only to the You Pay amount', () => {
   render(
     <PaymentConfirmDialog
@@ -245,7 +344,9 @@ it('uses the original preset buttons and keeps custom input visible while quotin
           topupAmount={payment.product?.amount ?? 0}
           paymentAmount={payment.quote?.amount ?? 0}
           paymentMethod={
-            payment.channel ? { ...payment.channel, type: 'jingsoft' } : undefined
+            payment.channel
+              ? { ...payment.channel, type: 'jingsoft' }
+              : undefined
           }
           calculating={payment.calculating}
           processing={payment.processing}

@@ -20,8 +20,6 @@ import { useEffect, useRef } from 'react'
 
 import { cn } from '@/lib/utils'
 
-import { getHeroSeamX, HERO_DESKTOP_MIN_WIDTH } from '../lib/hero-seam'
-
 interface HeroParticlesProps {
   className?: string
 }
@@ -40,6 +38,7 @@ interface Particle {
 }
 
 const TABLET_MIN_WIDTH = 768
+const HERO_DESKTOP_MIN_WIDTH = 1024
 const POINTER_RADIUS = 155
 const LINK_DISTANCE_DESKTOP = 112
 const LINK_DISTANCE_TABLET = 92
@@ -71,18 +70,6 @@ function getTargetCount(width: number, finePointer: boolean): number {
   if (!finePointer || width < TABLET_MIN_WIDTH) return 14
   if (width < HERO_DESKTOP_MIN_WIDTH) return 26
   return 42
-}
-
-function isPaperSide(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): boolean {
-  if (width >= HERO_DESKTOP_MIN_WIDTH) {
-    return x < getHeroSeamX(y, width, height)
-  }
-  return y > height * 0.56
 }
 
 export function HeroParticles(props: HeroParticlesProps) {
@@ -199,18 +186,15 @@ export function HeroParticles(props: HeroParticlesProps) {
         else if (p.y > height + 12) p.y = -12
       }
 
-      // Subtle constellation filaments on the developer console side
+      // Subtle constellation filaments across the full hero canvas
       if (linkDistance > 0) {
         const linkDistSq = linkDistance * linkDistance
         ctx.lineWidth = 0.6
         for (let i = 0; i < particles.length; i++) {
           const a = particles[i]
-          const aOnPaper = isPaperSide(a.x, a.y, width, height)
-          if (aOnPaper) continue
 
           for (let j = i + 1; j < particles.length; j++) {
             const b = particles[j]
-            if (isPaperSide(b.x, b.y, width, height)) continue
             const dx = a.x - b.x
             const dy = a.y - b.y
             const distSq = dx * dx + dy * dy
@@ -250,7 +234,6 @@ export function HeroParticles(props: HeroParticlesProps) {
       // Render luminous motes
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i]
-        const paper = isPaperSide(p.x, p.y, width, height)
         const twinkle = 0.72 + 0.28 * Math.sin(p.phase)
         let alpha = p.baseAlpha * twinkle
 
@@ -264,13 +247,9 @@ export function HeroParticles(props: HeroParticlesProps) {
           }
         }
 
-        let rgb = '96, 165, 250'
-        if (paper) {
-          rgb = isDark ? '232, 188, 118' : '198, 142, 62'
-        } else if (p.hueVariant === 1) {
+        let rgb = isDark ? '96, 165, 250' : '37, 99, 235'
+        if (p.hueVariant === 1) {
           rgb = isDark ? '167, 139, 250' : '124, 58, 237'
-        } else {
-          rgb = isDark ? '96, 165, 250' : '37, 99, 235'
         }
 
         ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`
